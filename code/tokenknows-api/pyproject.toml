@@ -1,0 +1,60 @@
+[project]
+name = "tokenknows-api"
+version = "0.1.0"
+description = "TokenKnows API · FastAPI 后端 + LLM Gateway (三层出域门禁 + LiteLLM 多家适配)"
+requires-python = ">=3.11"
+dependencies = [
+    # Web 框架
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    # 配置
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.1",
+    # LLM (统一适配 - 业务代码不允许直接 import anthropic/openai/minimax)
+    "litellm>=1.50.0",
+    # 异步 HTTP (litellm 内部用)
+    "httpx>=0.28.0",
+    # 可观测 (复用 digital_enterprise core)
+    "structlog>=24.4.0",
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    # 实用
+    "orjson>=3.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501", "E402"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# 架构铁律 (TDD §2.3): 业务代码必须走 LLM Gateway
+# 例外: app/llm_gateway/adapters/* 文件内可 import (用 # noqa: TID251)
+"anthropic".msg = "Use app.llm_gateway instead — 业务代码禁止直接 import anthropic"
+"openai.OpenAI".msg = "Use app.llm_gateway instead"
+"openai.AsyncOpenAI".msg = "Use app.llm_gateway instead"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["app/tests"]
