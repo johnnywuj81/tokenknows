@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · LLM 与出域</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .toggle-on { background: #141413; }
+    .toggle-on .dot { transform: translateX(20px); }
+    .toggle-off { background: #d4d2c7; }
+    .toggle-off .dot { transform: translateX(2px); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-[#faf9f5] border-b border-[#e8e6dc] h-14 px-6 flex items-center justify-between sticky top-0 z-10">
+    <span class="text-sm text-[#85857c]">AI Agent Pilot / 设置 / LLM 与出域</span>
+    <div class="w-9 h-9 rounded-full bg-[#fbeae0] text-[#b8623f] font-semibold flex items-center justify-center text-sm">JW</div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 py-8">
+
+    <div class="mb-6">
+      <h1 class="font-serif text-2xl text-[#141413] leading-tight">LLM 与出域控制</h1>
+      <p class="text-sm text-[#85857c] mt-1.5">控制本项目使用的模型，以及数据是否允许出域到云端 LLM 服务商。</p>
+    </div>
+
+    <!-- 实例级状态横幅 -->
+    <div class="bg-[#f5ecd8]/40 border border-[#d9c587] rounded-lg p-4 mb-6 flex items-start gap-3">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#856226" stroke-width="2" class="flex-shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div class="flex-1">
+        <div class="font-medium text-[#5c4318]">实例级出域开关：<span class="font-bold text-[#856226]">已开启</span></div>
+        <div class="text-xs text-[#5d5d57] mt-1">由实例管理员（@admin）控制。只有实例级 + 项目级 + 任务级全部开启，云端调用才会发生。</div>
+      </div>
+      <button class="text-xs px-3 py-1.5 border border-[#d9c587] text-[#856226] bg-[#faf9f5] rounded-md hover:bg-[#f5ecd8]/70 transition flex-shrink-0">如何申请变更</button>
+    </div>
+
+    <!-- 项目级开关 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-5 mb-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-serif text-lg text-[#141413]">项目级出域</h2>
+          <p class="text-xs text-[#85857c] mt-0.5">本项目是否允许在任务粒度使用云端 LLM</p>
+        </div>
+        <button class="toggle-on relative inline-flex h-6 w-11 items-center rounded-full transition">
+          <span class="dot inline-block h-5 w-5 rounded-full bg-[#faf9f5] shadow-sm transition"></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 任务级开关 + 模型路由 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg overflow-hidden mb-5">
+      <div class="p-5 border-b border-[#e8e6dc]">
+        <h2 class="font-serif text-lg text-[#141413]">任务级开关与模型路由</h2>
+        <p class="text-xs text-[#85857c] mt-0.5">每个生成任务可单独选择使用云端还是本地模型</p>
+      </div>
+
+      <div class="divide-y divide-[#e8e6dc]">
+
+        <div class="px-5 py-4 grid grid-cols-12 gap-3 items-center">
+          <div class="col-span-4">
+            <div class="text-sm font-medium text-[#141413]">价值识别</div>
+            <div class="text-xs text-[#85857c] mt-0.5 font-mono">value_extraction</div>
+          </div>
+          <div class="col-span-2">
+            <button class="toggle-off relative inline-flex h-5 w-10 items-center rounded-full transition">
+              <span class="dot inline-block h-4 w-4 rounded-full bg-[#faf9f5] shadow-sm transition"></span>
+            </button>
+          </div>
+          <div class="col-span-5">
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5] w-full">
+              <option>Qwen 32B (本地 · Ollama)</option>
+              <option disabled>Claude Sonnet 4.6（项目级出域关闭时不可用）</option>
+            </select>
+          </div>
+          <div class="col-span-1 text-xs text-[#85857c] font-mono text-right">本地</div>
+        </div>
+
+        <div class="px-5 py-4 grid grid-cols-12 gap-3 items-center">
+          <div class="col-span-4">
+            <div class="text-sm font-medium text-[#141413]">周报生成</div>
+            <div class="text-xs text-[#85857c] mt-0.5 font-mono">weekly_report</div>
+          </div>
+          <div class="col-span-2">
+            <button class="toggle-on relative inline-flex h-5 w-10 items-center rounded-full transition">
+              <span class="dot inline-block h-4 w-4 rounded-full bg-[#faf9f5] shadow-sm transition"></span>
+            </button>
+          </div>
+          <div class="col-span-5">
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5] w-full">
+              <option>Claude Sonnet 4.6 (云端 · Anthropic)</option>
+              <option>GPT-4o (云端 · OpenAI)</option>
+              <option>Qwen 32B (本地)</option>
+            </select>
+          </div>
+          <div class="col-span-1 text-xs text-[#b8623f] font-mono text-right">出域</div>
+        </div>
+
+        <div class="px-5 py-4 grid grid-cols-12 gap-3 items-center">
+          <div class="col-span-4">
+            <div class="text-sm font-medium text-[#141413]">技术方案</div>
+            <div class="text-xs text-[#85857c] mt-0.5 font-mono">tech_design</div>
+          </div>
+          <div class="col-span-2">
+            <button class="toggle-on relative inline-flex h-5 w-10 items-center rounded-full transition">
+              <span class="dot inline-block h-4 w-4 rounded-full bg-[#faf9f5] shadow-sm transition"></span>
+            </button>
+          </div>
+          <div class="col-span-5">
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5] w-full">
+              <option>Claude Sonnet 4.6 (云端 · Anthropic)</option>
+            </select>
+          </div>
+          <div class="col-span-1 text-xs text-[#b8623f] font-mono text-right">出域</div>
+        </div>
+
+        <div class="px-5 py-4 grid grid-cols-12 gap-3 items-center">
+          <div class="col-span-4">
+            <div class="text-sm font-medium text-[#141413]">ADR 整理</div>
+            <div class="text-xs text-[#85857c] mt-0.5 font-mono">adr</div>
+          </div>
+          <div class="col-span-2">
+            <button class="toggle-off relative inline-flex h-5 w-10 items-center rounded-full transition">
+              <span class="dot inline-block h-4 w-4 rounded-full bg-[#faf9f5] shadow-sm transition"></span>
+            </button>
+          </div>
+          <div class="col-span-5">
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5] w-full">
+              <option>Qwen 32B (本地)</option>
+            </select>
+          </div>
+          <div class="col-span-1 text-xs text-[#85857c] font-mono text-right">本地</div>
+        </div>
+
+        <div class="px-5 py-4 grid grid-cols-12 gap-3 items-center">
+          <div class="col-span-4">
+            <div class="text-sm font-medium text-[#141413]">脱敏语义判断</div>
+            <div class="text-xs text-[#85857c] mt-0.5 font-mono">redaction_llm</div>
+          </div>
+          <div class="col-span-2">
+            <button class="toggle-off relative inline-flex h-5 w-10 items-center rounded-full transition">
+              <span class="dot inline-block h-4 w-4 rounded-full bg-[#faf9f5] shadow-sm transition"></span>
+            </button>
+          </div>
+          <div class="col-span-5">
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5] w-full">
+              <option>Qwen 7B (本地 · 强制)</option>
+            </select>
+          </div>
+          <div class="col-span-1 text-xs text-[#85857c] font-mono text-right">本地</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- API Key 配置 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-5 mb-5">
+      <h2 class="font-serif text-lg text-[#141413] mb-1">云端 API Key</h2>
+      <p class="text-xs text-[#85857c] mb-4">由你填入并保存在本实例的 vault。TokenKnows 厂商不收集、不可见。</p>
+
+      <div class="space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-sm font-medium text-[#3a3a37]">Anthropic</div>
+          <input type="password" value="sk-ant-api03-•••••••••••••" class="flex-1 px-3 py-1.5 bg-[#f5f4ed] border border-[#e8e6dc] rounded-md text-sm font-mono focus:outline-none focus:border-[#d97757] transition"/>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-1 rounded">已验证</span>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">测试</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-sm font-medium text-[#3a3a37]">OpenAI</div>
+          <input type="password" value="sk-•••••••••••••••" class="flex-1 px-3 py-1.5 bg-[#f5f4ed] border border-[#e8e6dc] rounded-md text-sm font-mono focus:outline-none focus:border-[#d97757] transition"/>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-1 rounded">已验证</span>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">测试</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-sm font-medium text-[#3a3a37]">Ollama</div>
+          <input type="text" value="http://ollama-server:11434" class="flex-1 px-3 py-1.5 bg-[#f5f4ed] border border-[#e8e6dc] rounded-md text-sm font-mono focus:outline-none focus:border-[#d97757] transition"/>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-1 rounded">已连接</span>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">测试</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Token 用量 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="font-serif text-lg text-[#141413]">Token 用量（本月）</h2>
+          <p class="text-xs text-[#85857c] mt-0.5">详细见审计日志</p>
+        </div>
+        <button class="text-sm text-[#d97757] hover:text-[#b8623f] font-medium transition">导出 CSV</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3">
+        <div class="bg-[#e8e6dc]/30 rounded-md p-3">
+          <div class="text-xs text-[#85857c] mb-1">Anthropic</div>
+          <div class="font-serif text-2xl font-semibold text-[#141413]">1.2M</div>
+          <div class="text-xs text-[#85857c] mt-0.5">$11.40 估算</div>
+        </div>
+        <div class="bg-[#e8e6dc]/30 rounded-md p-3">
+          <div class="text-xs text-[#85857c] mb-1">OpenAI</div>
+          <div class="font-serif text-2xl font-semibold text-[#141413]">340k</div>
+          <div class="text-xs text-[#85857c] mt-0.5">$3.20 估算</div>
+        </div>
+        <div class="bg-[#e8e6dc]/30 rounded-md p-3">
+          <div class="text-xs text-[#85857c] mb-1">Ollama 本地</div>
+          <div class="font-serif text-2xl font-semibold text-[#141413]">4.8M</div>
+          <div class="text-xs text-[#5d6e45] mt-0.5">免费 · 本地</div>
+        </div>
+        <div class="bg-[#fbeae0]/40 border border-[#f5d4be] rounded-md p-3">
+          <div class="text-xs text-[#b8623f] mb-1">本月预算</div>
+          <div class="font-serif text-2xl font-semibold text-[#141413]">$50</div>
+          <div class="text-xs text-[#856226] mt-0.5">已用 $14.6 / 29%</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+</body>
+</html>

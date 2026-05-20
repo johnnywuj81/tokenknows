@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 脱敏确认</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-[#faf9f5] border-b border-[#e8e6dc] h-14 px-6 flex items-center justify-between sticky top-0 z-20">
+    <div class="flex items-center gap-3">
+      <button class="text-[#5d5d57] hover:text-[#141413] p-1.5 rounded-md transition">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="text-sm text-[#85857c]">脱敏确认 / AI Agent Pilot / 周报 W22</span>
+    </div>
+    <div class="w-9 h-9 rounded-full bg-[#fbeae0] text-[#b8623f] font-semibold flex items-center justify-center text-sm">JW</div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6 py-8">
+
+    <!-- 顶部状态 -->
+    <div class="bg-[#f5ecd8]/40 border border-[#d9c587] rounded-lg p-5 mb-6 flex items-start justify-between">
+      <div class="flex items-start gap-3">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#856226" stroke-width="2" class="flex-shrink-0 mt-0.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div>
+          <div class="font-serif text-xl text-[#141413] leading-tight">还有 <span class="text-[#b8623f] font-bold">7 处</span> 敏感信息未确认</div>
+          <div class="text-sm text-[#5c4318] mt-1.5">发布按钮已禁用。逐项处理或一键应用建议后即可发布。<span class="text-[#85857c] ml-2">已识别：12 处 · 已确认：5 处</span></div>
+        </div>
+      </div>
+      <button class="px-4 py-2 bg-[#141413] text-[#faf9f5] text-sm font-medium rounded-md hover:bg-[#3a3a37] transition flex items-center gap-2 flex-shrink-0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        一键应用所有建议
+      </button>
+    </div>
+
+    <!-- 筛选条 -->
+    <div class="flex items-center gap-2 mb-4 text-sm">
+      <button class="px-3 py-1.5 bg-[#141413] text-[#faf9f5] rounded-md font-medium">全部 12</button>
+      <button class="px-3 py-1.5 bg-[#faf9f5] border border-[#e8e6dc] text-[#3a3a37] rounded-md hover:bg-[#e8e6dc]/40 transition">待确认 7</button>
+      <button class="px-3 py-1.5 bg-[#faf9f5] border border-[#e8e6dc] text-[#3a3a37] rounded-md hover:bg-[#e8e6dc]/40 transition">已确认 5</button>
+      <div class="flex-1"></div>
+      <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5]">
+        <option>按类型分组</option>
+        <option>按章节</option>
+        <option>按置信度</option>
+      </select>
+    </div>
+
+    <!-- 敏感项列表 -->
+    <div class="space-y-2.5">
+
+      <!-- API_KEY · 待确认 · 高置信 -->
+      <div class="bg-[#faf9f5] border border-[#e8c7be] rounded-lg p-4 hover:border-[#d39c8e] transition">
+        <div class="flex items-start gap-3">
+          <span class="mt-0.5 px-2 py-0.5 bg-[#f5e0dc] text-[#8a3a2a] rounded font-mono text-xs font-medium border border-[#e8c7be]">API_KEY</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 text-xs text-[#85857c]">
+              <span>第 1 章 · 第 2 段</span>
+              <span class="text-[#d4d2c7]">·</span>
+              <span>规则识别 · 置信度 99%</span>
+              <span class="text-[#d4d2c7]">·</span>
+              <span class="font-medium text-[#856226]">仅 Reviewer 可见原文</span>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2.5">
+              <div>
+                <div class="text-xs text-[#85857c] mb-1">原文</div>
+                <div class="bg-[#f5e0dc]/30 border-l-2 border-[#b94a3a] rounded p-2.5 text-sm font-mono text-[#141413] break-all">sk-ant-api03-aBcDeFg...xyz789</div>
+              </div>
+              <div>
+                <div class="text-xs text-[#85857c] mb-1">建议替换 →</div>
+                <div class="bg-[#eef2e3]/40 border-l-2 border-[#788c5d] rounded p-2.5 text-sm font-mono text-[#141413]">[API_KEY]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[#e8e6dc]">
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">标记为非敏感</button>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">自定义文本</button>
+          <button class="text-xs px-3 py-1.5 border border-[#bdc9a3] text-[#5d6e45] bg-[#eef2e3]/40 rounded-md hover:bg-[#eef2e3] font-medium transition">应用建议</button>
+        </div>
+      </div>
+
+      <!-- CUSTOMER · 待确认 -->
+      <div class="bg-[#faf9f5] border border-[#e8c7be] rounded-lg p-4 hover:border-[#d39c8e] transition">
+        <div class="flex items-start gap-3">
+          <span class="mt-0.5 px-2 py-0.5 bg-[#f5e0dc] text-[#8a3a2a] rounded font-mono text-xs font-medium border border-[#e8c7be]">CUSTOMER</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 text-xs text-[#85857c]">
+              <span>第 3 章 · 第 1 段</span>
+              <span class="text-[#d4d2c7]">·</span>
+              <span>LLM 语义判断 · 置信度 92%</span>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2.5">
+              <div>
+                <div class="text-xs text-[#85857c] mb-1">原文</div>
+                <div class="bg-[#f5e0dc]/30 border-l-2 border-[#b94a3a] rounded p-2.5 text-sm text-[#141413] font-serif">…为<mark class="bg-[#f5d4be] px-0.5">中信证券</mark>定制的 Agent 工作流…</div>
+              </div>
+              <div>
+                <div class="text-xs text-[#85857c] mb-1">建议替换 →</div>
+                <div class="bg-[#eef2e3]/40 border-l-2 border-[#788c5d] rounded p-2.5 text-sm text-[#141413] font-serif">…为<mark class="bg-[#d6dec5] px-0.5 font-mono text-xs">[CUSTOMER]</mark>定制的 Agent 工作流…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[#e8e6dc]">
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">标记为非敏感</button>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">自定义文本</button>
+          <button class="text-xs px-3 py-1.5 border border-[#bdc9a3] text-[#5d6e45] bg-[#eef2e3]/40 rounded-md hover:bg-[#eef2e3] font-medium transition">应用建议</button>
+        </div>
+      </div>
+
+      <!-- INTERNAL_SYSTEM · 自定义文本 -->
+      <div class="bg-[#faf9f5] border border-[#fbeae0] rounded-lg p-4 ring-2 ring-[#fbeae0]/30">
+        <div class="flex items-start gap-3">
+          <span class="mt-0.5 px-2 py-0.5 bg-[#f5e0dc] text-[#8a3a2a] rounded font-mono text-xs font-medium border border-[#e8c7be]">INTERNAL_SYSTEM</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 text-xs text-[#85857c]">
+              <span>第 2 章 · 第 3 段</span>
+              <span class="text-[#d4d2c7]">·</span>
+              <span>自定义清单匹配</span>
+              <span class="text-[#d4d2c7]">·</span>
+              <span class="font-medium text-[#856226]">同名 3 处可一并替换</span>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2.5">
+              <div>
+                <div class="text-xs text-[#85857c] mb-1">原文</div>
+                <div class="bg-[#f5e0dc]/30 border-l-2 border-[#b94a3a] rounded p-2.5 text-sm text-[#141413] font-serif">部署到 <mark class="bg-[#f5d4be] px-0.5 font-mono text-xs">acme-prod-cluster-a3</mark> 后…</div>
+              </div>
+              <div>
+                <div class="text-xs text-[#85857c] mb-1">自定义替换文本</div>
+                <input type="text" value="生产集群" class="w-full px-2.5 py-1.5 bg-[#faf9f5] border border-[#d97757] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#fbeae0]"/>
+              </div>
+            </div>
+            <label class="flex items-center gap-2 mt-2 text-xs text-[#5d5d57]">
+              <input type="checkbox" class="w-3.5 h-3.5 rounded border-[#d4d2c7] text-[#d97757] focus:ring-[#fbeae0]" checked>
+              <span>同名 3 处一并替换为「生产集群」</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[#e8e6dc]">
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">取消</button>
+          <button class="text-xs px-3 py-1.5 bg-[#141413] text-[#faf9f5] rounded-md hover:bg-[#3a3a37] font-medium transition">确认替换 (3 处)</button>
+        </div>
+      </div>
+
+      <!-- 已确认（折叠） -->
+      <div class="bg-[#faf9f5] border border-[#bdc9a3] rounded-lg p-3.5 opacity-75">
+        <div class="flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5d6e45" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-sm text-[#141413] font-medium">EMAIL · 已确认</span>
+          <span class="text-xs text-[#85857c]">alice@acme.com → [EMAIL]</span>
+          <div class="flex-1"></div>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">撤销</button>
+        </div>
+      </div>
+
+      <!-- 已标记非敏感 -->
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-3.5 opacity-75">
+        <div class="flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#85857c" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          <span class="text-sm text-[#3a3a37]">IP · 已标记为非敏感</span>
+          <span class="text-xs text-[#85857c]">192.168.1.100（内网地址，已豁免）</span>
+          <div class="flex-1"></div>
+          <button class="text-xs text-[#5d5d57] hover:text-[#141413] transition">撤销</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 底部 -->
+    <div class="mt-8 pt-6 border-t border-[#e8e6dc] flex items-center justify-between">
+      <div class="text-xs text-[#85857c] leading-relaxed">
+        <div class="font-medium text-[#3a3a37] mb-0.5">数据驻留保证</div>
+        原文 SHA256 哈希仅用于审计；脱敏确认后原文不入库。
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="px-4 py-2 border border-[#e8e6dc] text-[#3a3a37] text-sm rounded-md hover:bg-[#e8e6dc]/40 transition">返回编辑</button>
+        <button class="px-4 py-2 bg-[#e8e6dc] text-[#85857c] text-sm rounded-md font-medium cursor-not-allowed" disabled>发布 · 还有 7 处待确认</button>
+      </div>
+    </div>
+
+  </main>
+
+</body>
+</html>

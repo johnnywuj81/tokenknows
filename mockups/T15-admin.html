@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 实例管理员控制台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-[#141413] text-[#faf9f5] h-14 px-6 flex items-center justify-between sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-md bg-[#d97757] flex items-center justify-center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#141413" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <span class="font-semibold">TokenKnows · 实例管理</span>
+      </div>
+      <span class="text-xs px-2 py-0.5 bg-[#d97757] text-[#141413] rounded font-semibold">ADMIN</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-[#b0aea5] font-mono">instance.acme.internal · v1.0.3</span>
+      <div class="w-9 h-9 rounded-full bg-[#d97757] text-[#141413] font-semibold flex items-center justify-center text-sm">AD</div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-8">
+
+    <!-- 实例健康仪表 -->
+    <div class="grid grid-cols-4 gap-3 mb-8">
+      <div class="bg-[#faf9f5] border border-[#bdc9a3] rounded-lg p-4">
+        <div class="text-xs text-[#85857c] uppercase tracking-wider">实例状态</div>
+        <div class="flex items-center gap-2 mt-2">
+          <span class="w-2 h-2 rounded-full bg-[#788c5d]"></span>
+          <span class="font-serif text-2xl font-semibold text-[#141413]">健康</span>
+        </div>
+        <div class="text-xs text-[#5d5d57] mt-1">已运行 28 天</div>
+      </div>
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-4">
+        <div class="text-xs text-[#85857c] uppercase tracking-wider">License</div>
+        <div class="font-serif text-2xl font-semibold text-[#141413] mt-2">87 天</div>
+        <div class="text-xs text-[#5d5d57] mt-1">到期 2026-08-15</div>
+      </div>
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-4">
+        <div class="text-xs text-[#85857c] uppercase tracking-wider">项目数</div>
+        <div class="font-serif text-2xl font-semibold text-[#141413] mt-2">3 / 5</div>
+        <div class="text-xs text-[#5d5d57] mt-1">已用 / 上限</div>
+      </div>
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-4">
+        <div class="text-xs text-[#85857c] uppercase tracking-wider">存储</div>
+        <div class="font-serif text-2xl font-semibold text-[#141413] mt-2">42 GB</div>
+        <div class="text-xs text-[#5d5d57] mt-1">DB 18 · 对象 24</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-[#e8e6dc] mb-6">
+      <div class="flex items-center gap-1">
+        <button class="px-4 py-2.5 text-sm font-medium text-[#141413] border-b-2 border-[#141413]">实例配置</button>
+        <button class="px-4 py-2.5 text-sm text-[#85857c] hover:text-[#141413] transition">License</button>
+        <button class="px-4 py-2.5 text-sm text-[#85857c] hover:text-[#141413] transition">审计日志</button>
+        <button class="px-4 py-2.5 text-sm text-[#85857c] hover:text-[#141413] transition">出域日志</button>
+        <button class="px-4 py-2.5 text-sm text-[#85857c] hover:text-[#141413] transition">运维</button>
+        <button class="px-4 py-2.5 text-sm text-[#85857c] hover:text-[#141413] transition">遥测</button>
+      </div>
+    </div>
+
+    <!-- 实例级出域开关 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-5 mb-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-serif text-lg text-[#141413]">实例级出域</h2>
+          <p class="text-xs text-[#85857c] mt-0.5">控制整个实例是否允许任何云端 LLM 调用</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-medium text-[#856226]">已开启</span>
+          <button class="bg-[#141413] relative inline-flex h-6 w-11 items-center rounded-full transition">
+            <span class="inline-block h-5 w-5 rounded-full bg-[#faf9f5] shadow-sm translate-x-5 transition"></span>
+          </button>
+        </div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-[#e8e6dc] flex items-start gap-3 text-xs">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#856226" stroke-width="2" class="flex-shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div class="text-[#5c4318]">
+          开启后，项目 Owner 可在项目级 / 任务级单独控制使用云端模型。<strong>所有云端调用记录到出域日志</strong>，仅在本实例本地存储。
+        </div>
+      </div>
+    </section>
+
+    <!-- 默认模型 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-5 mb-5">
+      <h2 class="font-serif text-lg text-[#141413] mb-1">默认 LLM Provider</h2>
+      <p class="text-xs text-[#85857c] mb-4">新建项目时的初始模型路由（项目 Owner 可覆盖）</p>
+
+      <div class="grid grid-cols-2 gap-3">
+        <label class="bg-[#faf9f5] border-2 border-[#141413] rounded-md p-3 cursor-pointer">
+          <div class="flex items-center gap-2">
+            <input type="radio" checked class="accent-[#141413]">
+            <span class="font-medium text-[#141413]">Ollama 本地（推荐）</span>
+          </div>
+          <div class="text-xs text-[#85857c] mt-1 ml-6">零出域 · 适合所有任务默认</div>
+        </label>
+        <label class="bg-[#faf9f5] border-2 border-[#e8e6dc] rounded-md p-3 cursor-pointer hover:border-[#d4d2c7] transition">
+          <div class="flex items-center gap-2">
+            <input type="radio" class="accent-[#141413]">
+            <span class="font-medium text-[#141413]">Anthropic 云端</span>
+          </div>
+          <div class="text-xs text-[#85857c] mt-1 ml-6">质量优先 · 数据出域</div>
+        </label>
+      </div>
+    </section>
+
+    <!-- 紧急关停 -->
+    <section class="bg-[#f5e0dc]/30 border border-[#e8c7be] rounded-lg p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="font-serif text-lg text-[#8a3a2a]">紧急关停</h2>
+          <p class="text-sm text-[#5d5d57] mt-1.5 leading-relaxed">一键关闭实例对外所有网络出站（含云端 LLM、产品官方更新源）。进入"全离线模式"后仍可继续生产使用，仅不能使用云端模型与自动更新。</p>
+          <div class="mt-3 text-xs text-[#85857c] space-y-0.5">
+            <div>• 不影响实例内的事件采集、文档生成（本地模型）、审批、发布到内部知识库</div>
+            <div>• 一旦执行，恢复需要在此面板手动解除</div>
+            <div>• 操作将记入审计日志（who / when / reason）</div>
+          </div>
+        </div>
+        <button class="flex-shrink-0 px-4 py-2.5 bg-[#b94a3a] text-[#faf9f5] text-sm font-medium rounded-md hover:bg-[#8a3a2a] transition flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          紧急关停
+        </button>
+      </div>
+    </section>
+
+    <!-- 底部：实例信息 -->
+    <div class="mt-8 pt-6 border-t border-[#e8e6dc] grid grid-cols-3 gap-4 text-xs">
+      <div>
+        <div class="font-semibold text-[#3a3a37] uppercase tracking-wider mb-1">部署形态</div>
+        <div class="text-[#5d5d57] font-mono">K8s · Helm Chart v1.0.3</div>
+      </div>
+      <div>
+        <div class="font-semibold text-[#3a3a37] uppercase tracking-wider mb-1">客户标识</div>
+        <div class="text-[#5d5d57] font-mono">acme-corp · License #ACME-2026-Q2</div>
+      </div>
+      <div>
+        <div class="font-semibold text-[#3a3a37] uppercase tracking-wider mb-1">实例 ID</div>
+        <div class="text-[#5d5d57] font-mono">inst_2bf3a9c1e8d4</div>
+      </div>
+    </div>
+
+  </main>
+
+</body>
+</html>

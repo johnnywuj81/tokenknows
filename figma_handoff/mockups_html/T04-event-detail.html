@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 事件详情</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: rgba(20,20,19,0.45); backdrop-filter: blur(4px); color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen flex justify-end">
+
+  <!-- 右侧抽屉 -->
+  <aside class="w-[560px] bg-[#f5f4ed] border-l border-[#e8e6dc] h-screen overflow-y-auto shadow-2xl">
+
+    <!-- 头部 -->
+    <div class="p-5 border-b border-[#e8e6dc] sticky top-0 bg-[#f5f4ed] z-10">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-md bg-[#141413] flex items-center justify-center">
+            <span class="text-[#d97757] font-bold text-sm">CC</span>
+          </div>
+          <div>
+            <div class="font-serif text-lg text-[#141413] leading-tight">Claude Code · 对话片段</div>
+            <div class="text-xs text-[#85857c] mt-0.5">@alice · 2 小时前 · <span class="font-mono">conv_a3b9...c1d2:turn_47</span></div>
+          </div>
+        </div>
+        <button class="text-[#85857c] hover:text-[#141413] p-1 transition">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Tab -->
+      <div class="flex items-center gap-1 mt-4 -mb-1">
+        <button class="px-3 py-2 text-sm font-medium text-[#141413] border-b-2 border-[#141413]">内容</button>
+        <button class="px-3 py-2 text-sm text-[#85857c] hover:text-[#141413] transition">Payload</button>
+        <button class="px-3 py-2 text-sm text-[#85857c] hover:text-[#141413] transition">价值识别 <span class="text-xs">(3)</span></button>
+        <button class="px-3 py-2 text-sm text-[#85857c] hover:text-[#141413] transition">关联事件 <span class="text-xs">(2)</span></button>
+      </div>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="p-5 space-y-5">
+
+      <!-- 对话内容 -->
+      <div class="font-serif text-[15px] leading-relaxed text-[#3a3a37] space-y-4">
+        <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-md p-4">
+          <div class="text-xs text-[#85857c] uppercase tracking-wider mb-2" style="font-family: 'Poppins', sans-serif;">User</div>
+          <p>迭代 Prompt：要求 Agent 给出三种方案对比。当前 Agent 倾向直接给出一个方案，有时候不够全面。</p>
+        </div>
+        <div class="bg-[#fbeae0]/30 border border-[#f5d4be] rounded-md p-4">
+          <div class="text-xs text-[#b8623f] uppercase tracking-wider mb-2 font-medium" style="font-family: 'Poppins', sans-serif;">Assistant</div>
+          <p>我建议在 system prompt 里加上明确指令：</p>
+          <pre class="font-mono text-xs bg-[#141413] text-[#d97757] rounded-md p-3 my-3 overflow-x-auto" style="white-space: pre-wrap;">When proposing a solution, ALWAYS present:
+1. The most direct approach
+2. An alternative with different tradeoffs
+3. An aggressive/experimental option
+
+Conclude with a brief comparison table.</pre>
+          <p>这样可以强制 Agent 在每次回答时都过一遍多方案空间。配合 critic 步骤效果会更好。</p>
+        </div>
+      </div>
+
+      <!-- 价值识别预览 -->
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-semibold text-[#3a3a37] uppercase tracking-wider">价值片段识别 · 3 个</div>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-0.5 rounded font-mono">trust 0.91</span>
+        </div>
+        <div class="space-y-2">
+          <div class="border-l-2 border-[#d97757] pl-3 py-1.5">
+            <div class="flex items-center gap-2 text-xs text-[#85857c]">
+              <span class="px-1.5 py-0.5 bg-[#e8eef5] text-[#3d6a96] rounded font-medium">prompt_pattern</span>
+              <span class="font-mono text-[#5d6e45]">conf 0.94</span>
+            </div>
+            <div class="font-serif text-sm text-[#3a3a37] mt-1">"三方案对比" prompt 模式（system prompt 强制约束）</div>
+          </div>
+          <div class="border-l-2 border-[#d97757] pl-3 py-1.5">
+            <div class="flex items-center gap-2 text-xs text-[#85857c]">
+              <span class="px-1.5 py-0.5 bg-[#e8eef5] text-[#3d6a96] rounded font-medium">architecture</span>
+              <span class="font-mono text-[#5d6e45]">conf 0.87</span>
+            </div>
+            <div class="font-serif text-sm text-[#3a3a37] mt-1">"critic 步骤"组合使用建议</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payload 概览 -->
+      <div class="bg-[#141413] rounded-lg p-4 font-mono text-xs text-[#d4d2c7] overflow-x-auto">
+        <div class="text-[#85857c] mb-2">// payload 摘要</div>
+        <pre style="white-space: pre-wrap;">{
+  "model": "claude-sonnet-4-6",
+  "tool_calls": [],
+  "tokens": { "in": 412, "out": 287 },
+  "files_referenced": [
+    "src/llm_gateway/prompts/agent.py"
+  ]
+}</pre>
+      </div>
+
+    </div>
+
+    <!-- 底部操作 -->
+    <div class="border-t border-[#e8e6dc] p-4 flex items-center gap-2 sticky bottom-0 bg-[#f5f4ed]">
+      <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/40 text-[#3a3a37] transition flex-1">复制链接</button>
+      <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/40 text-[#3a3a37] transition flex-1">标记非价值</button>
+      <button class="text-sm px-3 py-1.5 bg-[#141413] text-[#faf9f5] rounded-md hover:bg-[#3a3a37] font-medium transition flex-1">引用到文档</button>
+    </div>
+
+  </aside>
+
+</body>
+</html>

@@ -1,0 +1,88 @@
+<svg viewBox="0 0 900 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title-c desc-c">
+  <title id="title-c">旅程 C · 人工审核 → 导出 / 发布</title>
+  <desc id="desc-c">从 Editor 提交审核、Reviewer 决策、脱敏强制确认到多目的地发布与版本追溯</desc>
+
+  <defs>
+    <marker id="arrow-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-c-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <style>
+    .c-box { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+    .c-start { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.5; }
+    .c-end { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
+    .c-dia { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; }
+    .c-lb { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+    .c-ls { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 12px; fill: #475569; }
+    .c-arr { stroke: #64748b; stroke-width: 1.6; fill: none; }
+    .c-arr-warn { stroke: #dc2626; stroke-width: 1.6; fill: none; stroke-dasharray: 5,3; }
+    .c-title { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 18px; font-weight: 700; fill: #0f172a; }
+  </style>
+
+  <text x="450" y="30" text-anchor="middle" class="c-title">旅程 C · 人工审核 → 导出 / 发布</text>
+
+  <rect x="330" y="60" width="240" height="56" rx="8" class="c-start"/>
+  <text x="450" y="83" text-anchor="middle" class="c-lb">Editor 提交审核</text>
+  <text x="450" y="102" text-anchor="middle" class="c-ls">通知 Reviewer</text>
+
+  <line x1="450" y1="116" x2="450" y2="150" class="c-arr" marker-end="url(#arrow-c)"/>
+
+  <rect x="330" y="150" width="240" height="56" rx="8" class="c-box"/>
+  <text x="450" y="173" text-anchor="middle" class="c-lb">Reviewer 网页内逐段批注</text>
+  <text x="450" y="192" text-anchor="middle" class="c-ls">approve / reject / comment</text>
+
+  <line x1="450" y1="206" x2="450" y2="230" class="c-arr" marker-end="url(#arrow-c)"/>
+
+  <polygon points="450,230 580,280 450,330 320,280" class="c-dia"/>
+  <text x="450" y="285" text-anchor="middle" class="c-lb">Reviewer 决策</text>
+
+  <polyline points="320,280 200,280 200,88 330,88" class="c-arr-warn" marker-end="url(#arrow-c-warn)"/>
+  <text x="100" y="184" class="c-ls" fill="#dc2626">Reject</text>
+  <text x="100" y="202" class="c-ls" fill="#dc2626">回到 Editor</text>
+
+  <line x1="450" y1="330" x2="450" y2="360" class="c-arr" marker-end="url(#arrow-c)"/>
+  <text x="465" y="350" class="c-ls">Approve</text>
+
+  <rect x="330" y="360" width="240" height="56" rx="8" class="c-box"/>
+  <text x="450" y="383" text-anchor="middle" class="c-lb">自动脱敏识别</text>
+  <text x="450" y="402" text-anchor="middle" class="c-ls">API Key / 客户名 / 内部系统名</text>
+
+  <line x1="450" y1="416" x2="450" y2="440" class="c-arr" marker-end="url(#arrow-c)"/>
+
+  <polygon points="450,440 600,500 450,560 300,500" class="c-dia"/>
+  <text x="450" y="495" text-anchor="middle" class="c-lb">敏感项已全部确认?</text>
+
+  <polyline points="600,500 780,500 780,388 570,388" class="c-arr-warn" marker-end="url(#arrow-c-warn)"/>
+  <text x="790" y="460" class="c-ls" fill="#dc2626">否</text>
+  <text x="790" y="478" class="c-ls" fill="#dc2626">发布禁用</text>
+  <text x="790" y="496" class="c-ls" fill="#dc2626">逐项确认</text>
+
+  <line x1="450" y1="560" x2="450" y2="590" class="c-arr" marker-end="url(#arrow-c)"/>
+  <text x="465" y="582" class="c-ls">是</text>
+
+  <rect x="330" y="590" width="240" height="56" rx="8" class="c-box"/>
+  <text x="450" y="613" text-anchor="middle" class="c-lb">发布按钮激活</text>
+  <text x="450" y="632" text-anchor="middle" class="c-ls">选择目的地</text>
+
+  <line x1="380" y1="646" x2="180" y2="690" class="c-arr" marker-end="url(#arrow-c)"/>
+  <line x1="520" y1="646" x2="720" y2="690" class="c-arr" marker-end="url(#arrow-c)"/>
+
+  <rect x="60" y="690" width="240" height="56" rx="8" class="c-box"/>
+  <text x="180" y="713" text-anchor="middle" class="c-lb">TokenKnows 内部</text>
+  <text x="180" y="732" text-anchor="middle" class="c-ls">项目知识库</text>
+
+  <rect x="600" y="690" width="240" height="56" rx="8" class="c-box"/>
+  <text x="720" y="713" text-anchor="middle" class="c-lb">外部目的地</text>
+  <text x="720" y="732" text-anchor="middle" class="c-ls">飞书 / Slack / Notion · 跨格式</text>
+
+  <line x1="180" y1="746" x2="420" y2="800" class="c-arr" marker-end="url(#arrow-c)"/>
+  <line x1="720" y1="746" x2="480" y2="800" class="c-arr" marker-end="url(#arrow-c)"/>
+
+  <rect x="330" y="800" width="240" height="56" rx="8" class="c-end"/>
+  <text x="450" y="823" text-anchor="middle" class="c-lb">发布回执 + 版本追溯</text>
+  <text x="450" y="842" text-anchor="middle" class="c-ls">链接 · 撤回 · 版本对比</text>
+</svg>

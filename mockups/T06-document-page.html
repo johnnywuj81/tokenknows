@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 周报 W22</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+      background: #f5f4ed;
+      color: #141413;
+      font-size: 14px;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .prose-doc { font-family: 'Lora', Georgia, serif; }
+    .prose-doc h2 { font-family: 'Poppins', sans-serif; font-size: 1.375rem; font-weight: 600; margin-top: 2.25rem; margin-bottom: 1rem; color: #141413; letter-spacing: -0.01em; }
+    .prose-doc h3 { font-family: 'Poppins', sans-serif; font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; color: #3a3a37; }
+    .prose-doc p { color: #3a3a37; line-height: 1.75; margin-bottom: 1rem; font-size: 15px; }
+    .prose-doc ul { list-style: disc; padding-left: 1.5rem; color: #3a3a37; margin-bottom: 1rem; }
+    .prose-doc li { line-height: 1.75; margin-bottom: 0.375rem; font-size: 15px; }
+    .prose-doc strong { color: #141413; font-weight: 600; }
+    .evidence-badge { font-family: 'Poppins', sans-serif; display: inline-flex; align-items: center; gap: 2px; padding: 1px 6px; background: #fbeae0; color: #b8623f; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer; vertical-align: super; margin-left: 2px; }
+    .evidence-badge:hover { background: #f5d4be; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- 顶栏 -->
+  <header class="bg-[#faf9f5] border-b border-[#e8e6dc] h-14 px-6 flex items-center justify-between sticky top-0 z-20">
+    <div class="flex items-center gap-3">
+      <button class="text-[#5d5d57] hover:text-[#141413] hover:bg-[#e8e6dc]/50 p-1.5 rounded-md transition">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="text-sm text-[#85857c]">文档 / AI Agent Pilot / 周报</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 text-xs text-[#5d5d57] bg-[#e8e6dc]/40 px-3 py-1.5 rounded-md border border-[#e8e6dc]">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#788c5d]"></span>
+        <span class="font-mono">instance.acme.internal</span>
+      </div>
+      <div class="w-9 h-9 rounded-full bg-[#fbeae0] text-[#b8623f] font-semibold flex items-center justify-center text-sm">JW</div>
+    </div>
+  </header>
+
+  <!-- 文档头部 + 自评卡 -->
+  <div class="bg-[#faf9f5] border-b border-[#e8e6dc] px-8 py-5 sticky top-14 z-10">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="font-serif text-2xl text-[#141413] leading-tight">项目周报 · W22 (5/13 – 5/19)</h1>
+          <span class="px-2 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded-md text-xs font-medium">周报</span>
+          <span class="px-2 py-0.5 bg-[#f5ecd8] text-[#856226] rounded-md text-xs font-medium">草稿</span>
+          <span class="font-mono text-xs text-[#85857c]">v3</span>
+        </div>
+        <div class="text-xs text-[#85857c] mt-1.5">由 @alice 于 2 分钟前生成 · 编辑：刚才</div>
+      </div>
+
+      <!-- 自评卡 -->
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 bg-[#eef2e3]/60 border border-[#bdc9a3] rounded-md px-3 py-1.5">
+          <span class="text-xs text-[#3d4a2c] font-medium">覆盖度</span>
+          <span class="font-mono text-sm font-bold text-[#5d6e45]">82%</span>
+        </div>
+        <div class="flex items-center gap-2 bg-[#eef2e3]/60 border border-[#bdc9a3] rounded-md px-3 py-1.5">
+          <span class="text-xs text-[#3d4a2c] font-medium">引用密度</span>
+          <span class="font-mono text-sm font-bold text-[#5d6e45]">高</span>
+        </div>
+        <div class="flex items-center gap-2 bg-[#f5ecd8]/60 border border-[#ebe1c0] rounded-md px-3 py-1.5">
+          <span class="text-xs text-[#5c4318] font-medium">空话比例</span>
+          <span class="font-mono text-sm font-bold text-[#856226]">12%</span>
+        </div>
+        <div class="flex items-center gap-2 bg-[#e8e6dc]/40 border border-[#e8e6dc] rounded-md px-3 py-1.5">
+          <span class="text-xs text-[#5d5d57] font-medium">相似度</span>
+          <span class="font-mono text-sm font-bold text-[#3a3a37]">低</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex">
+
+    <!-- 左侧章节导航 -->
+    <aside class="w-52 bg-[#faf9f5] border-r border-[#e8e6dc] h-[calc(100vh-56px-77px-56px)] sticky top-[189px] p-4 overflow-y-auto">
+      <div class="text-xs font-semibold text-[#85857c] uppercase tracking-wider mb-2.5">章节</div>
+      <nav class="space-y-0.5 text-sm">
+        <a class="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[#141413] text-[#faf9f5] font-medium">
+          <span>1. 进展摘要</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#788c5d]"></span>
+        </a>
+        <a class="flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">
+          <span>2. Bug 与解决</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#788c5d]"></span>
+        </a>
+        <a class="flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">
+          <span>3. 关键决策</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#788c5d]"></span>
+        </a>
+        <a class="flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">
+          <span class="text-[#856226]">4. 风险与阻塞</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#d97757]" title="自评分低"></span>
+        </a>
+        <a class="flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">
+          <span>5. 下周计划</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#788c5d]"></span>
+        </a>
+      </nav>
+
+      <div class="pt-4 mt-4 border-t border-[#e8e6dc]">
+        <div class="text-xs font-semibold text-[#85857c] uppercase tracking-wider mb-2.5">证据来源</div>
+        <div class="space-y-1.5 text-xs text-[#5d5d57]">
+          <div class="flex items-center justify-between"><span>Claude Code</span><span class="font-mono">42</span></div>
+          <div class="flex items-center justify-between"><span>GitHub PR</span><span class="font-mono">8</span></div>
+          <div class="flex items-center justify-between"><span>Cursor</span><span class="font-mono">15</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 px-10 py-8 max-w-4xl prose-doc">
+
+      <div class="group relative -ml-4 pl-4 border-l-2 border-transparent hover:border-[#fbeae0] transition">
+        <div class="absolute left-[-44px] top-2 flex items-center gap-1">
+          <div class="px-1.5 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded text-[10px] font-mono font-medium border border-[#f5d4be]">Claude</div>
+        </div>
+        <div class="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+          <button class="text-xs px-2 py-1 bg-[#faf9f5] border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/50 text-[#3a3a37] flex items-center gap-1">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            重生成
+          </button>
+          <button class="text-xs px-2 py-1 bg-[#faf9f5] border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/50 text-[#3a3a37]">⋯</button>
+        </div>
+
+        <h2>1. 进展摘要</h2>
+        <p>本周项目核心进展集中在 Agent 架构与 LLM 抽象层。完成了 <strong>Ollama 适配器的首版实现</strong><span class="evidence-badge">📎 3</span>，并在内部环境验证了与现有 Anthropic 适配器的接口兼容性<span class="evidence-badge">📎 2</span>。前端编辑器从 Slate.js 迁移至 TipTap，主要为了原生支持自定义证据徽章与脱敏占位节点<span class="evidence-badge">📎 1</span>。</p>
+        <p>团队本周共合并 <strong>8 个 PR</strong><span class="evidence-badge">📎 8</span>，其中 3 个属于"架构决策"类，另外 5 个为常规迭代。Claude Code 对话量 847 条，比上周增长 17%。</p>
+      </div>
+
+      <div class="group relative -ml-4 pl-4 border-l-2 border-transparent hover:border-[#fbeae0] transition mt-2">
+        <div class="absolute left-[-44px] top-2 flex items-center gap-1">
+          <div class="px-1.5 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded text-[10px] font-mono font-medium border border-[#f5d4be]">Claude</div>
+        </div>
+        <h2>2. Bug 与解决</h2>
+        <p><strong>Cursor 扩展在 macOS 偶发崩溃</strong>（Issue #87）<span class="evidence-badge">📎 4</span>：根因为扩展在 Apple Silicon 上调用 native module 时未正确处理 ARM64 / x86_64 差异。@dave 提交 PR #138 增加架构检测逻辑，下周一发布修复版本。</p>
+        <p><strong>幻觉问题修复</strong>（生成的 ADR 引用了不存在的 PR）<span class="evidence-badge">📎 2</span>：在生成 Prompt 中加入 critic 步骤，强制模型在引用前验证 PR 是否存在。@carol 主导，已在 W22 全部新生成文档中应用。</p>
+      </div>
+
+      <div class="group relative -ml-4 pl-4 border-l-2 border-transparent hover:border-[#fbeae0] transition mt-2">
+        <div class="absolute left-[-44px] top-2 flex items-center gap-1">
+          <div class="px-1.5 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded text-[10px] font-mono font-medium border border-[#f5d4be]">Claude</div>
+        </div>
+        <h2>3. 关键决策</h2>
+        <ul>
+          <li><strong>不直接使用 LangChain</strong><span class="evidence-badge">📎 5</span>：经过 @alice 与团队讨论，决定自研轻量 LLM 抽象层。理由：LangChain 的 chain / agent 抽象过重，与本项目"task → adapter"路由模型不匹配；自研可控、易测、易私有化。</li>
+          <li><strong>采用 Postgres + pgvector 替代独立向量库</strong><span class="evidence-badge">📎 3</span>：MVP 规模下事件量 < 10M，pgvector 性能足够；私有化部署少一个依赖组件，运维成本降低。</li>
+          <li><strong>VS Code 扩展推迟到 S6</strong><span class="evidence-badge">📎 2</span>：Copilot Chat API 授权路径未稳定，需要单独 spike。Claude Code 优先（覆盖 80% 重度用户）。</li>
+        </ul>
+      </div>
+
+      <!-- 章节 4 - 标红/warning，用 Anthropic 暖色 -->
+      <div class="group relative -ml-4 pl-4 border-l-2 border-[#d9c587] transition mt-2 bg-[#f5ecd8]/30 rounded-r-lg py-2">
+        <div class="absolute left-[-44px] top-2 flex items-center gap-1">
+          <div class="px-1.5 py-0.5 bg-[#f5ecd8] text-[#856226] rounded text-[10px] font-mono font-medium border border-[#d9c587]">Claude</div>
+        </div>
+        <div class="bg-[#f5ecd8]/70 border border-[#d9c587] rounded-md px-3.5 py-2.5 mb-3 flex items-start gap-2.5 text-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#856226" stroke-width="2" class="flex-shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div>
+            <div class="font-medium text-[#5c4318]">该章节自评分较低（覆盖度 54%）</div>
+            <div class="text-[#7a6024] text-xs mt-0.5">建议补充更多"风险讨论"相关事件，或手动改写。 <button class="underline font-medium hover:text-[#5c4318]">补充数据源</button> · <button class="underline font-medium hover:text-[#5c4318]">重新生成</button></div>
+          </div>
+        </div>
+        <h2>4. 风险与阻塞</h2>
+        <p>本周识别的主要风险点包括 pgvector 在大数据量下的索引性能未实测<span class="evidence-badge">📎 1</span>，以及 Copilot Chat 接入路径仍待验证。后续需要进行专项 spike。</p>
+      </div>
+
+      <div class="group relative -ml-4 pl-4 border-l-2 border-transparent hover:border-[#fbeae0] transition mt-2">
+        <div class="absolute left-[-44px] top-2 flex items-center gap-1">
+          <div class="px-1.5 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded text-[10px] font-mono font-medium border border-[#f5d4be]">Claude</div>
+        </div>
+        <h2>5. 下周计划</h2>
+        <ul>
+          <li>完成 Ollama 适配器的生产级测试（@alice）</li>
+          <li>启动 K8s Helm Chart 的设计与首版实现（@dave）</li>
+          <li>对接首家试点客户的部署环境（@john）</li>
+          <li>价值识别模型的微调实验（@carol）</li>
+        </ul>
+      </div>
+
+    </main>
+
+    <!-- 右侧证据链抽屉 -->
+    <aside class="w-96 bg-[#faf9f5] border-l border-[#e8e6dc] h-[calc(100vh-56px-77px)] sticky top-[133px] overflow-y-auto">
+      <div class="p-4 border-b border-[#e8e6dc]">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-[#141413] text-sm">证据来源</h3>
+          <button class="text-[#b0aea5] hover:text-[#141413] text-sm transition">×</button>
+        </div>
+        <div class="text-xs text-[#85857c] mt-1">第 1 章 · 第 1 段：「Ollama 适配器的首版实现」</div>
+      </div>
+      <div class="divide-y divide-[#e8e6dc]">
+
+        <div class="p-4 hover:bg-[#e8e6dc]/30 cursor-pointer transition">
+          <div class="flex items-start justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <div class="w-5 h-5 rounded bg-[#3a3a37] text-[#faf9f5] text-[10px] font-semibold flex items-center justify-center">GH</div>
+              <span class="text-xs font-medium text-[#141413]">PR #142</span>
+              <span class="text-xs text-[#85857c]">@bob · 3 天前</span>
+            </div>
+            <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-1.5 py-0.5 rounded font-mono font-medium">0.95</span>
+          </div>
+          <div class="text-xs font-medium text-[#141413] mb-1">feat: add Ollama adapter with OpenAI-compatible API</div>
+          <div class="bg-[#f5f4ed] rounded p-2.5 text-xs text-[#3a3a37] leading-relaxed border-l-2 border-[#d97757]">
+            <span class="font-serif">实现了 <mark class="bg-[#f5d4be] text-[#141413] px-0.5">OllamaAdapter</mark>，复用 OpenAIAdapter 的请求格式（Ollama 提供 OpenAI 兼容端点），主要差异：1）endpoint 走 http://localhost:11434；2）model 名映射；3）...</span>
+          </div>
+          <div class="flex items-center gap-3 mt-2 text-xs">
+            <button class="text-[#d97757] hover:text-[#b8623f] font-medium transition">在事件流中查看</button>
+            <button class="text-[#d97757] hover:text-[#b8623f] font-medium transition">在 GitHub 打开 ↗</button>
+          </div>
+        </div>
+
+        <div class="p-4 hover:bg-[#e8e6dc]/30 cursor-pointer transition">
+          <div class="flex items-start justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <div class="w-5 h-5 rounded bg-[#141413] text-[#faf9f5] text-[10px] font-semibold flex items-center justify-center">CC</div>
+              <span class="text-xs font-medium text-[#141413]">对话片段</span>
+              <span class="text-xs text-[#85857c]">@alice · 4 天前</span>
+            </div>
+            <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-1.5 py-0.5 rounded font-mono font-medium">0.88</span>
+          </div>
+          <div class="text-xs font-medium text-[#141413] mb-1">讨论 Ollama 接入方案</div>
+          <div class="bg-[#f5f4ed] rounded p-2.5 text-xs text-[#3a3a37] leading-relaxed border-l-2 border-[#d97757] font-serif">
+            <span class="text-[#85857c]">[user]</span> 我们要不要在 LLM Gateway 加个本地模型的 adapter？<br/>
+            <span class="text-[#85857c]">[assistant]</span> <mark class="bg-[#f5d4be] text-[#141413] px-0.5">最直接的选择是 Ollama</mark>——它的 API 与 OpenAI 高度兼容，我们的 OpenAIAdapter 几乎能直接复用...
+          </div>
+          <div class="flex items-center gap-3 mt-2 text-xs">
+            <button class="text-[#d97757] hover:text-[#b8623f] font-medium transition">在事件流中查看</button>
+          </div>
+        </div>
+
+        <div class="p-4 hover:bg-[#e8e6dc]/30 cursor-pointer transition">
+          <div class="flex items-start justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <div class="w-5 h-5 rounded bg-[#3a3a37] text-[#faf9f5] text-[10px] font-semibold flex items-center justify-center">GH</div>
+              <span class="text-xs font-medium text-[#141413]">PR #135</span>
+              <span class="text-xs text-[#85857c]">@dave · 5 天前</span>
+            </div>
+            <span class="text-xs text-[#856226] bg-[#f5ecd8] px-1.5 py-0.5 rounded font-mono font-medium">0.73</span>
+          </div>
+          <div class="text-xs font-medium text-[#141413] mb-1">refactor: introduce BaseAdapter abstract class</div>
+          <div class="bg-[#f5f4ed] rounded p-2.5 text-xs text-[#3a3a37] leading-relaxed border-l-2 border-[#d97757] font-serif">
+            为 LLM Gateway 引入 BaseAdapter，定义 `generate` 与 `stream` 两个抽象方法，<mark class="bg-[#f5d4be] text-[#141413] px-0.5">为后续 Ollama / vLLM 适配做铺垫</mark>。
+          </div>
+        </div>
+
+      </div>
+
+      <div class="p-4 border-t border-[#e8e6dc]">
+        <button class="w-full text-sm py-2 border border-dashed border-[#d4d2c7] text-[#5d5d57] hover:border-[#d97757] hover:text-[#d97757] hover:bg-[#fbeae0]/30 rounded-md flex items-center justify-center gap-1.5 transition">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          手动添加来源
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 底部操作条 -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-[#faf9f5] border-t border-[#e8e6dc] px-6 py-3 flex items-center justify-between z-10">
+    <div class="text-xs text-[#85857c] flex items-center gap-2">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#788c5d" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      已自动保存 · 1 秒前
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/40 text-[#3a3a37] flex items-center gap-1.5 transition">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        重生成全文
+      </button>
+      <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/40 text-[#3a3a37] flex items-center gap-1.5 transition">
+        切换模型
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] rounded-md hover:bg-[#e8e6dc]/40 text-[#3a3a37] transition">导出</button>
+      <button class="text-sm px-4 py-1.5 bg-[#141413] text-[#faf9f5] rounded-md hover:bg-[#3a3a37] font-medium transition">提交审核</button>
+    </div>
+  </footer>
+
+  <div class="h-16"></div>
+
+</body>
+</html>

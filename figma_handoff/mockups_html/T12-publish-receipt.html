@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 发布回执与版本</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-[#faf9f5] border-b border-[#e8e6dc] h-14 px-6 flex items-center justify-between sticky top-0 z-10">
+    <span class="text-sm text-[#85857c]">AI Agent Pilot / 文档 / 周报 W22</span>
+    <div class="w-9 h-9 rounded-full bg-[#fbeae0] text-[#b8623f] font-semibold flex items-center justify-center text-sm">JW</div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6 py-8">
+
+    <!-- 发布成功 banner -->
+    <div class="bg-[#eef2e3]/50 border border-[#bdc9a3] rounded-lg p-5 mb-6 flex items-start gap-3">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5d6e45" stroke-width="2.5" class="flex-shrink-0 mt-0.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <div class="flex-1">
+        <div class="font-serif text-lg text-[#141413] leading-tight">已发布 · v3 已固定为快照</div>
+        <div class="text-sm text-[#5d5d57] mt-1">发布到 2 个目的地 · 全部成功 · 1 分钟前</div>
+      </div>
+      <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] text-[#3a3a37] bg-[#faf9f5] rounded-md hover:bg-[#e8e6dc]/40 transition flex-shrink-0">查看发布版本</button>
+    </div>
+
+    <!-- 已发送目的地 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg overflow-hidden mb-6">
+      <div class="p-4 border-b border-[#e8e6dc]">
+        <h2 class="font-serif text-lg text-[#141413]">发布目的地</h2>
+      </div>
+      <div class="divide-y divide-[#e8e6dc]">
+
+        <div class="p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-md bg-[#141413] flex items-center justify-center flex-shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-[#141413]">TokenKnows 内部知识库</div>
+            <div class="text-xs text-[#85857c] mt-0.5 font-mono truncate">tokenknows://projects/ai-agent-pilot/assets/wkr-w22-v3</div>
+          </div>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-0.5 rounded font-medium">成功</span>
+          <button class="text-sm text-[#d97757] hover:text-[#b8623f] font-medium transition">打开 →</button>
+        </div>
+
+        <div class="p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-md bg-[#00d6b9]/15 flex items-center justify-center flex-shrink-0">
+            <span class="font-bold text-sm text-[#00a087]">飞书</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-[#141413]">飞书 · 研发周报频道</div>
+            <div class="text-xs text-[#85857c] mt-0.5 truncate">已创建文档：项目周报 · W22 · 发布模式：完整文档</div>
+          </div>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-0.5 rounded font-medium">成功</span>
+          <button class="text-sm text-[#d97757] hover:text-[#b8623f] font-medium transition">在飞书打开 ↗</button>
+        </div>
+
+      </div>
+      <div class="p-3 border-t border-[#e8e6dc] bg-[#e8e6dc]/20 flex items-center justify-between text-xs text-[#85857c]">
+        <div>分享链接：<span class="font-mono text-[#3a3a37]">https://instance.acme.internal/s/w22-snapshot</span></div>
+        <button class="text-[#d97757] hover:text-[#b8623f] font-medium transition">复制链接</button>
+      </div>
+    </section>
+
+    <!-- 版本历史 + 对比 -->
+    <section class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg overflow-hidden">
+      <div class="p-4 border-b border-[#e8e6dc] flex items-center justify-between">
+        <h2 class="font-serif text-lg text-[#141413]">版本历史</h2>
+        <button class="text-sm px-3 py-1.5 border border-[#e8e6dc] text-[#3a3a37] bg-[#faf9f5] rounded-md hover:bg-[#e8e6dc]/40 transition flex items-center gap-1.5">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-3-3"/></svg>
+          对比版本
+        </button>
+      </div>
+
+      <div class="divide-y divide-[#e8e6dc]">
+
+        <!-- v3 (current) -->
+        <div class="p-4 flex items-center gap-4 bg-[#eef2e3]/20">
+          <span class="font-mono text-sm text-[#141413] font-semibold w-12">v3</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-[#141413]">已发布到 TokenKnows + 飞书</div>
+            <div class="text-xs text-[#85857c] mt-0.5">@john 审批通过 · 1 分钟前 · 5/5 章节 approved</div>
+          </div>
+          <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-2 py-0.5 rounded font-medium">当前</span>
+          <button class="text-sm text-[#d4d2c7] cursor-not-allowed">撤回</button>
+        </div>
+
+        <!-- v2 -->
+        <div class="p-4 flex items-center gap-4">
+          <span class="font-mono text-sm text-[#5d5d57] w-12">v2</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-[#3a3a37]">第 4 章重生成后再次提审</div>
+            <div class="text-xs text-[#85857c] mt-0.5">@alice 修改 · 12 分钟前 · 自评分覆盖度 79%</div>
+          </div>
+          <span class="text-xs text-[#85857c] bg-[#e8e6dc] px-2 py-0.5 rounded">草稿</span>
+          <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">查看 diff</button>
+        </div>
+
+        <!-- v1 -->
+        <div class="p-4 flex items-center gap-4">
+          <span class="font-mono text-sm text-[#5d5d57] w-12">v1</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-[#3a3a37]">系统自动生成首版</div>
+            <div class="text-xs text-[#85857c] mt-0.5">事件累积阈值触发 · 30 分钟前 · 5 章节</div>
+          </div>
+          <span class="text-xs text-[#85857c] bg-[#e8e6dc] px-2 py-0.5 rounded">草稿</span>
+          <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">查看 diff</button>
+        </div>
+
+      </div>
+
+      <!-- Diff 预览 -->
+      <div class="border-t border-[#e8e6dc] bg-[#e8e6dc]/20 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-medium text-[#3a3a37] uppercase tracking-wider">Diff 预览 · v2 → v3 · 第 4 章</div>
+          <button class="text-xs text-[#d97757] hover:text-[#b8623f] font-medium transition">展开全文 →</button>
+        </div>
+        <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-md p-4 font-serif text-sm leading-relaxed">
+          <p class="bg-[#f5e0dc]/40 border-l-2 border-[#b94a3a] -mx-2 px-2 py-1 line-through text-[#85857c]">本周识别的主要风险点包括 pgvector 性能问题，以及 Copilot Chat 接入路径不确定。</p>
+          <p class="bg-[#eef2e3]/40 border-l-2 border-[#5d6e45] -mx-2 px-2 py-1 mt-1 text-[#141413]">本周识别的主要风险点包括 <strong>pgvector 在 ≥10M 行规模下的索引性能未实测</strong>，以及 Copilot Chat 接入路径未稳定。<strong>已规划下周做专项 spike，在 1k / 10k / 100k 行数据量下分别测索引重建与 cosine 查询。</strong></p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+</body>
+</html>

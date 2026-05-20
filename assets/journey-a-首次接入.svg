@@ -1,0 +1,90 @@
+<svg viewBox="0 0 900 780" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title-a desc-a">
+  <title id="title-a">旅程 A · 首次接入与项目空间创建</title>
+  <desc id="desc-a">从管理员私有化部署到用户进入项目工作台的端到端流程</desc>
+
+  <defs>
+    <marker id="arrow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <style>
+    .box { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+    .box-start { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.5; }
+    .box-end { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
+    .diamond { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; }
+    .label { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; fill: #0f172a; }
+    .label-bold { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+    .label-sub { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 12px; fill: #475569; }
+    .arrow-line { stroke: #64748b; stroke-width: 1.6; fill: none; }
+    .title-text { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 18px; font-weight: 700; fill: #0f172a; }
+  </style>
+
+  <text x="450" y="38" text-anchor="middle" class="title-text">旅程 A · 首次接入与项目空间创建</text>
+
+  <!-- Step 1: 管理员部署 -->
+  <rect x="330" y="70" width="240" height="56" rx="8" class="box-start"/>
+  <text x="450" y="93" text-anchor="middle" class="label-bold">管理员私有化部署</text>
+  <text x="450" y="112" text-anchor="middle" class="label-sub">Docker Compose / K8s 启动实例</text>
+
+  <line x1="450" y1="126" x2="450" y2="160" class="arrow-line" marker-end="url(#arrow-a)"/>
+
+  <!-- Step 2: 邮箱注册 -->
+  <rect x="330" y="160" width="240" height="56" rx="8" class="box"/>
+  <text x="450" y="183" text-anchor="middle" class="label-bold">用户邮箱注册</text>
+  <text x="450" y="202" text-anchor="middle" class="label-sub">顶栏常驻实例信息</text>
+
+  <line x1="450" y1="216" x2="450" y2="250" class="arrow-line" marker-end="url(#arrow-a)"/>
+
+  <!-- Step 3: 邮箱验证 -->
+  <rect x="330" y="250" width="240" height="56" rx="8" class="box"/>
+  <text x="450" y="283" text-anchor="middle" class="label-bold">邮箱验证</text>
+
+  <line x1="450" y1="306" x2="450" y2="340" class="arrow-line" marker-end="url(#arrow-a)"/>
+
+  <!-- Step 4: 创建项目 -->
+  <rect x="330" y="340" width="240" height="56" rx="8" class="box"/>
+  <text x="450" y="363" text-anchor="middle" class="label-bold">创建项目</text>
+  <text x="450" y="382" text-anchor="middle" class="label-sub">项目名 + Owner（默认本人）</text>
+
+  <line x1="450" y1="396" x2="450" y2="430" class="arrow-line" marker-end="url(#arrow-a)"/>
+
+  <!-- Step 5: Diamond 添加数据源 -->
+  <polygon points="450,430 580,490 450,550 320,490" class="diamond"/>
+  <text x="450" y="486" text-anchor="middle" class="label-bold">添加数据源</text>
+  <text x="450" y="504" text-anchor="middle" class="label-sub">卡片视图 · 状态可见</text>
+
+  <!-- Fan out to 4 sources -->
+  <line x1="450" y1="550" x2="120" y2="600" class="arrow-line" marker-end="url(#arrow-a)"/>
+  <line x1="450" y1="550" x2="340" y2="600" class="arrow-line" marker-end="url(#arrow-a)"/>
+  <line x1="450" y1="550" x2="560" y2="600" class="arrow-line" marker-end="url(#arrow-a)"/>
+  <line x1="450" y1="550" x2="780" y2="600" class="arrow-line" marker-end="url(#arrow-a)"/>
+
+  <!-- 4 data source boxes -->
+  <rect x="20" y="600" width="200" height="56" rx="8" class="box"/>
+  <text x="120" y="623" text-anchor="middle" class="label-bold">Claude Code</text>
+  <text x="120" y="642" text-anchor="middle" class="label-sub">3 步插件安装</text>
+
+  <rect x="240" y="600" width="200" height="56" rx="8" class="box"/>
+  <text x="340" y="623" text-anchor="middle" class="label-bold">Cursor</text>
+  <text x="340" y="642" text-anchor="middle" class="label-sub">扩展安装</text>
+
+  <rect x="460" y="600" width="200" height="56" rx="8" class="box"/>
+  <text x="560" y="623" text-anchor="middle" class="label-bold">VS Code</text>
+  <text x="560" y="642" text-anchor="middle" class="label-sub">Copilot Chat 会话捕获</text>
+
+  <rect x="680" y="600" width="200" height="56" rx="8" class="box"/>
+  <text x="780" y="623" text-anchor="middle" class="label-bold">GitHub</text>
+  <text x="780" y="642" text-anchor="middle" class="label-sub">PAT · 最小只读权限</text>
+
+  <!-- Converge to workspace -->
+  <line x1="120" y1="656" x2="380" y2="710" class="arrow-line" marker-end="url(#arrow-a)"/>
+  <line x1="340" y1="656" x2="420" y2="710" class="arrow-line" marker-end="url(#arrow-a)"/>
+  <line x1="560" y1="656" x2="480" y2="710" class="arrow-line" marker-end="url(#arrow-a)"/>
+  <line x1="780" y1="656" x2="520" y2="710" class="arrow-line" marker-end="url(#arrow-a)"/>
+
+  <!-- End: 工作台 -->
+  <rect x="330" y="710" width="240" height="56" rx="8" class="box-end"/>
+  <text x="450" y="733" text-anchor="middle" class="label-bold">进入项目工作台</text>
+  <text x="450" y="752" text-anchor="middle" class="label-sub">含模板推荐位（非强制）</text>
+</svg>

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 出版级书稿示例</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700;400i;500i&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: #d4d2c7;
+      color: #141413;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+    .book-page {
+      background: #faf9f5;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 80px 96px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.12);
+      min-height: 900px;
+      position: relative;
+    }
+    .page-num {
+      position: absolute;
+      bottom: 40px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: 'Lora', serif;
+      font-size: 13px;
+      color: #85857c;
+      font-style: italic;
+    }
+    .running-head {
+      position: absolute;
+      top: 36px;
+      left: 96px;
+      right: 96px;
+      display: flex;
+      justify-content: space-between;
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      color: #85857c;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 0.5px solid #d4d2c7;
+      padding-bottom: 8px;
+    }
+    .drop-cap::first-letter {
+      font-family: 'Lora', serif;
+      font-size: 56px;
+      font-weight: 600;
+      float: left;
+      line-height: 0.9;
+      margin: 4px 8px -4px 0;
+      color: #d97757;
+    }
+    .chapter-num {
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.3em;
+      color: #85857c;
+      font-weight: 500;
+    }
+    .chapter-title {
+      font-family: 'Lora', serif;
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      margin-top: 12px;
+    }
+    .chapter-subtitle {
+      font-family: 'Lora', serif;
+      font-size: 18px;
+      font-style: italic;
+      color: #5d5d57;
+      margin-top: 14px;
+      line-height: 1.5;
+    }
+    .body-text p {
+      margin-bottom: 1.1em;
+      text-align: justify;
+      hyphens: auto;
+    }
+    .sidenote {
+      position: absolute;
+      left: calc(100% + 24px);
+      width: 200px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #5d5d57;
+      padding: 8px 10px;
+      background: #f5ecd8;
+      border-left: 2px solid #d97757;
+      border-radius: 0 4px 4px 0;
+    }
+    .sidenote .source-type {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #b8623f;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .sidenote .source-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #856226;
+      margin-top: 4px;
+    }
+    .sidenote-anchor {
+      position: relative;
+    }
+    .pull-quote {
+      font-family: 'Lora', serif;
+      font-style: italic;
+      font-size: 22px;
+      line-height: 1.45;
+      color: #3a3a37;
+      padding: 20px 0 24px 28px;
+      margin: 28px -28px 28px 0;
+      border-left: 3px solid #d97757;
+    }
+    .small-caps {
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #5d5d57;
+    }
+    .toc-entry {
+      display: flex;
+      align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 0.5px dotted #d4d2c7;
+    }
+    .toc-num {
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      color: #85857c;
+      width: 32px;
+      letter-spacing: 0.1em;
+    }
+    .toc-title {
+      flex: 1;
+      font-family: 'Lora', serif;
+      font-size: 15px;
+    }
+    .toc-page {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #85857c;
+    }
+    .code-excerpt {
+      background: #141413;
+      color: #d4d2c7;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      padding: 16px 20px;
+      border-radius: 4px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+    .code-excerpt .kw { color: #d97757; }
+    .code-excerpt .cm { color: #788c5d; font-style: italic; }
+    .code-excerpt .str { color: #6a9bcc; }
+  </style>
+</head>
+<body>
+
+<!-- ============================================ -->
+<!-- 封面 -->
+<!-- ============================================ -->
+<div class="book-page" style="display: flex; flex-direction: column; justify-content: space-between; padding: 100px 96px;">
+
+  <div>
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: #85857c;">
+      AI Native 工程实录
+    </div>
+  </div>
+
+  <div style="text-align: center;">
+    <div style="font-family: 'Lora', serif; font-size: 56px; font-weight: 600; line-height: 1.1; color: #141413; letter-spacing: -0.02em;">
+      构建 AI Agent<br/>的十二周
+    </div>
+    <div style="font-family: 'Lora', serif; font-style: italic; font-size: 20px; color: #5d5d57; margin-top: 28px; line-height: 1.4;">
+      从一个真实项目的研发过程，<br/>看清楚一个 AI 产品如何被造出来
+    </div>
+
+    <div style="margin: 60px auto; width: 80px; height: 80px; background: #141413; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    </div>
+
+    <div style="font-family: 'Lora', serif; font-size: 18px; color: #3a3a37;">John Wu</div>
+    <div style="font-family: 'Poppins', sans-serif; font-size: 12px; color: #85857c; margin-top: 6px; letter-spacing: 0.05em;">著</div>
+  </div>
+
+  <div style="text-align: center;">
+    <div style="font-family: 'Lora', serif; font-style: italic; font-size: 13px; color: #85857c;">TokenKnows Press</div>
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; color: #b0aea5; margin-top: 4px; letter-spacing: 0.1em;">2027</div>
+  </div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- 版权与说明页 -->
+<!-- ============================================ -->
+<div class="book-page" style="padding: 120px 96px;">
+  <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: #85857c; margin-bottom: 40px;">关于本书</div>
+
+  <div style="font-family: 'Lora', serif; font-size: 15px; line-height: 1.85; color: #3a3a37;">
+    <p style="margin-bottom: 1.2em;">本书的内容，<strong>不是事后写出来的</strong>。</p>
+    <p style="margin-bottom: 1.2em;">2026 年 5 月到 8 月，我和另外四位工程师用十二周时间，从零搭建了一个面向 AI 研发团队的私有化知识平台——TokenKnows。在这十二周里，我们的每一次代码提交、每一段架构讨论、每一个 Prompt 迭代、每一次故障复盘，都被产品本身记录、识别、归档。</p>
+    <p style="margin-bottom: 1.2em;">十二周结束时，TokenKnows 实例里沉淀着 6,000 多条研发事件、120 多份生成文档（周报、技术方案、ADR、故障复盘）。我从中挑出 11 条主线，请产品再帮我整理成章节草稿，自己改写润色，配上反思与图示，就有了你手里这本书。</p>
+    <p style="margin-bottom: 1.2em;">所以本书的每一段，几乎都能在边栏注释里追到一个**真实**的源头——某个 PR、某段对话、某次评审、某次半夜的争论。我没有发明任何"教学情节"——所有"我们"做过的事，产品都还记着。</p>
+    <p style="margin-bottom: 1.2em;">这是一本被自己造出来的书。</p>
+
+    <div style="margin-top: 60px; padding-top: 20px; border-top: 0.5px solid #d4d2c7; font-style: italic; font-size: 13px; color: #85857c;">
+      ——John，2027 年春，于杭州
+    </div>
+  </div>
+
+  <div class="page-num">iv</div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- 目录 -->
+<!-- ============================================ -->
+<div class="book-page">
+  <div class="running-head">
+    <span>构建 AI Agent 的十二周</span>
+    <span>目录</span>
+  </div>
+
+  <div style="margin-top: 60px;">
+    <div style="font-family: 'Lora', serif; font-size: 36px; font-weight: 600; color: #141413;">目录</div>
+  </div>
+
+  <div style="margin-top: 32px;">
+
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: #d97757; margin-bottom: 8px; margin-top: 24px;">第一部分 · 起点</div>
+    <div class="toc-entry"><span class="toc-num">I</span><span class="toc-title">问题 · AI 研发过程中流失的隐性知识</span><span class="toc-page">3</span></div>
+    <div class="toc-entry"><span class="toc-num">II</span><span class="toc-title">定位 · 从一句话到一份 PRD</span><span class="toc-page">23</span></div>
+
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: #d97757; margin-bottom: 8px; margin-top: 28px;">第二部分 · 架构</div>
+    <div class="toc-entry"><span class="toc-num">III</span><span class="toc-title">数据模型 · 把一切看作 Event</span><span class="toc-page">49</span></div>
+    <div class="toc-entry" style="background: #fbeae0/30; border-radius: 4px; padding-left: 8px; margin-left: -8px;"><span class="toc-num">IV</span><span class="toc-title" style="color: #b8623f; font-weight: 600;">LLM 抽象层 · 为什么不直接用 LangChain</span><span class="toc-page" style="color: #b8623f; font-weight: 600;">73</span></div>
+    <div class="toc-entry"><span class="toc-num">V</span><span class="toc-title">双形态部署 · Compose 与 K8s 共享一份代码</span><span class="toc-page">99</span></div>
+
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: #d97757; margin-bottom: 8px; margin-top: 28px;">第三部分 · 实现</div>
+    <div class="toc-entry"><span class="toc-num">VI</span><span class="toc-title">采集层 · 让插件听见每一次 Tool Call</span><span class="toc-page">127</span></div>
+    <div class="toc-entry"><span class="toc-num">VII</span><span class="toc-title">价值识别 · 双层引擎与可信度评分</span><span class="toc-page">155</span></div>
+    <div class="toc-entry"><span class="toc-num">VIII</span><span class="toc-title">文档生成 · 从 Prompt 工程到证据链</span><span class="toc-page">183</span></div>
+    <div class="toc-entry"><span class="toc-num">IX</span><span class="toc-title">脱敏与合规 · 私有化场景下的三层开关</span><span class="toc-page">213</span></div>
+
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: #d97757; margin-bottom: 8px; margin-top: 28px;">第四部分 · 运营</div>
+    <div class="toc-entry"><span class="toc-num">X</span><span class="toc-title">性能与可观测性</span><span class="toc-page">239</span></div>
+    <div class="toc-entry"><span class="toc-num">XI</span><span class="toc-title">试点客户 · 让产品被使用的二十六个动作</span><span class="toc-page">259</span></div>
+
+    <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: #788c5d; margin-bottom: 8px; margin-top: 28px;">附录</div>
+    <div class="toc-entry"><span class="toc-num">A</span><span class="toc-title">完整 PRD 的演进史</span><span class="toc-page">289</span></div>
+    <div class="toc-entry"><span class="toc-num">B</span><span class="toc-title">关键架构决策（ADR）合集</span><span class="toc-page">307</span></div>
+    <div class="toc-entry"><span class="toc-num">C</span><span class="toc-title">我们犯过的八个错</span><span class="toc-page">325</span></div>
+    <div class="toc-entry"><span class="toc-num">D</span><span class="toc-title">工具栈与开源依赖</span><span class="toc-page">343</span></div>
+
+  </div>
+
+  <div class="page-num">v</div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- 章节扉页 -->
+<!-- ============================================ -->
+<div class="book-page" style="display: flex; flex-direction: column; justify-content: center;">
+
+  <div style="text-align: left;">
+    <div class="chapter-num">第 四 章</div>
+    <div class="chapter-title">LLM 抽象层</div>
+    <div class="chapter-subtitle">为什么我们没有<br/>直接用 LangChain。</div>
+
+    <div style="margin-top: 80px; max-width: 380px;">
+      <div class="small-caps" style="margin-bottom: 8px;">本章源自</div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5d5d57; line-height: 1.8;">
+        ADR-003 LLM 抽象层选型<br/>
+        Tech Design v1 · LLM Gateway<br/>
+        PR #135 introduce BaseAdapter<br/>
+        Claude Code 对话 conv_a3b9c1d2<br/>
+        Weekly Report W5 / W6 / W14
+      </div>
+    </div>
+  </div>
+
+  <div class="page-num">73</div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- 第 IV 章正文（带边栏注释）-->
+<!-- ============================================ -->
+<div class="book-page" style="padding-right: 280px;">
+  <div class="running-head">
+    <span>第四章 · LLM 抽象层</span>
+    <span>74</span>
+  </div>
+
+  <div class="body-text" style="margin-top: 56px;">
+
+    <p class="drop-cap">第三周一个周二的晚上，alice 在内部 Slack 里发了一段话：「我们到底要不要直接接 LangChain？再不决定下周的活就开不动了。」<span class="sidenote-anchor"><span class="sidenote" style="top: 24px;"><div class="source-type">▌ 原始对话</div>讨论可追溯到 Slack #tokenknows-dev 频道 2026-05-26 22:47<div class="source-id">→ slack_msg_b7f3a1</div></span></span></p>
+
+    <p>那个晚上之前，我们已经为这件事来回三周了。<span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ 项目周报</div>Week 5 周报「关键决策」段落记录了这一争论的两端立场<div class="source-id">→ asset_wkr_w5_v3</div></span></span> bob 站在"直接用 LangChain"的一边——它有现成的 chain、agent、tool 调用抽象，社区生态最大，最不容易出错。我和 carol 站在另一边：自研一个轻量 LLM Gateway——理由更多是预感而非可论证，"它好像不适合我们要做的事"。</p>
+
+    <p>真正让我们决定不用 LangChain 的，是 alice 那晚补的一句话——</p>
+
+    <div class="pull-quote">
+      我们的核心不是"调用 LLM 完成任务"，<br/>
+      而是"<em>路由不同任务到不同模型</em>"。<br/>
+      LangChain 是前者的工具。
+    </div>
+
+    <p>这句话戳到了关键。<span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ 架构决策记录</div>ADR-003 第 3 节"备选方案对比"明确列出 LangChain / LiteLLM / 自研三选项<div class="source-id">→ asset_adr_003_v2</div></span></span> TokenKnows 要做的是一件具体的事：把数据接入、价值识别、文档生成、脱敏判断这六类任务，分别路由到不同的模型与服务商。每个任务对模型的要求不同——价值识别可以用轻量本地模型，文档润色需要 Claude 级别的能力，脱敏判断要求模型完全离线。这不是一个"chain"问题，是一个"<em>adapter + router</em>"问题。</p>
+
+    <p>LangChain 当然可以实现这个，但它的 chain / agent 抽象会绕一层。更要命的是，它的依赖树深、版本变化快、内部 API 不稳定——而 TokenKnows 要面对的是私有化客户，需要数年级别的 ABI 稳定与可审计性。<span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ PR 讨论</div>PR #128 的评论区有详细的依赖审计讨论，最终 16 个依赖被裁减到 4 个<div class="source-id">→ pr_128_comments</div></span></span></p>
+
+  </div>
+
+  <div class="page-num">74</div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- 第 IV 章正文续 -->
+<!-- ============================================ -->
+<div class="book-page" style="padding-right: 280px;">
+  <div class="running-head">
+    <span>第四章 · LLM 抽象层</span>
+    <span>75</span>
+  </div>
+
+  <div class="body-text" style="margin-top: 56px;">
+
+    <p>第二天 PR #135 由 dave 起的草。<span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ Pull Request</div>PR #135 「refactor: introduce BaseAdapter」<div class="source-id">→ github/pr_135</div></span></span> 一个接口，两个方法，BaseAdapter 抽象类：</p>
+
+    <div class="code-excerpt">
+<span class="cm"># tokenknows/llm_gateway/base.py</span>
+<span class="kw">class</span> BaseAdapter(ABC):
+    provider: <span class="kw">str</span>
+    is_cloud: <span class="kw">bool</span>   <span class="cm"># True for cloud, False for local</span>
+
+    <span class="kw">async def</span> generate(
+        <span class="kw">self</span>,
+        messages: <span class="kw">list</span>[LLMMessage],
+        options: LLMOptions
+    ) -> LLMResponse: ...
+
+    <span class="kw">async def</span> stream(
+        <span class="kw">self</span>,
+        messages: <span class="kw">list</span>[LLMMessage],
+        options: LLMOptions
+    ) -> AsyncIterator[<span class="kw">str</span>]: ...
+</div>
+
+    <p>就这些。<span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ 技术方案</div>Tech Design「LLM Gateway v1」§3.1 记录了"刻意保持接口窄"的设计原则<div class="source-id">→ asset_techdesign_llm_gw</div></span></span>那种克制是有意识的。我们清楚，每加一个方法、每加一个参数，将来都会变成兼容性债务。所以最早的那一版只有两个方法、四个字段，连流式响应的细粒度都没有暴露。</p>
+
+    <p>三周后，Anthropic、OpenAI、Ollama、vLLM 四个适配器全部就位。每个适配器大约 80 行代码——远比我们预想的要简单。<em>抽象层不需要复杂，需要的是稳定。</em><span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ 周报片段</div>Week 14 周报回顾："早期定下来的窄接口，让后面三周的开发几乎没有意外"<div class="source-id">→ asset_wkr_w14_v1</div></span></span></p>
+
+    <p>六个月之后回看，<span style="font-style: italic;">这是 TokenKnows 整个项目里少数几个"做对了"的决定之一</span>。客户端切换模型不需要重启、不需要改业务代码；新加一个 provider 只要写一个 80 行的 adapter；甚至客户自己的 IT 团队都能写一个内部模型的 adapter——因为接口窄到他们一眼就能看懂。</p>
+
+    <p>但我得诚实地补一句：我们当时没有任何把握说这是"对的"。决定靠的是那个周二晚上的一句话，加上四个人一起的直觉。<span class="sidenote-anchor"><span class="sidenote" style="top: 0;"><div class="source-type">▌ 月度复盘</div>第二月复盘中，alice 写道："其实我们当时怕极了——万一 LangChain 才是对的呢？"<div class="source-id">→ asset_retro_2026_06</div></span></span></p>
+
+    <p style="font-style: italic; color: #5d5d57; margin-top: 32px;">下一节，我们会回到那个抽象层，看它在真实压力下如何演化——具体来说，是当 alice 突发奇想要让"价值识别"也能切换模型的那一天。</p>
+
+  </div>
+
+  <div class="page-num">75</div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- 加工说明（最后一页）-->
+<!-- ============================================ -->
+<div class="book-page" style="background: #141413; color: #faf9f5; padding: 80px 96px;">
+
+  <div style="font-family: 'Poppins', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: #d97757; margin-bottom: 32px;">书稿是怎么被造出来的</div>
+
+  <div style="font-family: 'Lora', serif; font-size: 15px; line-height: 1.85;">
+
+    <p style="margin-bottom: 1.2em;">这本书的每一段，对应的源头数据都在 TokenKnows 实例里。我没有"写"它——我只是把材料**重新排了一遍**。</p>
+
+    <div style="margin: 32px 0; padding: 20px; background: #3a3a37; border-radius: 6px; font-family: 'Poppins', sans-serif; font-size: 13px; line-height: 1.8;">
+      <div style="color: #d97757; font-weight: 600; margin-bottom: 12px; letter-spacing: 0.05em;">第 IV 章的源头清单</div>
+      <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+        <div style="color: #d97757;">ADR-003</div><div style="color: #d4d2c7;">LLM 抽象层选型 · 5,400 字</div>
+        <div style="color: #d97757;">Tech Design</div><div style="color: #d4d2c7;">LLM Gateway v1 设计稿 · 11,200 字</div>
+        <div style="color: #d97757;">PR #128</div><div style="color: #d4d2c7;">依赖审计讨论 · 73 条评论</div>
+        <div style="color: #d97757;">PR #135</div><div style="color: #d4d2c7;">BaseAdapter 首版实现 · 142 行变更</div>
+        <div style="color: #d97757;">5 篇周报</div><div style="color: #d4d2c7;">W5 / W6 / W8 / W14 / W22</div>
+        <div style="color: #d97757;">2 篇复盘</div><div style="color: #d4d2c7;">2026-06 月度 / 2026-08 季度</div>
+        <div style="color: #d97757;">28 段对话</div><div style="color: #d4d2c7;">Claude Code + Slack 决策类对话</div>
+      </div>
+      <div style="margin-top: 16px; padding-top: 12px; border-top: 0.5px solid #5d5d57; color: #b0aea5; font-size: 11px;">
+        总计源材料约 7.4 万字 → 本章成稿约 1,800 字
+      </div>
+    </div>
+
+    <p style="margin-bottom: 1.2em;">流程大致是这样的：</p>
+    <ol style="margin-bottom: 1.2em; padding-left: 1.6em; list-style: decimal;">
+      <li style="margin-bottom: 0.6em;">在 TokenKnows 里选定"主题" → 系统按主题相关性聚合事件</li>
+      <li style="margin-bottom: 0.6em;">系统生成"章节草稿" + 完整证据链（每段都标注来自哪个资产）</li>
+      <li style="margin-bottom: 0.6em;">我（人）做主编：增减取舍、加入个人视角与情绪、润色叙事节奏</li>
+      <li style="margin-bottom: 0.6em;">技术审校 + 客户脱敏审查 + 法务版权核对</li>
+      <li style="margin-bottom: 0.6em;">出版社编辑做最后语言润色</li>
+    </ol>
+
+    <p style="margin-bottom: 1.2em;">边栏注释里的每一条 <span style="color: #d97757; font-family: 'JetBrains Mono', monospace; font-size: 13px;">→ source_id</span> 都对应着实例里一条真实记录。读者读完一段觉得疑惑，可以扫码到 TokenKnows 的公开版本（脱敏后的）看原文。<strong style="color: #d97757;">这是任何"事后写出来的"书都做不到的可信度。</strong></p>
+
+    <p style="font-style: italic; color: #b0aea5; margin-top: 32px;">十二周的项目，最终变成 380 页的书。<br/>但更重要的是：这本书的每一句话，都有出处。</p>
+
+  </div>
+
+  <div class="page-num" style="color: #5d5d57;">— Colophon —</div>
+</div>
+
+<div style="text-align: center; padding: 24px; font-family: 'Poppins', sans-serif; font-size: 12px; color: #5d5d57;">
+  TokenKnows · 出版级书稿示例 · 演示用途
+</div>
+
+</body>
+</html>

@@ -1,0 +1,87 @@
+<svg viewBox="0 0 1300 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title-er desc-er">
+  <title id="title-er">数据模型 · 统一事件 + 资产/章节/证据三层结构</title>
+  <desc id="desc-er">五个核心实体（Event / Asset / Chapter / Evidence / PublishRecord）及其关系</desc>
+
+  <style>
+    .er-box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+    .er-header { fill: #0284c7; }
+    .er-header-text { fill: #ffffff; font-size: 16px; font-weight: 600; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .er-field { fill: #0f172a; font-size: 12px; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .er-pk { fill: #0284c7; font-size: 12px; font-weight: 600; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .er-fk { fill: #ca8a04; font-size: 12px; font-weight: 600; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .er-type { fill: #64748b; font-size: 11px; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .er-line { stroke: #64748b; stroke-width: 1.5; fill: none; }
+    .er-label { fill: #475569; font-size: 13px; font-weight: 600; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .er-title { fill: #0f172a; font-size: 18px; font-weight: 700; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+  </style>
+
+  <text x="650" y="40" text-anchor="middle" class="er-title">数据模型 · 统一事件 + 资产 / 章节 / 证据三层结构</text>
+
+  <rect x="40" y="80" width="240" height="200" class="er-box"/>
+  <rect x="40" y="80" width="240" height="32" class="er-header"/>
+  <text x="160" y="102" text-anchor="middle" class="er-header-text">Asset</text>
+  <text x="50" y="132" class="er-pk">id  UUID</text>
+  <text x="50" y="156" class="er-field">project_id  UUID</text>
+  <text x="50" y="180" class="er-field">type  enum</text>
+  <text x="50" y="204" class="er-field">status  enum</text>
+  <text x="50" y="228" class="er-field">current_version  int</text>
+  <text x="50" y="252" class="er-type">approval / redaction state</text>
+
+  <rect x="350" y="80" width="240" height="200" class="er-box"/>
+  <rect x="350" y="80" width="240" height="32" class="er-header"/>
+  <text x="470" y="102" text-anchor="middle" class="er-header-text">Chapter</text>
+  <text x="360" y="132" class="er-pk">id  UUID</text>
+  <text x="360" y="156" class="er-fk">asset_id  UUID</text>
+  <text x="360" y="180" class="er-field">order_index  int</text>
+  <text x="360" y="204" class="er-field">title  string</text>
+  <text x="360" y="228" class="er-field">content  text</text>
+  <text x="360" y="252" class="er-type">generated_by / layout</text>
+
+  <rect x="660" y="80" width="240" height="200" class="er-box"/>
+  <rect x="660" y="80" width="240" height="32" class="er-header"/>
+  <text x="780" y="102" text-anchor="middle" class="er-header-text">Evidence</text>
+  <text x="670" y="132" class="er-pk">id  UUID</text>
+  <text x="670" y="156" class="er-fk">chapter_id  UUID</text>
+  <text x="670" y="180" class="er-fk">event_id  UUID</text>
+  <text x="670" y="204" class="er-field">event_version  int</text>
+  <text x="670" y="228" class="er-field">span_start, end  int</text>
+  <text x="670" y="252" class="er-type">citation_text / manually_added</text>
+
+  <rect x="970" y="80" width="290" height="200" class="er-box"/>
+  <rect x="970" y="80" width="290" height="32" class="er-header"/>
+  <text x="1115" y="102" text-anchor="middle" class="er-header-text">Event</text>
+  <text x="980" y="132" class="er-pk">id  UUID</text>
+  <text x="980" y="156" class="er-field">project_id  UUID</text>
+  <text x="980" y="180" class="er-field">source_type  enum</text>
+  <text x="980" y="204" class="er-field">external_id  string</text>
+  <text x="980" y="228" class="er-field">event_type  enum</text>
+  <text x="980" y="252" class="er-type">content / payload / version / hash</text>
+
+  <rect x="40" y="340" width="240" height="180" class="er-box"/>
+  <rect x="40" y="340" width="240" height="32" class="er-header"/>
+  <text x="160" y="362" text-anchor="middle" class="er-header-text">PublishRecord</text>
+  <text x="50" y="392" class="er-pk">id  UUID</text>
+  <text x="50" y="416" class="er-fk">asset_id  UUID</text>
+  <text x="50" y="440" class="er-field">asset_version  int</text>
+  <text x="50" y="464" class="er-field">destination  enum</text>
+  <text x="50" y="488" class="er-field">status / url</text>
+
+  <line x1="280" y1="180" x2="350" y2="180" class="er-line"/>
+  <text x="315" y="172" text-anchor="middle" class="er-label">1 : N</text>
+
+  <line x1="590" y1="180" x2="660" y2="180" class="er-line"/>
+  <text x="625" y="172" text-anchor="middle" class="er-label">1 : N</text>
+
+  <line x1="900" y1="180" x2="970" y2="180" class="er-line"/>
+  <text x="935" y="172" text-anchor="middle" class="er-label">N : 1</text>
+
+  <line x1="160" y1="280" x2="160" y2="340" class="er-line"/>
+  <text x="180" y="316" class="er-label">1 : N</text>
+
+  <rect x="380" y="380" width="220" height="120" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="490" y="404" text-anchor="middle" class="er-label">说明</text>
+  <text x="395" y="428" class="er-pk">蓝色加粗 · 主键 (PK)</text>
+  <text x="395" y="450" class="er-fk">琥珀加粗 · 外键 (FK)</text>
+  <text x="395" y="472" class="er-type">灰色 · 其他关键字段</text>
+  <text x="395" y="492" class="er-type">连线标注：基数关系</text>
+</svg>

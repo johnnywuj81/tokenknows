@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 文档列表</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-[#faf9f5] border-b border-[#e8e6dc] h-14 px-6 flex items-center justify-between sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-[#85857c]">AI Agent Pilot / 文档</span>
+    </div>
+    <div class="w-9 h-9 rounded-full bg-[#fbeae0] text-[#b8623f] font-semibold flex items-center justify-center text-sm">JW</div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-8">
+
+    <!-- 标题 + 新建 -->
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h1 class="font-serif text-3xl text-[#141413] leading-tight">文档</h1>
+        <p class="text-sm text-[#85857c] mt-1.5">12 份文档 · 3 份待审 · 1 份待发布</p>
+      </div>
+      <button class="px-4 py-2 bg-[#141413] text-[#faf9f5] text-sm font-medium rounded-md hover:bg-[#3a3a37] transition flex items-center gap-1.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建文档
+      </button>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="flex items-center gap-2 mb-5 text-sm">
+      <div class="flex items-center gap-1 bg-[#faf9f5] border border-[#e8e6dc] rounded-md p-0.5">
+        <button class="px-3 py-1 bg-[#141413] text-[#faf9f5] rounded text-xs font-medium">全部 12</button>
+        <button class="px-3 py-1 text-[#5d5d57] hover:text-[#141413] rounded text-xs transition">周报 3</button>
+        <button class="px-3 py-1 text-[#5d5d57] hover:text-[#141413] rounded text-xs transition">技术方案 5</button>
+        <button class="px-3 py-1 text-[#5d5d57] hover:text-[#141413] rounded text-xs transition">ADR 2</button>
+        <button class="px-3 py-1 text-[#5d5d57] hover:text-[#141413] rounded text-xs transition">复盘 2</button>
+      </div>
+      <div class="flex-1"></div>
+      <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5]">
+        <option>全部状态</option>
+        <option>草稿</option>
+        <option>审核中</option>
+        <option>已发布</option>
+      </select>
+      <input type="search" placeholder="搜索文档..." class="text-sm border border-[#e8e6dc] rounded-md px-3 py-1.5 bg-[#faf9f5] w-56 focus:outline-none focus:border-[#d97757] focus:ring-2 focus:ring-[#fbeae0] transition"/>
+    </div>
+
+    <!-- 列表 -->
+    <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg overflow-hidden">
+
+      <!-- Header row -->
+      <div class="grid grid-cols-12 gap-3 px-5 py-2.5 border-b border-[#e8e6dc] text-xs font-semibold text-[#85857c] uppercase tracking-wider bg-[#e8e6dc]/30">
+        <div class="col-span-5">标题</div>
+        <div class="col-span-2">类型</div>
+        <div class="col-span-2">状态</div>
+        <div class="col-span-1">自评分</div>
+        <div class="col-span-2 text-right">更新时间</div>
+      </div>
+
+      <div class="divide-y divide-[#e8e6dc]">
+
+        <a class="grid grid-cols-12 gap-3 px-5 py-3.5 hover:bg-[#e8e6dc]/30 cursor-pointer items-center transition">
+          <div class="col-span-5">
+            <div class="font-serif text-base font-medium text-[#141413]">项目周报 · W22 (5/13 – 5/19)</div>
+            <div class="text-xs text-[#85857c] mt-0.5">由 @alice 生成 · 3 名 Reviewer</div>
+          </div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded-md text-xs font-medium">周报</span></div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#f5ecd8] text-[#856226] rounded-md text-xs font-medium">审核中 3/5</span></div>
+          <div class="col-span-1 font-mono text-sm text-[#5d6e45]">82%</div>
+          <div class="col-span-2 text-right text-xs text-[#85857c]">2 分钟前</div>
+        </a>
+
+        <a class="grid grid-cols-12 gap-3 px-5 py-3.5 hover:bg-[#e8e6dc]/30 cursor-pointer items-center transition">
+          <div class="col-span-5">
+            <div class="font-serif text-base font-medium text-[#141413]">LLM 抽象层技术方案</div>
+            <div class="text-xs text-[#85857c] mt-0.5">由 @bob 生成 · 已批准</div>
+          </div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#e8eef5] text-[#3d6a96] rounded-md text-xs font-medium">技术方案</span></div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#eef2e3] text-[#5d6e45] rounded-md text-xs font-medium">待发布</span></div>
+          <div class="col-span-1 font-mono text-sm text-[#5d6e45]">91%</div>
+          <div class="col-span-2 text-right text-xs text-[#85857c]">1 小时前</div>
+        </a>
+
+        <a class="grid grid-cols-12 gap-3 px-5 py-3.5 hover:bg-[#e8e6dc]/30 cursor-pointer items-center transition">
+          <div class="col-span-5">
+            <div class="font-serif text-base font-medium text-[#141413]">ADR-007 · 选用 Postgres + pgvector</div>
+            <div class="text-xs text-[#85857c] mt-0.5">由 @alice 生成 · 自动扫描候选</div>
+          </div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#e8e6dc] text-[#3a3a37] rounded-md text-xs font-medium">ADR</span></div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#f5ecd8] text-[#856226] rounded-md text-xs font-medium">草稿</span></div>
+          <div class="col-span-1 font-mono text-sm text-[#856226]">68%</div>
+          <div class="col-span-2 text-right text-xs text-[#85857c]">3 小时前</div>
+        </a>
+
+        <a class="grid grid-cols-12 gap-3 px-5 py-3.5 hover:bg-[#e8e6dc]/30 cursor-pointer items-center transition">
+          <div class="col-span-5">
+            <div class="font-serif text-base font-medium text-[#141413]">Cursor 扩展崩溃复盘</div>
+            <div class="text-xs text-[#85857c] mt-0.5">由 @carol 生成 · 来自 Issue #87</div>
+          </div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#f5e0dc] text-[#8a3a2a] rounded-md text-xs font-medium">复盘</span></div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#eef2e3] text-[#5d6e45] rounded-md text-xs font-medium">已发布</span></div>
+          <div class="col-span-1 font-mono text-sm text-[#5d6e45]">87%</div>
+          <div class="col-span-2 text-right text-xs text-[#85857c]">昨天</div>
+        </a>
+
+        <a class="grid grid-cols-12 gap-3 px-5 py-3.5 hover:bg-[#e8e6dc]/30 cursor-pointer items-center transition">
+          <div class="col-span-5">
+            <div class="font-serif text-base font-medium text-[#141413]">项目周报 · W21</div>
+            <div class="text-xs text-[#85857c] mt-0.5">由 @alice 生成 · 发布到飞书 + Slack</div>
+          </div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#fbeae0] text-[#b8623f] rounded-md text-xs font-medium">周报</span></div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#eef2e3] text-[#5d6e45] rounded-md text-xs font-medium">已发布</span></div>
+          <div class="col-span-1 font-mono text-sm text-[#5d6e45]">79%</div>
+          <div class="col-span-2 text-right text-xs text-[#85857c]">5 天前</div>
+        </a>
+
+        <a class="grid grid-cols-12 gap-3 px-5 py-3.5 hover:bg-[#e8e6dc]/30 cursor-pointer items-center transition">
+          <div class="col-span-5">
+            <div class="font-serif text-base font-medium text-[#141413]">Agent 工作流设计方案 v2</div>
+            <div class="text-xs text-[#85857c] mt-0.5">由 @bob 生成</div>
+          </div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#e8eef5] text-[#3d6a96] rounded-md text-xs font-medium">技术方案</span></div>
+          <div class="col-span-2"><span class="px-2 py-0.5 bg-[#eef2e3] text-[#5d6e45] rounded-md text-xs font-medium">已发布</span></div>
+          <div class="col-span-1 font-mono text-sm text-[#5d6e45]">88%</div>
+          <div class="col-span-2 text-right text-xs text-[#85857c]">1 周前</div>
+        </a>
+
+      </div>
+
+      <div class="px-5 py-3 border-t border-[#e8e6dc] bg-[#e8e6dc]/20 text-xs text-[#85857c] flex items-center justify-between">
+        <span>显示 6 / 12 份</span>
+        <button class="text-[#d97757] hover:text-[#b8623f] font-medium transition">查看全部 →</button>
+      </div>
+
+    </div>
+
+  </main>
+
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 项目设置</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-[#faf9f5] border-b border-[#e8e6dc] h-14 px-6 flex items-center justify-between sticky top-0 z-10">
+    <span class="text-sm text-[#85857c]">AI Agent Pilot / 设置</span>
+    <div class="w-9 h-9 rounded-full bg-[#fbeae0] text-[#b8623f] font-semibold flex items-center justify-center text-sm">JW</div>
+  </header>
+
+  <div class="flex">
+
+    <!-- 左侧 tab -->
+    <aside class="w-56 bg-[#faf9f5] border-r border-[#e8e6dc] h-[calc(100vh-56px)] sticky top-14 p-4">
+      <div class="font-serif text-lg text-[#141413] mb-4">项目设置</div>
+      <nav class="space-y-0.5 text-sm">
+        <a class="block px-3 py-2 rounded-md bg-[#141413] text-[#faf9f5] font-medium">数据源</a>
+        <a class="block px-3 py-2 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">模板与品牌</a>
+        <a class="block px-3 py-2 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">团队成员</a>
+        <a class="block px-3 py-2 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">敏感词清单</a>
+        <a class="block px-3 py-2 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">LLM 与出域</a>
+        <a class="block px-3 py-2 rounded-md text-[#3a3a37] hover:bg-[#e8e6dc]/50 transition">项目信息</a>
+        <div class="pt-2 mt-2 border-t border-[#e8e6dc]"></div>
+        <a class="block px-3 py-2 rounded-md text-[#8a3a2a] hover:bg-[#f5e0dc]/40 transition">归档项目</a>
+      </nav>
+    </aside>
+
+    <!-- 主区域 -->
+    <main class="flex-1 px-10 py-8 max-w-4xl">
+
+      <div class="mb-6">
+        <h1 class="font-serif text-2xl text-[#141413] leading-tight">数据源</h1>
+        <p class="text-sm text-[#85857c] mt-1">管理项目接入的事件源。每个项目可挂多个仓库 + 多个对话源。</p>
+      </div>
+
+      <!-- 已接入列表 -->
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg overflow-hidden mb-6">
+        <div class="p-4 border-b border-[#e8e6dc] flex items-center justify-between">
+          <div class="font-medium text-[#141413]">已接入 · 3</div>
+          <button class="text-sm px-3 py-1.5 bg-[#141413] text-[#faf9f5] rounded-md hover:bg-[#3a3a37] font-medium transition flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            添加数据源
+          </button>
+        </div>
+        <div class="divide-y divide-[#e8e6dc]">
+
+          <div class="p-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-md bg-[#141413] flex items-center justify-center flex-shrink-0">
+              <span class="text-[#d97757] font-bold text-sm">CC</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[#141413]">Claude Code</span>
+                <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-1.5 py-0.5 rounded">已连接</span>
+              </div>
+              <div class="text-xs text-[#85857c] mt-0.5 font-mono">install_a1b2c3 · 847 事件 / 7 天</div>
+            </div>
+            <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">查看 token</button>
+            <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">暂停</button>
+            <button class="text-sm text-[#8a3a2a] hover:text-[#612717] transition">移除</button>
+          </div>
+
+          <div class="p-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-md bg-[#141413] flex items-center justify-center flex-shrink-0">
+              <span class="text-[#d97757] font-bold text-sm">CR</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[#141413]">Cursor</span>
+                <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-1.5 py-0.5 rounded">已连接</span>
+              </div>
+              <div class="text-xs text-[#85857c] mt-0.5 font-mono">workspace: /Users/alice/work/tokenknows · 312 事件 / 7 天</div>
+            </div>
+            <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">配置</button>
+            <button class="text-sm text-[#8a3a2a] hover:text-[#612717] transition">移除</button>
+          </div>
+
+          <div class="p-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-md bg-[#141413] flex items-center justify-center flex-shrink-0">
+              <span class="text-[#faf9f5] font-bold text-sm">GH</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[#141413]">GitHub · acme/tokenknows</span>
+                <span class="text-xs text-[#5d6e45] bg-[#eef2e3] px-1.5 py-0.5 rounded">已连接</span>
+                <span class="text-xs text-[#85857c]">+1 仓库</span>
+              </div>
+              <div class="text-xs text-[#85857c] mt-0.5">PAT · 最近同步 2 分钟前 · 63 PR / Issue · 下次轮询 13:42</div>
+            </div>
+            <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">管理仓库</button>
+            <button class="text-sm text-[#5d5d57] hover:text-[#141413] transition">轮换 PAT</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 高级配置 -->
+      <div class="bg-[#faf9f5] border border-[#e8e6dc] rounded-lg p-5">
+        <h3 class="font-serif text-lg text-[#141413] mb-1">高级配置</h3>
+        <p class="text-xs text-[#85857c] mb-4">事件过滤、归档、保留策略</p>
+
+        <div class="space-y-4">
+          <div class="flex items-center justify-between py-3 border-b border-[#e8e6dc]">
+            <div>
+              <div class="text-sm font-medium text-[#141413]">事件保留期</div>
+              <div class="text-xs text-[#85857c] mt-0.5">超过此期限的事件归档到对象存储，仍可查询</div>
+            </div>
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5]">
+              <option>90 天</option>
+              <option>180 天</option>
+              <option>1 年</option>
+              <option>永久</option>
+            </select>
+          </div>
+
+          <div class="flex items-center justify-between py-3 border-b border-[#e8e6dc]">
+            <div>
+              <div class="text-sm font-medium text-[#141413]">事件去重粒度</div>
+              <div class="text-xs text-[#85857c] mt-0.5">跨数据源相同内容的合并阈值</div>
+            </div>
+            <select class="text-sm border border-[#e8e6dc] rounded-md px-2.5 py-1.5 bg-[#faf9f5]">
+              <option>严格（hash 完全相同）</option>
+              <option>宽松（内容相似度 ≥ 90%）</option>
+            </select>
+          </div>
+
+          <div class="flex items-center justify-between py-3">
+            <div>
+              <div class="text-sm font-medium text-[#141413]">事件流暂停</div>
+              <div class="text-xs text-[#85857c] mt-0.5">暂停所有数据源采集（已缓存数据保留）</div>
+            </div>
+            <button class="relative inline-flex h-6 w-11 items-center rounded-full bg-[#e8e6dc] transition">
+              <span class="inline-block h-4 w-4 transform rounded-full bg-[#faf9f5] shadow-sm translate-x-1 transition"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+</body>
+</html>

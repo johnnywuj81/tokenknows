@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenKnows · 登录</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f5f4ed; color: #141413; font-size: 14px; }
+    .font-serif { font-family: 'Lora', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-screen flex">
+
+  <!-- 左侧：品牌 + 文案 -->
+  <div class="w-1/2 bg-[#141413] text-[#faf9f5] flex flex-col justify-between p-12 min-h-screen">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-md bg-[#d97757] flex items-center justify-center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#141413" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <span class="font-semibold text-base tracking-tight">TokenKnows</span>
+    </div>
+
+    <div class="max-w-md">
+      <p class="font-serif text-3xl leading-snug text-[#faf9f5]">
+        把每一次大模型调用，<br/>
+        沉淀为可追溯、可审计、<br/>
+        可发布的<span class="text-[#d97757]">组织知识资产</span>。
+      </p>
+      <div class="mt-8 pt-6 border-t border-[#3a3a37] text-xs text-[#b0aea5] leading-relaxed font-serif">
+        "我们以前的项目复盘永远拖延，TokenKnows 让我们的研发知识第一次有了沉淀。"
+      </div>
+      <div class="mt-2 text-xs text-[#85857c]">
+        — 试点客户 · AI 产品 Lead
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between text-xs text-[#85857c]">
+      <div class="flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#788c5d]"></span>
+        <span class="font-mono">instance.acme.internal</span>
+        <span class="text-[#3a3a37]">·</span>
+        <span class="font-mono">v1.0.3</span>
+      </div>
+      <div>© 2026 TokenKnows</div>
+    </div>
+  </div>
+
+  <!-- 右侧：表单 -->
+  <div class="w-1/2 flex items-center justify-center p-12">
+    <div class="w-full max-w-md">
+
+      <!-- Tab 切换 -->
+      <div class="flex items-center gap-1 mb-8">
+        <button class="px-4 py-2 text-sm font-medium bg-[#141413] text-[#faf9f5] rounded-md">登录</button>
+        <button class="px-4 py-2 text-sm text-[#85857c] hover:text-[#141413] transition">注册</button>
+      </div>
+
+      <h1 class="font-serif text-3xl text-[#141413] leading-tight">欢迎回来</h1>
+      <p class="text-sm text-[#85857c] mt-2">登录到 <span class="font-mono text-[#3a3a37]">instance.acme.internal</span></p>
+
+      <form class="mt-8 space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-[#3a3a37] mb-1.5 uppercase tracking-wider">邮箱</label>
+          <input type="email" value="john.wu@acme.com" class="w-full px-3.5 py-2.5 bg-[#faf9f5] border border-[#e8e6dc] rounded-md text-sm focus:outline-none focus:border-[#d97757] focus:ring-2 focus:ring-[#fbeae0] transition"/>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-medium text-[#3a3a37] uppercase tracking-wider">密码</label>
+            <a class="text-xs text-[#d97757] hover:text-[#b8623f] cursor-pointer transition">忘记密码？</a>
+          </div>
+          <div class="relative">
+            <input type="password" value="••••••••••••" class="w-full px-3.5 py-2.5 bg-[#faf9f5] border border-[#e8e6dc] rounded-md text-sm focus:outline-none focus:border-[#d97757] focus:ring-2 focus:ring-[#fbeae0] transition"/>
+            <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-[#85857c] hover:text-[#141413]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-[#3a3a37] cursor-pointer">
+          <input type="checkbox" class="w-4 h-4 rounded border-[#d4d2c7] text-[#d97757] focus:ring-[#fbeae0]" checked>
+          <span>保持登录 30 天</span>
+        </label>
+
+        <button type="submit" class="w-full py-2.5 bg-[#141413] text-[#faf9f5] font-medium rounded-md hover:bg-[#3a3a37] transition mt-2">登录</button>
+      </form>
+
+      <div class="mt-8 pt-6 border-t border-[#e8e6dc] text-xs text-[#85857c] leading-relaxed">
+        <div class="flex items-start gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#788c5d" stroke-width="2" class="flex-shrink-0 mt-0.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div>
+            这是一个**私有化部署实例**。你的代码、对话、项目数据从未离开你的服务器。
+            <a class="text-[#d97757] hover:text-[#b8623f] cursor-pointer ml-1 font-medium">了解 →</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
