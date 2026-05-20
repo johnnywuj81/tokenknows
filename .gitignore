@@ -58,3 +58,11 @@ venv/
 # Misc
 *.tsbuildinfo
 .eslintcache
+
+# 备份文件 (shadcn-cli 升级 / tsconfig 手工备份)
+*.bak
+*.bak.[0-9]*
+*.radix-nova.bak
+
+# 本地 docs 软链 (绝对路径,跨机器无效;请在 clone 后手工建)
+code/tokenknows-web/docs/
