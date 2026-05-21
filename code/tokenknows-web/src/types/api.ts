@@ -317,6 +317,7 @@ export interface Evidence {
 
 export type PublishDestination =
   | 'internal'
+  | 'public_link'
   | 'feishu'
   | 'slack'
   | 'notion'
