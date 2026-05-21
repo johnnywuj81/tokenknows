@@ -31,6 +31,12 @@ coverage/
 .env.*.local
 *.pem
 
+# Backend runtime state (SQLite databases)
+code/tokenknows-api/data/*.sqlite
+code/tokenknows-api/data/*.sqlite-journal
+code/tokenknows-api/data/*.sqlite-wal
+code/tokenknows-api/data/*.sqlite-shm
+
 # IDE
 .idea/
 .vscode/*

@@ -34,6 +34,8 @@ from app.schemas.asset import (
     AssetType,
     Chapter,
     ChapterGeneratedBy,
+    Evidence,
+    EvidencePreview,
 )
 from app.schemas.generation import (
     GenerateAssetRequest,
@@ -49,6 +51,8 @@ _assets: dict[str, Asset] = {}
 _chapters: dict[str, list[Chapter]] = {}
 _progress: dict[str, GenerationProgress] = {}
 _sse_queues: dict[str, list[asyncio.Queue]] = {}
+# T07: chapter_id → List[Evidence]
+_evidence_by_chapter: dict[str, list[Evidence]] = {}
 _state_lock = asyncio.Lock()
 
 
@@ -361,14 +365,128 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     }
 
 
+# T07 Mock Event 模板: 真后端会查 fixture events / DB 真 events.
+# 这些 EventPreview 嵌入 Evidence 让前端一次性拿到展示数据.
+_MOCK_EVENT_TEMPLATES: list[dict] = [
+    {
+        "event_id": "evt-pr-127",
+        "title": "PR #127 · 加入 EgressGate 中间件",
+        "source_type": "github",
+        "source_ref": "TokenKnows/api",
+        "author_name": "Alice",
+        "author_email": "alice@tokenknows.local",
+        "content_excerpt": "合并到 main, 含 12 个 commit, +824 / -36. 实例级出域开关在中间件强制校验.",
+        "external_url": "https://github.com/TokenKnows/api/pull/127",
+        "citation_text": "PR #127 · @alice 合并于 2026-05-21",
+        "trust_score": 0.95,
+    },
+    {
+        "event_id": "evt-conv-001",
+        "title": "讨论价值识别的 trust_score 加权公式",
+        "source_type": "claude_code",
+        "source_ref": "install-john-mac",
+        "author_name": "示例用户",
+        "author_email": "demo@tokenknows.local",
+        "content_excerpt": "trust_score = 0.3*source_authority + 0.2*corroboration + 0.2*recency + 0.3*extraction_confidence. manual_trust_override 永远覆盖.",
+        "external_url": None,
+        "citation_text": "Claude Code 对话 · 2026-05-21 16:30",
+        "trust_score": 0.82,
+    },
+    {
+        "event_id": "evt-issue-89",
+        "title": "Issue #89 · pgvector 在 1M 行性能 spike",
+        "source_type": "github",
+        "source_ref": "TokenKnows/api",
+        "author_name": "Alice",
+        "author_email": "alice@tokenknows.local",
+        "content_excerpt": "1M 行 events 表上 ivfflat lists=100 查询 p95 ~ 280ms, 超出 SLA. 建议切 HNSW 或 lists=1000.",
+        "external_url": "https://github.com/TokenKnows/api/issues/89",
+        "citation_text": "Issue #89 · @alice 创建于 2026-05-21",
+        "trust_score": 0.75,
+    },
+    {
+        "event_id": "evt-commit-a7f3",
+        "title": "feat(llm): 实例级出域开关在中间件强制校验",
+        "source_type": "github",
+        "source_ref": "TokenKnows/api",
+        "author_name": "Alice",
+        "author_email": "alice@tokenknows.local",
+        "content_excerpt": "新增 LLMRouter._egress_check 检查 instance ∧ project ∧ task 三层; 任一 OFF 抛 EgressDeniedError.",
+        "external_url": "https://github.com/TokenKnows/api/commit/a7f3e91",
+        "citation_text": "commit a7f3e91 · @alice 提交",
+        "trust_score": 0.7,
+    },
+    {
+        "event_id": "evt-conv-rca",
+        "title": "排查 worker-extract 内存泄漏",
+        "source_type": "claude_code",
+        "source_ref": "install-bob-linux",
+        "author_name": "Bob",
+        "author_email": "bob@tokenknows.local",
+        "content_excerpt": "PyTorch tensor 未 detach 累积在 CUDA cache. 修: torch.cuda.empty_cache() + with torch.no_grad().",
+        "external_url": None,
+        "citation_text": "Claude Code 对话 · @bob · 2026-05-21",
+        "trust_score": 0.88,
+    },
+]
+
+
 async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     """阶段 4 · 证据链回填.
 
-    MVP 占位: 假装回填 18 条 evidence.
-    生产: 解析阶段 3 LLM 返回的结构化 spans→event_ids; 失败回退 TF-IDF.
+    MVP: 为每章 mock 3 条 Evidence (rotation from _MOCK_EVENT_TEMPLATES).
+    span_start/end 用章节字符长度模拟随机区间.
+    生产: 解析阶段 3 LLM 返回的结构化 spans→event_ids; 失败回退 TF-IDF + pgvector.
     """
+    import random
     await asyncio.sleep(0.8)
-    return {"evidence_total": 18, "evidence_stale": 0, "fallback_used": False}
+
+    chapters = _chapters.get(asset_id, [])
+    total_evidence = 0
+    for ch in chapters:
+        # 每章选 3-4 条
+        num = random.randint(3, 4)
+        ev_list: list[Evidence] = []
+        chosen = random.sample(_MOCK_EVENT_TEMPLATES, k=min(num, len(_MOCK_EVENT_TEMPLATES)))
+        content_len = max(50, len(ch.content))
+        for idx, tpl in enumerate(chosen):
+            # 随机 span (字符偏移)
+            span_start = random.randint(0, max(1, content_len - 50))
+            span_end = min(content_len, span_start + random.randint(20, 50))
+            ev = Evidence(
+                id=f"ev-{ch.id}-{idx + 1}",
+                chapter_id=ch.id,
+                event_id=tpl["event_id"],
+                event_version=1,
+                span_start=span_start,
+                span_end=span_end,
+                citation_text=tpl["citation_text"],
+                manually_added=False,
+                stale=False,
+                trust_score=tpl["trust_score"],
+                citation_strength=round(tpl["trust_score"] * (0.85 + random.random() * 0.15), 3),
+                event_preview=EvidencePreview(
+                    event_id=tpl["event_id"],
+                    title=tpl["title"],
+                    source_type=tpl["source_type"],
+                    source_ref=tpl["source_ref"],
+                    author_name=tpl["author_name"],
+                    author_email=tpl["author_email"],
+                    occurred_at="2026-05-21T08:00:00Z",
+                    content_excerpt=tpl["content_excerpt"],
+                    external_url=tpl["external_url"],
+                ),
+            )
+            ev_list.append(ev)
+        _evidence_by_chapter[ch.id] = ev_list
+        total_evidence += len(ev_list)
+
+    return {
+        "evidence_total": total_evidence,
+        "evidence_stale": 0,
+        "fallback_used": False,
+        "chapters_with_evidence": len(chapters),
+    }
 
 
 async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
@@ -486,6 +604,12 @@ def get_asset(asset_id: str) -> Asset | None:
 
 def list_chapters(asset_id: str) -> list[Chapter]:
     return _chapters.get(asset_id, [])
+
+
+def list_chapter_evidence(asset_id: str, chapter_id: str) -> list[Evidence]:
+    """T07 抽屉打开时一次性加载本章所有 Evidence."""
+    return _evidence_by_chapter.get(chapter_id, [])
+
 
 
 def get_progress(asset_id: str) -> GenerationProgress | None:

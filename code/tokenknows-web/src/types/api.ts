@@ -287,6 +287,18 @@ export interface Chapter {
   redacted_spans: RedactedSpan[]
 }
 
+export interface EvidencePreview {
+  event_id: string
+  title: string | null
+  source_type: string
+  source_ref: string
+  author_name: string | null
+  author_email: string | null
+  occurred_at: string
+  content_excerpt: string
+  external_url: string | null
+}
+
 export interface Evidence {
   id: string
   chapter_id: string
@@ -297,8 +309,9 @@ export interface Evidence {
   citation_text: string
   manually_added: boolean
   stale: boolean
-  trust_score?: number
-  citation_strength?: number
+  trust_score?: number | null
+  citation_strength?: number | null
+  event_preview: EvidencePreview
 }
 
 export type PublishDestination =

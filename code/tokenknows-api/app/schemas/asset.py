@@ -74,3 +74,37 @@ class Asset(BaseModel):
     metrics: AssetMetrics | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class EvidencePreview(BaseModel):
+    """Evidence 内嵌的 Event 摘要 (避免前端额外 GET /events/:id)."""
+
+    event_id: str
+    title: str | None = None
+    source_type: str  # "github" / "claude_code" / "cursor" / ...
+    source_ref: str
+    author_name: str | None = None
+    author_email: str | None = None
+    occurred_at: str  # ISO 8601
+    content_excerpt: str  # 截取 ≤ 500 字; 后端用 span_start/end 周围片段
+    external_url: str | None = None  # "在源头打开" 链接 (GitHub PR / commit)
+
+
+class Evidence(BaseModel):
+    """Chapter 与 Event 之间的多对多桥接.
+
+    设计依据 TDD §7.2.2 / TaskTechDesign T07 数据流时序.
+    """
+
+    id: str
+    chapter_id: str
+    event_id: str
+    event_version: int = 1
+    span_start: int  # 在 Chapter.content 中的字符偏移
+    span_end: int
+    citation_text: str  # 例: "PR #127 由 @alice 合并于 2026-05-21"
+    manually_added: bool = False
+    stale: bool = False  # 编辑后字符相似度 30-70% 标 stale (PRD §5.4 D1)
+    trust_score: float | None = None  # 0-1
+    citation_strength: float | None = None  # 派生自 trust_score + corroboration
+    event_preview: EvidencePreview

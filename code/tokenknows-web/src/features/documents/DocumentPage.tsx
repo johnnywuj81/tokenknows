@@ -36,9 +36,9 @@ export default function DocumentPage() {
 
   const handleViewEvidence = useCallback(
     (chapterId: string, evidenceId?: string) => {
-      // 没指定 evidenceId 时 (来自 footer "查看证据" 按钮),
-      // 默认打开该章节第 1 条证据.
-      openEvidence(evidenceId ?? `ev-${chapterId}-1`)
+      // 没指定 evidenceId 时 (来自 footer "查看证据" 按钮) → EvidenceDrawer 内
+      // useEffect 会读 evidence 列表后默认聚焦第 1 条.
+      openEvidence(chapterId, evidenceId ?? null)
     },
     [openEvidence],
   )
@@ -130,8 +130,8 @@ export default function DocumentPage() {
         <DocSidebar asset={asset} />
       </div>
 
-      {/* T07 stub - 证据抽屉 */}
-      <EvidenceDrawer />
+      {/* T07 · 证据链抽屉 */}
+      <EvidenceDrawer assetId={docId} />
 
       {/* T08 stub - 重生成对话框 */}
       <RegenerateDialog />

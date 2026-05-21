@@ -10,8 +10,11 @@
 import { create } from 'zustand'
 
 interface DocumentUiState {
-  // T07 证据抽屉
+  // T07 证据抽屉 (重设计 - chapterId 是数据 key, evidenceId 是高亮项)
   evidenceOpen: boolean
+  /** 抽屉关联的 chapter (决定 fetch 哪份证据列表). */
+  evidenceChapterId: string | null
+  /** 当前高亮的 evidence (切换不重 fetch). */
   activeEvidenceId: string | null
 
   // T04 事件抽屉
@@ -23,7 +26,9 @@ interface DocumentUiState {
   regenerateChapterId: string | null
 
   // actions
-  openEvidence: (id: string) => void
+  /** 打开抽屉: 必须传 chapterId, evidenceId 可选 (默认聚焦第 1 条). */
+  openEvidence: (chapterId: string, evidenceId?: string | null) => void
+  setActiveEvidence: (evidenceId: string | null) => void
   closeEvidence: () => void
   openEventDrawer: (id: string) => void
   closeEventDrawer: () => void
@@ -33,14 +38,18 @@ interface DocumentUiState {
 
 export const useDocumentUiStore = create<DocumentUiState>((set) => ({
   evidenceOpen: false,
+  evidenceChapterId: null,
   activeEvidenceId: null,
   eventDrawerOpen: false,
   activeEventId: null,
   regenerateOpen: false,
   regenerateChapterId: null,
 
-  openEvidence: (id) => set({ evidenceOpen: true, activeEvidenceId: id }),
-  closeEvidence: () => set({ evidenceOpen: false, activeEvidenceId: null }),
+  openEvidence: (chapterId, evidenceId = null) =>
+    set({ evidenceOpen: true, evidenceChapterId: chapterId, activeEvidenceId: evidenceId }),
+  setActiveEvidence: (evidenceId) => set({ activeEvidenceId: evidenceId }),
+  closeEvidence: () =>
+    set({ evidenceOpen: false, evidenceChapterId: null, activeEvidenceId: null }),
   openEventDrawer: (id) => set({ eventDrawerOpen: true, activeEventId: id }),
   closeEventDrawer: () => set({ eventDrawerOpen: false, activeEventId: null }),
   openRegenerate: (chapterId) => set({ regenerateOpen: true, regenerateChapterId: chapterId }),

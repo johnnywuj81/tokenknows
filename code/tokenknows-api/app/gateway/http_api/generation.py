@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel
 
-from app.schemas.asset import Asset, Chapter
+from app.schemas.asset import Asset, Chapter, Evidence
 from app.schemas.generation import (
     GenerateAssetRequest,
     GenerationProgress,
@@ -99,6 +99,17 @@ async def patch_chapter(
     if updated is None:
         raise HTTPException(404, detail="Chapter not found")
     return updated
+
+
+@router.get(
+    "/assets/{asset_id}/chapters/{chapter_id}/evidence",
+    response_model=list[Evidence],
+)
+async def list_chapter_evidence(asset_id: str, chapter_id: str) -> list[Evidence]:
+    """T07 · 一次性返回本章所有 Evidence (含 event_preview, 抽屉切换不再 fetch)."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    return svc.list_chapter_evidence(asset_id, chapter_id)
 
 
 # ─── 删除 / 克隆 (T05 列表卡更多菜单) ────────────────────────────
