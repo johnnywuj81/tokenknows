@@ -48,10 +48,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Vitest (skip if no test files yet)
+      - name: Vitest + coverage (info only, no enforcement)
         run: |
           if find src -name "*.test.ts" -o -name "*.test.tsx" 2>/dev/null | grep -q .; then
-            npm test
+            npm test -- --coverage --reporter=default 2>&1 | tee vitest-output.txt
+            # 抽 "All files" 总行打到 step summary
+            grep -E "^All files" vitest-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
           else
             echo "no .test files yet, skip"
           fi
@@ -80,7 +82,7 @@ jobs:
               fastapi uvicorn pydantic pydantic-settings python-dotenv \
               structlog litellm httpx requests
           fi
-          .venv/bin/pip install --quiet ruff pytest pytest-asyncio httpx
+          .venv/bin/pip install --quiet ruff pytest pytest-asyncio pytest-cov httpx
 
       - name: ruff (info only)
         run: |
@@ -100,10 +102,13 @@ jobs:
           print('all required routes registered ✓')
           "
 
-      - name: pytest (if tests/ exists)
+      - name: pytest + coverage (info only, no enforcement)
         run: |
           if [ -d tests ]; then
-            .venv/bin/pytest tests/ -v
+            PYTHONPATH=. .venv/bin/pytest tests/ -v --cov --cov-report=term \
+              | tee pytest-output.txt
+            # 抽 TOTAL 行打到 summary 让 PR/job 可见
+            grep -E "^TOTAL " pytest-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
           else
             echo "no tests/ dir yet, skip"
           fi

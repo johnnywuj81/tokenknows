@@ -57,4 +57,24 @@ ignore = ["E501", "E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["app/tests"]
+testpaths = ["tests"]
+# 默认不启 coverage (跑得快, 本地开发友好); CI 显式 --cov 时启
+# 公司里如要强制最低覆盖: 在 CI 加 --cov-fail-under=70
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/__pycache__/*",
+    "app/tests/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+precision = 1
