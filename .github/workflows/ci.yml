@@ -7,26 +7,28 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# self-hosted runner: macOS ARM64 (TokenKnows/actions-runner)
+# labels = [self-hosted, macOS, ARM64]
+# 注意 self-hosted job 之间共享磁盘, 需要每个 step 清理 working dir 避免污染
+# 不需要 pip 缓存 (Node/Python 全在 host 已装)
+
 jobs:
   # ─── 前端 · TypeScript + ESLint + Build ───────────────────
   web:
     name: Web · tsc + lint + build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     defaults:
       run:
         working-directory: code/tokenknows-web
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: code/tokenknows-web/package-lock.json
+      # node 已在 host 装 (开发环境一致), 走 host 的 node 18+/20+ 即可
+      - name: Node version
+        run: node --version && npm --version
 
       - name: Install
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --progress=false
 
       - name: TypeScript check
         run: npx tsc --noEmit
@@ -37,7 +39,6 @@ jobs:
         run: |
           npm run lint > lint-output.txt 2>&1 || true
           cat lint-output.txt
-          # 检查除既有 2 个 shadcn 错误之外是否有新 error
           NEW_ERRORS=$(grep -c " error " lint-output.txt || echo 0)
           if [ "$NEW_ERRORS" -gt 2 ]; then
             echo "::error::ESLint 出现 $NEW_ERRORS 个 error (>2 个已知 shadcn 错误)"
@@ -47,55 +48,89 @@ jobs:
       - name: Build
         run: npm run build
 
-  # ─── 后端 · ruff + pytest (若有) ───────────────────────────
+  # ─── 后端 · 模块导入冒烟 + ruff ───────────────────────────
   api:
-    name: API · ruff + tests
-    runs-on: ubuntu-latest
+    name: API · ruff + import smoke
+    runs-on: [self-hosted, macOS, ARM64]
     defaults:
       run:
         working-directory: code/tokenknows-api
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
+      - name: Python version
+        run: python3 --version
 
-      - name: Install (editable + dev)
+      - name: Install (use repo .venv if exists, else create)
         run: |
-          python -m pip install --upgrade pip
-          # 主依赖
-          if [ -f pyproject.toml ]; then
-            pip install -e . || pip install fastapi uvicorn pydantic pydantic-settings python-dotenv structlog litellm
+          if [ -d .venv ]; then
+            echo "using existing .venv"
+            .venv/bin/python --version
+          else
+            python3 -m venv .venv
+            .venv/bin/pip install -e . || .venv/bin/pip install \
+              fastapi uvicorn pydantic pydantic-settings python-dotenv \
+              structlog litellm httpx requests
           fi
-          # 开发工具
-          pip install ruff pytest pytest-asyncio httpx
+          .venv/bin/pip install --quiet ruff pytest pytest-asyncio httpx
 
-      - name: ruff
+      - name: ruff (info only)
         run: |
-          ruff check app/ || true   # MVP 允许告警, 不阻塞
-          ruff format --check app/ || true
+          .venv/bin/ruff check app/ || true
+          .venv/bin/ruff format --check app/ || true
 
-      - name: pytest (smoke)
+      - name: Import smoke (FastAPI app loads + routes registered)
         run: |
-          # 简单 import 测试: app 能加载 = endpoints 注册成功
-          PYTHONPATH=. python -c "from app.main import app; print('routes:', len(app.routes))"
-          # 真测试集存在再跑
-          if [ -d tests ]; then pytest tests/ -v; else echo "no tests/ dir yet"; fi
+          PYTHONPATH=. .venv/bin/python -c "
+          from app.main import app
+          routes = [r.path for r in app.routes if hasattr(r, 'path')]
+          print(f'routes: {len(routes)}')
+          # 核心端点都注册
+          for need in ['/api/v1/healthz', '/api/v1/projects/{project_id}/events',
+                       '/api/v1/assets/{asset_id}/publish']:
+              assert any(need in r for r in routes), f'missing {need}'
+          print('all required routes registered ✓')
+          "
+
+      - name: pytest (if tests/ exists)
+        run: |
+          if [ -d tests ]; then
+            .venv/bin/pytest tests/ -v
+          else
+            echo "no tests/ dir yet, skip"
+          fi
+
+  # ─── 插件层 · Python plugins import smoke ─────────────────
+  plugins:
+    name: Plugins · syntax check
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax check 3 个 plugin
+        run: |
+          for f in plugins/claude-code/sync.py plugins/cursor/sync.py plugins/github/sync.py; do
+            python3 -m py_compile "$f" && echo "  ✓ $f"
+          done
+      - name: VS Code 扩展 TS 编译
+        working-directory: plugins/vscode-tokenknows
+        run: |
+          npm install --prefer-offline --no-audit --progress=false
+          npx tsc -p ./
 
   # ─── 综合状态 ─────────────────────────────────────────────
   status:
     name: CI Status
-    needs: [web, api]
-    runs-on: ubuntu-latest
+    needs: [web, api, plugins]
+    runs-on: [self-hosted, macOS, ARM64]
     if: always()
     steps:
       - name: Report
         run: |
-          echo "Web:   ${{ needs.web.result }}"
-          echo "API:   ${{ needs.api.result }}"
-          if [ "${{ needs.web.result }}" != "success" ] || [ "${{ needs.api.result }}" != "success" ]; then
+          echo "Web:     ${{ needs.web.result }}"
+          echo "API:     ${{ needs.api.result }}"
+          echo "Plugins: ${{ needs.plugins.result }}"
+          if [ "${{ needs.web.result }}" != "success" ] \
+             || [ "${{ needs.api.result }}" != "success" ] \
+             || [ "${{ needs.plugins.result }}" != "success" ]; then
             exit 1
           fi
