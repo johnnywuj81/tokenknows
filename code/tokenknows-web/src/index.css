@@ -75,3 +75,54 @@
     @apply font-sans;
     }
 }
+/* T06 文档章节渲染样式 (markdown-it + TipTap 共用) */
+.markdown-body, .tiptap-prose {
+  white-space: pre-wrap;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.tiptap-prose h1, .tiptap-prose h2, .tiptap-prose h3 {
+  font-family: var(--font-content);
+  color: var(--color-text-primary);
+  margin: 1em 0 0.5em;
+}
+.markdown-body h1, .tiptap-prose h1 { font-size: 1.5em; font-weight: 600; }
+.markdown-body h2, .tiptap-prose h2 { font-size: 1.25em; font-weight: 600; }
+.markdown-body h3, .tiptap-prose h3 { font-size: 1.1em; font-weight: 600; }
+.markdown-body p, .tiptap-prose p { margin: 0.5em 0; }
+.markdown-body ul, .markdown-body ol,
+.tiptap-prose ul, .tiptap-prose ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.markdown-body li, .tiptap-prose li { margin: 0.25em 0; }
+.markdown-body code, .tiptap-prose code {
+  background: var(--color-bg-warm);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+.markdown-body pre, .tiptap-prose pre {
+  background: var(--color-inverse-bg);
+  color: var(--color-inverse-text);
+  padding: 0.75em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.markdown-body blockquote, .tiptap-prose blockquote {
+  border-left: 3px solid var(--color-accent-primary-border);
+  padding-left: 0.75em;
+  color: var(--color-text-muted);
+  margin: 0.75em 0;
+}
+.tiptap-prose:focus { outline: none; }
+.tiptap-prose .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+  height: 0;
+}

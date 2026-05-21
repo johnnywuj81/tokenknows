@@ -540,3 +540,24 @@ def clone_asset(asset_id: str) -> Asset | None:
         for c in src_chapters
     ]
     return cloned
+
+
+def update_chapter_content(
+    asset_id: str, chapter_id: str, content: str
+) -> Chapter | None:
+    """更新章节内容 (T06 Phase 2 自动保存).
+
+    服务端可能改 content (后续脱敏/格式化), 返回 server-side 结果让前端 reconcile.
+    """
+    chapters = _chapters.get(asset_id)
+    if not chapters:
+        return None
+    for c in chapters:
+        if c.id == chapter_id:
+            c.content = content
+            # 更新 asset.updated_at
+            asset = _assets.get(asset_id)
+            if asset is not None:
+                asset.updated_at = _now()
+            return c
+    return None

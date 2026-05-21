@@ -27,6 +27,12 @@ from app.services import generation_service as svc
 router = APIRouter()
 
 
+class ChapterPatchRequest(BaseModel):
+    """T06 Phase 2 自动保存请求."""
+
+    content: str
+
+
 class PaginatedAssets(BaseModel):
     """前端 useInfiniteQuery 期待的分页响应格式 (与 MSW mock 一致)."""
 
@@ -82,6 +88,17 @@ async def list_chapters(asset_id: str) -> list[Chapter]:
     if svc.get_asset(asset_id) is None:
         raise HTTPException(404, detail="Asset not found")
     return svc.list_chapters(asset_id)
+
+
+@router.patch("/assets/{asset_id}/chapters/{chapter_id}", response_model=Chapter)
+async def patch_chapter(
+    asset_id: str, chapter_id: str, body: ChapterPatchRequest
+) -> Chapter:
+    """更新章节内容 (T06 自动保存). 返回 server-side 结果让前端 reconcile."""
+    updated = svc.update_chapter_content(asset_id, chapter_id, body.content)
+    if updated is None:
+        raise HTTPException(404, detail="Chapter not found")
+    return updated
 
 
 # ─── 删除 / 克隆 (T05 列表卡更多菜单) ────────────────────────────
