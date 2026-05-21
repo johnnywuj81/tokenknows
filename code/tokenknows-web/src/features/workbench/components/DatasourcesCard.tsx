@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { DatasourceHealth, DatasourceHealthItem, DatasourceType } from '@/types/api'
 import { cn } from '@/lib/utils'
+import { formatRelative } from '@/lib/format'
 
 interface DatasourcesCardProps {
   items: DatasourceHealthItem[] | undefined
@@ -150,12 +151,3 @@ function DatasourceRow({ item }: { item: DatasourceHealthItem }) {
   )
 }
 
-function formatRelative(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)} 天前`
-  if (diff < 86400 * 365) return `${Math.floor(diff / (86400 * 30))} 个月前`
-  return `${Math.floor(diff / (86400 * 365))} 年前`
-}

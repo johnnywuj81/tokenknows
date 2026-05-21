@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Project, ProjectStats as Stats } from '@/types/api'
 import { cn } from '@/lib/utils'
+import { formatRelative } from '@/lib/format'
 
 interface ProjectStatsProps {
   project: Project | undefined
@@ -138,10 +139,3 @@ function StatItem({ icon: Icon, label, value, isLoading, tooltip, valueColor }: 
   )
 }
 
-function formatRelative(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 60 * 60) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 60 * 60 * 24) return `${Math.floor(diff / 3600)} 小时前`
-  return `${Math.floor(diff / 86400)} 天前`
-}
