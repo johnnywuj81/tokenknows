@@ -103,18 +103,92 @@ async def get_project_stats(project_id: str) -> dict:
     assets = gen_svc.list_assets(project_id)
     pending = sum(1 for a in assets if a.status == "in_review")
 
-    # 数据源数: 统计本项目近 7 天事件出现的 source_type 数量
-    source_types = set()
-    sample_events, _ = db.list_events(project_id=project_id, from_iso=week_ago, limit=100)
-    for e in sample_events:
-        st = e.get("source_type")
-        if st:
-            source_types.add(st)
-    datasources_total = max(len(source_types), 1)
+    # 数据源数: 用 datasource_health (近 7 天) DISTINCT, 不再 limit=100 抽样
+    health_rows = db.datasource_health(project_id, window_days=7)
+    datasources_total = max(len([r for r in health_rows if r["event_count"] > 0]), 1)
 
     return {
         "events_this_week": total_week,
         "assets_pending_review": pending,
         "datasources_total": datasources_total,
         "datasources_healthy": datasources_total,  # MVP: 假设全 healthy
+    }
+
+
+# ─── 数据源健康度 (5 源真实数 + last_seen) ────────────────────────
+
+
+_KNOWN_SOURCE_TYPES = ("claude_code", "github", "cursor", "vscode", "local_file")
+
+
+@router.get("/projects/{project_id}/datasources/health")
+async def get_datasource_health(
+    project_id: str,
+    window_days: int = Query(30, ge=1, le=365),
+) -> dict:
+    """T03 · 工作台数据源卡 · 每个 source_type 的事件数 + 最近一次入库.
+
+    返回 5 行 (包含未出现过的源, event_count=0), 前端按固定顺序排:
+        claude_code / github / cursor / vscode / local_file
+
+    health 判定 (前端展示用):
+        - active   : last_seen_at within 24h
+        - stale    : last_seen_at within 7d
+        - cold     : last_seen_at within window_days
+        - inactive : 无事件 (event_count = 0)
+    """
+    from datetime import datetime, timezone
+    from app.persistence import get_db
+    db = get_db()
+    rows = db.datasource_health(project_id, window_days=window_days)
+
+    # 已出现的源
+    by_type = {r["source_type"]: r for r in rows}
+    now = datetime.now(timezone.utc)
+
+    def _health(last_seen: str | None, count: int) -> str:
+        if count == 0 or not last_seen:
+            return "inactive"
+        try:
+            ts = last_seen.replace("Z", "+00:00") if last_seen.endswith("Z") else last_seen
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            hours_ago = (now - dt).total_seconds() / 3600
+        except ValueError:
+            return "cold"
+        if hours_ago <= 24:
+            return "active"
+        if hours_ago <= 24 * 7:
+            return "stale"
+        return "cold"
+
+    # 补齐 5 个已知源 (含历史有数据但近期无活动的源)
+    items: list[dict] = []
+    for st in _KNOWN_SOURCE_TYPES:
+        r = by_type.get(st)
+        ec = r["event_count"] if r else 0          # 窗口内
+        te = r["total_events"] if r else 0          # 历史
+        ls = r["last_seen_at"] if r else None
+        li = r["last_ingested_at"] if r else None
+        # health: 优先看 last_ingested_at (插件是否还在跑) — 24h 内入库就算 active
+        health = _health(li or ls, te)
+        items.append({
+            "source_type": st,
+            "event_count": ec,
+            "total_events": te,
+            "last_seen_at": ls,
+            "last_ingested_at": li,
+            "health": health,
+        })
+
+    total_active = sum(1 for it in items if it["health"] in ("active", "stale"))
+    total_events_window = sum(it["event_count"] for it in items)
+    total_events_all = sum(it["total_events"] for it in items)
+    return {
+        "items": items,
+        "window_days": window_days,
+        "total_active": total_active,
+        "total_events_window": total_events_window,
+        "total_events_all": total_events_all,
     }

@@ -340,6 +340,65 @@ class SqliteStore:
         )[0]["n"]
         return events, total
 
+    def datasource_health(
+        self,
+        project_id: str,
+        window_days: int = 30,
+    ) -> list[dict[str, Any]]:
+        """每个 source_type 的健康度: 事件数 + 最近 occurred_at + 最近 ingested_at.
+
+        语义区分:
+        - event_count: 窗口内 (occurred_at) 的事件数, 反映"近期活动"
+        - last_seen_at: 该源最近一次 occurred_at (历史最大值, 不受窗口限制)
+        - last_ingested_at: 该源最近一次入库 ingested_at (反映插件是否仍在跑)
+
+        e.g. Cursor 把 8 个月前的对话历史 backfill 到现在,
+             event_count(30d) = 0, last_seen_at = 8个月前, last_ingested_at = 1小时前.
+             前端可据此判断: "插件在跑, 但近期没有新对话".
+        """
+        from datetime import datetime, timedelta, timezone
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        # 窗口内的事件统计
+        in_window = self._query(
+            """
+            SELECT
+                source_type,
+                COUNT(*) AS event_count
+            FROM events
+            WHERE project_id = ? AND occurred_at >= ?
+            GROUP BY source_type
+            """,
+            (project_id, cutoff),
+        )
+        # 历史最大时间戳 (不受窗口限制)
+        all_time = self._query(
+            """
+            SELECT
+                source_type,
+                MAX(occurred_at) AS last_seen_at,
+                MAX(ingested_at) AS last_ingested_at,
+                COUNT(*) AS total_events
+            FROM events
+            WHERE project_id = ?
+            GROUP BY source_type
+            """,
+            (project_id,),
+        )
+        by_type_window = {r["source_type"]: r["event_count"] for r in in_window}
+        merged: list[dict[str, Any]] = []
+        for r in all_time:
+            st = r["source_type"]
+            merged.append({
+                "source_type": st,
+                "event_count": by_type_window.get(st, 0),
+                "total_events": r["total_events"],
+                "last_seen_at": r["last_seen_at"],
+                "last_ingested_at": r["last_ingested_at"],
+            })
+        # 按窗口内事件数降序
+        merged.sort(key=lambda x: x["event_count"], reverse=True)
+        return merged
+
     def get_event(self, event_id: str) -> dict[str, Any] | None:
         rows = self._query("SELECT json FROM events WHERE id = ?", (event_id,))
         if not rows:
