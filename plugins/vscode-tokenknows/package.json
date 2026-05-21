@@ -1,0 +1,82 @@
+{
+  "name": "tokenknows-vscode",
+  "displayName": "TokenKnows · 代码事件采集",
+  "description": "把 VS Code 里的文件保存 / 切换等研发事件实时推到 TokenKnows 工作台",
+  "version": "0.1.0",
+  "publisher": "tokenknows",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnnywuj81/tokenknows"
+  },
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "TokenKnows",
+      "properties": {
+        "tokenknows.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:8001",
+          "description": "TokenKnows API 后端地址"
+        },
+        "tokenknows.projectId": {
+          "type": "string",
+          "default": "proj-demo-001",
+          "description": "事件投递的 project_id"
+        },
+        "tokenknows.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用自动采集 (off 时仅手动 flush)"
+        },
+        "tokenknows.batchIntervalSec": {
+          "type": "number",
+          "default": 10,
+          "minimum": 2,
+          "maximum": 120,
+          "description": "批量上报间隔 (秒)"
+        },
+        "tokenknows.includeFileExtensions": {
+          "type": "array",
+          "default": [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java", ".kt", ".swift", ".md", ".sql", ".html", ".css", ".scss", ".vue", ".yaml", ".yml", ".toml", ".json"],
+          "description": "只采这些扩展名 (其它跳过 · 防止采到 .log/.lock)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "tokenknows.flush",
+        "title": "TokenKnows: 立即上报"
+      },
+      {
+        "command": "tokenknows.toggle",
+        "title": "TokenKnows: 启用/禁用采集"
+      },
+      {
+        "command": "tokenknows.status",
+        "title": "TokenKnows: 显示状态"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/vscode": "^1.84.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.5.0"
+  }
+}
