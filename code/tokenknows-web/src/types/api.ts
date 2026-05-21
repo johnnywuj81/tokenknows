@@ -118,6 +118,26 @@ export interface ProjectStats {
   datasources_healthy: number
 }
 
+// 5 个采集器的实时健康度 (T03 工作台数据源卡)
+export type DatasourceHealth = 'active' | 'stale' | 'cold' | 'inactive'
+
+export interface DatasourceHealthItem {
+  source_type: DatasourceType   // 5 个已知类型
+  event_count: number           // 窗口内 (默认 30d)
+  total_events: number          // 历史全量
+  last_seen_at: string | null   // MAX(occurred_at)
+  last_ingested_at: string | null  // MAX(ingested_at)
+  health: DatasourceHealth
+}
+
+export interface DatasourceHealthResponse {
+  items: DatasourceHealthItem[]
+  window_days: number
+  total_active: number
+  total_events_window: number
+  total_events_all: number
+}
+
 export interface ProjectMember {
   project_id: string
   user_id: string

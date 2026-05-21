@@ -18,9 +18,11 @@ import { useProject } from './hooks/useProject'
 import { useProjectStats } from './hooks/useProjectStats'
 import { useTodos } from './hooks/useTodos'
 import { useProjects } from './hooks/useProjects'
+import { useDatasourceHealth } from './hooks/useDatasourceHealth'
 import { ProjectStats } from './components/ProjectStats'
 import { EventStream } from './components/EventStream'
 import { TodoList } from './components/TodoList'
+import { DatasourcesCard } from './components/DatasourcesCard'
 import { EmptyWorkbench } from './components/EmptyWorkbench'
 import { EventDrawer } from './components/EventDrawer'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -43,6 +45,7 @@ export default function WorkbenchPage() {
   const projectQuery = useProject(projectId)
   const statsQuery = useProjectStats(projectId)
   const todosQuery = useTodos(projectId)
+  const dsHealthQuery = useDatasourceHealth(projectId)
 
   // 无项目可显示
   if (!projectId) {
@@ -86,6 +89,12 @@ export default function WorkbenchPage() {
           project={projectQuery.data}
           stats={statsQuery.data}
           isLoading={statsQuery.isLoading || projectQuery.isLoading}
+        />
+        <DatasourcesCard
+          items={dsHealthQuery.data?.items}
+          totalActive={dsHealthQuery.data?.total_active}
+          totalEventsAll={dsHealthQuery.data?.total_events_all}
+          isLoading={dsHealthQuery.isLoading}
         />
       </div>
 
