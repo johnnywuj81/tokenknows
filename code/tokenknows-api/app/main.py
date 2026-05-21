@@ -18,6 +18,8 @@ from app import __version__
 from app.config.logging import logger, setup_logging
 from app.config.settings import get_settings
 from app.gateway.http_api import api_router
+from app.persistence import bootstrap as bootstrap_db
+from app.services.generation_service import _bootstrap_from_db
 
 
 @asynccontextmanager
@@ -34,6 +36,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         has_openai_key=bool(settings.openai_api_key),
         has_minimax_key=bool(settings.minimax_api_key),
     )
+    # P1 · SQLite 持久化: 启动时把 state.sqlite 全量加载进内存 dict
+    bootstrap_db()
+    _bootstrap_from_db()
     yield
     logger.info("tokenknows_api_stopping")
 

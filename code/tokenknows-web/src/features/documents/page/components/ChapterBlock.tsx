@@ -1,9 +1,11 @@
 /**
- * ChapterBlock · 单章节卡 (Phase 2: TipTap editor + 自动保存)
+ * ChapterBlock · 单章节卡
  *
  * Phase 1: markdown-it 静态渲染
- * Phase 2 (本提交): TipTap editor + useChapterAutosave (debounce 2s)
- * Phase 3 (后续): InlineEvidence [N] 角标 + 重生成 disable
+ * Phase 2: TipTap editor + useChapterAutosave (debounce 2s)
+ * Phase 3: InlineEvidence [N] 角标 + 重生成 disable
+ * P2: EvidenceBadge 自定义 Node 接入, [N] 在编辑器内可被识别为 atom 单元,
+ *     编辑后保存仍可往返
  */
 
 import { useEffect, useMemo } from 'react'
@@ -17,6 +19,7 @@ import { cn } from '@/lib/utils'
 import type { Chapter } from '@/types/api'
 import { ChapterFooter } from './ChapterFooter'
 import { useChapterAutosave, type AutosaveState } from '../../hooks/useChapterAutosave'
+import { EvidenceBadge } from '../tiptap/EvidenceBadge'
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -26,13 +29,14 @@ function toEditorHTML(content: string): string {
   if (trimmed.startsWith('<')) return content
   return md.render(content)
 }
-// 把 [N] 形式标注转成可点击 evidence-badge.
-// contenteditable=false 让 TipTap 不把它当编辑内容; click 委托捕获.
+// 把后端 markdown 渲染后产生的纯文本 `[N]` 转成 evidence-badge span
+// (有 data-evidence-id 占位 ev-<chapter>-N + data-index=N), 让 EvidenceBadge
+// 的 parseHTML 接管成 Node. 编辑后输出 HTML 也是相同 span 结构, 因此可逆.
 function annotateEvidence(html: string, chapterId: string): string {
   return html.replace(
     /\[(\d+)\]/g,
     (_match, idx) =>
-      `<span class="evidence-badge" data-evidence-id="ev-${chapterId}-${idx}" contenteditable="false">${idx}</span>`,
+      `<span class="evidence-badge" data-evidence-id="ev-${chapterId}-${idx}" data-index="${idx}" contenteditable="false">${idx}</span>`,
   )
 }
 
@@ -70,6 +74,8 @@ export function ChapterBlock({
           placeholder: '开始编辑章节内容…',
         }),
         Link.configure({ openOnClick: false, autolink: true }),
+        // P2 · [N] 角标自定义 Node, 解决 StarterKit 吞 span class 的问题
+        EvidenceBadge,
       ],
       content: initialHTML,
       editable,

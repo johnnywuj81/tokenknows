@@ -31,6 +31,8 @@ import {
   useAssetPublishRecords,
 } from './hooks/usePublish'
 import { useAsset } from '../documents/hooks/useAsset'
+import { useChapters } from '../documents/hooks/useChapters'
+import { ChapterDiffView } from './components/ChapterDiffView'
 import type { PublishRecord } from '@/types/api'
 import { cn } from '@/lib/utils'
 
@@ -44,6 +46,7 @@ export default function PublishReceiptPage() {
   const recordQuery = usePublishRecord(publishId)
   const historyQuery = useAssetPublishRecords(docId)
   const assetQuery = useAsset(docId)
+  const chaptersQuery = useChapters(docId)
 
   if (recordQuery.error) {
     return (
@@ -129,12 +132,45 @@ export default function PublishReceiptPage() {
             </section>
           ) : null}
 
-          {/* 版本 diff (T12 §8) - MVP 跳过, 留 TODO */}
-          <section className="rounded-md border border-dashed border-border-medium bg-bg-card p-4 text-center">
-            <p className="font-ui text-caption text-text-muted">
-              · 版本 diff (与上版本对比) 在后续迭代中接入 (npm i diff + line-by-line color render)
-            </p>
-            <p className="mt-1 font-ui text-micro text-text-subtle">
+          {/* P3 · 版本 diff: 章节级 line-by-line */}
+          <section>
+            <h3 className="mb-2 font-ui text-eyebrow uppercase tracking-wider text-text-muted">
+              章节级 diff (本版本 vs 重生成前)
+            </h3>
+            {chaptersQuery.isLoading ? (
+              <p className="font-ui text-caption text-text-muted">加载章节…</p>
+            ) : chaptersQuery.data && chaptersQuery.data.length > 0 ? (
+              (() => {
+                const diffable = chaptersQuery.data.filter(
+                  (c) => c.regeneration_history.length > 0
+                )
+                if (diffable.length === 0) {
+                  return (
+                    <div className="rounded-md border border-dashed border-border-medium bg-bg-card p-4 text-center">
+                      <p className="font-ui text-caption text-text-muted">
+                        本文档章节未经重生成, 无 diff 历史. 编辑或重生成后可在此查看
+                        与上版本的逐行差异.
+                      </p>
+                    </div>
+                  )
+                }
+                return (
+                  <ul className="space-y-2">
+                    {chaptersQuery.data.map((c, idx) => (
+                      <li key={c.id}>
+                        <ChapterDiffView
+                          chapter={c}
+                          defaultExpanded={idx === 0 && diffable[0]?.id === c.id}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )
+              })()
+            ) : (
+              <p className="font-ui text-caption text-text-muted">无章节数据</p>
+            )}
+            <p className="mt-3 font-ui text-micro text-text-subtle">
               · 撤回发布需结合 T13 凭证管理 (RBAC) 一起做
             </p>
           </section>

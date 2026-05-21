@@ -282,6 +282,7 @@ export interface Chapter {
     user_id: string
     instruction: string
     model: string
+    previous_content?: string  // P3 · 重生成前的内容快照, 用于 diff 视图
   }>
   approval_state: 'pending' | 'approved' | 'rejected'
   redacted_spans: RedactedSpan[]

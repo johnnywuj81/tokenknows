@@ -16,6 +16,7 @@ import { useDocumentUiStore } from '@/stores/documentUiStore'
 import { useSubmitAsset } from '../review/hooks/useReviewMutations'
 import { useAsset } from './hooks/useAsset'
 import { useChapters } from './hooks/useChapters'
+import { useGenerationSSE } from './hooks/useGenerationSSE'
 import { DocHeader } from './page/components/DocHeader'
 import { DocOutline } from './page/components/DocOutline'
 import { ChapterBlock } from './page/components/ChapterBlock'
@@ -30,6 +31,14 @@ export default function DocumentPage() {
   const assetQuery = useAsset(docId)
   const chaptersQuery = useChapters(docId)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // P4 · 文档生成中订阅 SSE, 替代 polling. status=generating 时开,
+  // 收到 done/failed 自动关. chapter_completed 事件 invalidate chapters
+  // → ChapterBlock 增量出现.
+  useGenerationSSE({
+    assetId: docId,
+    enabled: assetQuery.data?.status === 'generating',
+  })
 
   const openEvidence = useDocumentUiStore((s) => s.openEvidence)
   const openRegenerate = useDocumentUiStore((s) => s.openRegenerate)

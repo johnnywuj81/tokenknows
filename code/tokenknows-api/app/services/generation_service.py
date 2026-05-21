@@ -29,6 +29,7 @@ from uuid import uuid4
 from app.config.logging import logger
 from app.config.settings import get_settings
 from app.llm_gateway import LLMMessage, LLMOptions, get_router
+from app.persistence import get_db
 from app.schemas.asset import (
     Asset,
     AssetMetrics,
@@ -62,6 +63,113 @@ _redaction_jobs: dict[str, RedactionScanJob] = {}
 # T11/T12: publish_record_id → PublishRecord
 _publish_records: dict[str, PublishRecord] = {}
 _state_lock = asyncio.Lock()
+
+
+# ─── P1 · SQLite 持久化 helper ────────────────────────────────────
+
+
+def _persist_asset(asset_id: str) -> None:
+    """把 asset + progress + chapters + evidence 写入 SQLite.
+
+    在每个 mutation 之后调. dict 是读 cache, SQLite 是真理之源.
+    重启 _bootstrap_from_db() 全量重建 dict.
+    """
+    asset = _assets.get(asset_id)
+    if asset is None:
+        return
+    db = get_db()
+    db.upsert_asset(
+        asset_id=asset.id,
+        project_id=asset.project_id,
+        status=asset.status,
+        asset_type=asset.type,
+        updated_at=asset.updated_at.isoformat(),
+        json_str=asset.model_dump_json(),
+    )
+
+    progress = _progress.get(asset_id)
+    if progress is not None:
+        db.upsert_progress(
+            asset_id=asset_id,
+            overall=progress.overall_status,
+            json_str=progress.model_dump_json(),
+        )
+
+    chapters = _chapters.get(asset_id, [])
+    db.replace_chapters(
+        asset_id,
+        [(c.id, c.order_index, c.model_dump_json()) for c in chapters],
+    )
+
+    # evidence (按 chapter)
+    for ch in chapters:
+        ev_list = _evidence_by_chapter.get(ch.id, [])
+        db.replace_evidence(
+            ch.id,
+            [(e.id, e.model_dump_json()) for e in ev_list],
+        )
+
+
+def _persist_redaction_job(asset_id: str) -> None:
+    job = _redaction_jobs.get(asset_id)
+    if job is None:
+        return
+    get_db().upsert_redaction_job(asset_id, job.model_dump_json())
+
+
+def _persist_publish_record(record_id: str) -> None:
+    record = _publish_records.get(record_id)
+    if record is None:
+        return
+    get_db().upsert_publish_record(
+        record_id=record_id,
+        asset_id=record.asset_id,
+        published_at=record.published_at,
+        json_str=record.model_dump_json(),
+    )
+
+
+def _bootstrap_from_db() -> None:
+    """启动时从 SQLite 加载所有状态. main.py @app.on_event('startup') 调."""
+    db = get_db()
+
+    # Assets
+    for raw in db.load_all_assets():
+        asset = Asset.model_validate(raw)
+        _assets[asset.id] = asset
+
+        # Progress
+        prog_raw = db.load_progress(asset.id)
+        if prog_raw is not None:
+            _progress[asset.id] = GenerationProgress.model_validate(prog_raw)
+
+        # Chapters
+        chap_raws = db.load_chapters_for_asset(asset.id)
+        chapters = [Chapter.model_validate(r) for r in chap_raws]
+        _chapters[asset.id] = chapters
+
+    # Evidence (一次查全表更快)
+    ev_by_chapter = db.load_all_evidence()
+    for chapter_id, raws in ev_by_chapter.items():
+        _evidence_by_chapter[chapter_id] = [Evidence.model_validate(r) for r in raws]
+
+    # Redaction jobs
+    for asset_id, raw in db.load_all_redaction_jobs().items():
+        _redaction_jobs[asset_id] = RedactionScanJob.model_validate(raw)
+
+    # Publish records
+    for raw in db.load_all_publish_records():
+        record = PublishRecord.model_validate(raw)
+        _publish_records[record.id] = record
+
+    stats = db.stats()
+    logger.info(
+        "persistence_loaded",
+        assets=stats["assets"],
+        chapters=stats["chapters"],
+        evidence=stats["evidence"],
+        publish_records=stats["publish_records"],
+    )
 
 
 # 标题模板 (替代真 LLM 时的占位)
@@ -186,6 +294,8 @@ async def _run_stage(
         progress.stages[idx].completed_at = end
         progress.stages[idx].metadata = metadata or {}
         progress.updated_at = end
+        # P1 持久化: 每阶段完成 → SQLite
+        _persist_asset(asset_id)
         await _publish_event(
             asset_id,
             SseEvent(
@@ -204,6 +314,7 @@ async def _run_stage(
         progress.overall_status = "failed"
         progress.error = str(exc)
         progress.updated_at = end
+        _persist_asset(asset_id)
         await _publish_event(
             asset_id,
             SseEvent(
@@ -648,6 +759,7 @@ async def start_generation(
         _progress[asset_id].primary_model = (
             req.model_override or settings.task_model(req.type)
         )
+        _persist_asset(asset_id)   # P1 持久化
 
     # 后台跑流水线
     asyncio.create_task(_run_pipeline(asset_id, req))
@@ -667,6 +779,7 @@ async def _run_pipeline(asset_id: str, req: GenerateAssetRequest) -> None:
         progress.overall_status = "done"
         progress.current_stage = None
         progress.updated_at = _now()
+        _persist_asset(asset_id)   # P1: pipeline 完成态
         await _publish_event(
             asset_id,
             SseEvent(event="done", asset_id=asset_id, ts=_now(),
@@ -679,7 +792,7 @@ async def _run_pipeline(asset_id: str, req: GenerateAssetRequest) -> None:
         )
     except Exception as exc:
         logger.error("generation_pipeline_failed", asset_id=asset_id, error=str(exc))
-        # _run_stage 已经写入失败状态
+        # _run_stage 已经写入失败状态 + 已 _persist_asset
 
 
 # ─── 查询 API ─────────────────────────────────────────────────────
@@ -773,6 +886,18 @@ async def regenerate_chapter(
     if len(new_content) < 30:
         raise ValueError(f"LLM 返回内容过短: {new_content!r}")
 
+    # P3 · diff 准备: 把旧内容快照存进 history (前端 T12 diff 视图用)
+    previous_content = chapter.content
+    chapter.regeneration_history.append(
+        {
+            "at": _now().isoformat(),
+            "user_id": user_id or "anonymous",
+            "instruction": instruction,
+            "model": f"{provider}/{model}",
+            "previous_content": previous_content,    # P3 快照
+        }
+    )
+
     chapter.content = new_content
     chapter.generated_by = ChapterGeneratedBy(
         model=model,
@@ -781,15 +906,8 @@ async def regenerate_chapter(
         prompt_tokens=response.usage.get("prompt_tokens", 0),
         completion_tokens=response.usage.get("completion_tokens", 0),
     )
-    chapter.regeneration_history.append(
-        {
-            "at": _now().isoformat(),
-            "user_id": user_id or "anonymous",
-            "instruction": instruction,
-            "model": f"{provider}/{model}",
-        }
-    )
     asset.updated_at = _now()
+    _persist_asset(asset_id)   # P1
 
     # 推 SSE 通知其它订阅者 (例如同步的协作端).
     # 复用 stage="content" - regenerate 是 content 阶段的局部重跑.
@@ -832,13 +950,16 @@ def list_assets(project_id: str) -> list[Asset]:
 
 
 def delete_asset(asset_id: str) -> bool:
-    """硬删 (MVP 内存; 生产换软删 status=archived)."""
+    """硬删 (内存 + SQLite CASCADE)."""
     if asset_id not in _assets:
         return False
     _assets.pop(asset_id, None)
     _chapters.pop(asset_id, None)
     _progress.pop(asset_id, None)
     _sse_queues.pop(asset_id, None)
+    _redaction_jobs.pop(asset_id, None)
+    # P1: SQLite 删 (FK CASCADE 自动级联 chapters/evidence/progress/redaction/publish)
+    get_db().delete_asset(asset_id)
     return True
 
 
@@ -874,6 +995,7 @@ def clone_asset(asset_id: str) -> Asset | None:
         )
         for c in src_chapters
     ]
+    _persist_asset(new_id)   # P1
     return cloned
 
 
@@ -894,6 +1016,7 @@ def update_chapter_content(
             asset = _assets.get(asset_id)
             if asset is not None:
                 asset.updated_at = _now()
+            _persist_asset(asset_id)   # P1
             return c
     return None
 
@@ -908,6 +1031,7 @@ def approve_chapter(asset_id: str, chapter_id: str) -> Chapter | None:
         return None
     chapter.approval_state = "approved"
     _refresh_asset_approval(asset_id)
+    _persist_asset(asset_id)   # P1
     return chapter
 
 
@@ -930,6 +1054,7 @@ def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | Non
     if asset is not None:
         asset.approval_state = "rejected"
         asset.updated_at = _now()
+    _persist_asset(asset_id)   # P1
     return chapter
 
 
@@ -945,6 +1070,7 @@ def submit_asset_for_review(asset_id: str) -> Asset | None:
     for c in chapters:
         c.approval_state = "pending"
     asset.approval_state = "pending"
+    _persist_asset(asset_id)   # P1
     return asset
 
 
@@ -1014,10 +1140,12 @@ def publish_asset(
         )
         _publish_records[rec_id] = record
         records.append(record)
+        _persist_publish_record(rec_id)   # P1
 
     # 推进 asset 状态 → published
     asset.status = "published"
     asset.updated_at = _now()
+    _persist_asset(asset_id)   # P1
 
     logger.info(
         "asset_published",
@@ -1114,6 +1242,8 @@ def scan_redaction(asset_id: str) -> RedactionScanJob | None:
     if asset is not None:
         asset.redaction_state = "all_confirmed" if not items else "any_unresolved"
         asset.updated_at = _now()
+    _persist_redaction_job(asset_id)   # P1
+    _persist_asset(asset_id)
     return job
 
 
@@ -1130,6 +1260,8 @@ def confirm_redaction(asset_id: str, item_ids: list[str]) -> RedactionScanJob | 
         if item.id in id_set and item.status == "pending":
             item.status = "confirmed"
     _refresh_redaction_state(asset_id, job)
+    _persist_redaction_job(asset_id)   # P1
+    _persist_asset(asset_id)
     return job
 
 
@@ -1143,6 +1275,8 @@ def exempt_redaction(asset_id: str, item_id: str, reason: str) -> RedactionScanJ
             item.reason = reason.strip()
             break
     _refresh_redaction_state(asset_id, job)
+    _persist_redaction_job(asset_id)   # P1
+    _persist_asset(asset_id)
     return job
 
 
