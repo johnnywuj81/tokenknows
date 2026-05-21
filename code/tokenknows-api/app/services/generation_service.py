@@ -696,41 +696,70 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
         )
         use_embedding = False
 
-    # ── 3. 为每章选 top-4 ─────────────────────────────────
+    # ── 3. 为每章选 top-4 (final = 0.6×cos + 0.25×trust + 0.15×recency) ──
     by_source: dict[str, list[dict]] = {}
     for e in all_events:
         by_source.setdefault(e.get("source_type", "other"), []).append(e)
 
+    # 预算 recency: 越新分越高 (30 天衰减一半)
+    now_utc = _now()
+    event_recency: list[float] = []
+    for e in all_events:
+        event_recency.append(_compute_recency(e.get("occurred_at"), now_utc))
+
+    # event trust (插件上报的真值, 没有的 fallback 到 source_type 默认)
+    event_trust: list[float] = []
+    for e in all_events:
+        t = e.get("trust_score")
+        if t is None:
+            t = {"github": 0.85, "claude_code": 0.75, "cursor": 0.70}.get(
+                e.get("source_type", ""), 0.60
+            )
+        event_trust.append(float(t))
+
     total_evidence = 0
     avg_cos_per_chapter: list[float] = []
+    avg_final_per_chapter: list[float] = []
     for ch_idx, ch in enumerate(chapters):
-        num = 4    # 固定 4, 让 demo 稳定
+        num = 4
         if use_embedding:
             ch_vec = chapter_vecs[ch_idx]
-            scored: list[tuple[float, dict]] = [
-                (cosine(ch_vec, ev), all_events[i])
-                for i, ev in enumerate(event_vecs)
-            ]
+            scored: list[tuple[float, float, float, dict]] = []
+            for i, ev_vec in enumerate(event_vecs):
+                cos_v = cosine(ch_vec, ev_vec)
+                # final = 综合分; 各分量保留方便调试
+                trust = event_trust[i]
+                rec = event_recency[i]
+                final = 0.6 * cos_v + 0.25 * trust + 0.15 * rec
+                scored.append((final, cos_v, trust, all_events[i]))
             scored.sort(key=lambda x: x[0], reverse=True)
-            chosen = _enforce_source_diversity(scored, num)
+            top = scored[:num]
+            chosen_with_score = _enforce_source_diversity_scored(scored, num)
             avg_cos_per_chapter.append(
-                round(sum(s for s, _ in scored[:num]) / num, 3)
+                round(sum(c for _, c, _, _ in top) / num, 3)
+            )
+            avg_final_per_chapter.append(
+                round(sum(f for f, _, _, _ in top) / num, 3)
             )
         else:
-            # fallback: 现 round-robin
-            scored = [(0.0, e) for e in _pick_diverse_events(by_source, num)]
-            chosen = scored
+            # fallback: 现 round-robin · 没有打分信息
+            chosen_with_score = [
+                (0.0, 0.0, ev.get("trust_score") or 0.7, ev)
+                for ev in _pick_diverse_events(by_source, num)
+            ]
             avg_cos_per_chapter.append(0.0)
+            avg_final_per_chapter.append(0.0)
 
         ev_list: list[Evidence] = []
         content_len = max(50, len(ch.content))
-        for idx, (score, ev_raw) in enumerate(chosen):
+        for idx, (final_score, cos_score, trust, ev_raw) in enumerate(chosen_with_score):
             span_start = random.randint(0, max(1, content_len - 50))
             span_end = min(content_len, span_start + random.randint(20, 50))
             ev_list.append(
                 _build_evidence_from_event(
                     ev_raw, ch.id, idx, span_start, span_end,
-                    cosine_score=score if use_embedding else None,
+                    cosine_score=cos_score if use_embedding else None,
+                    composite_score=final_score if use_embedding else None,
                 )
             )
         _evidence_by_chapter[ch.id] = ev_list
@@ -742,8 +771,10 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
         events_in_window=len(all_events),
         sources=list(by_source.keys()),
         total_evidence=total_evidence,
-        method="embedding_cosine" if use_embedding else "round_robin_fallback",
+        method="embedding_cosine_trust_recency" if use_embedding else "round_robin_fallback",
         avg_cosine_per_chapter=avg_cos_per_chapter,
+        avg_final_per_chapter=avg_final_per_chapter,
+        weights={"cosine": 0.6, "trust": 0.25, "recency": 0.15},
     )
     return {
         "evidence_total": total_evidence,
@@ -751,9 +782,47 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
         "fallback_used": not use_embedding,
         "chapters_with_evidence": len(chapters),
         "real_event_pool_size": len(all_events),
-        "rerank_method": "embedding_cosine" if use_embedding else "round_robin",
+        "rerank_method": "cosine_trust_recency" if use_embedding else "round_robin",
         "avg_cosine_per_chapter": avg_cos_per_chapter,
+        "avg_final_per_chapter": avg_final_per_chapter,
+        "weights": {"cosine": 0.6, "trust": 0.25, "recency": 0.15},
     }
+
+
+def _compute_recency(occurred_at: str | None, now: datetime) -> float:
+    """时间衰减 0-1. 0 天=1.0, 30 天≈0.5, 90 天≈0.13."""
+    if not occurred_at:
+        return 0.5
+    try:
+        # 容 ISO 8601 + Z 后缀
+        ts = occurred_at.replace("Z", "+00:00") if occurred_at.endswith("Z") else occurred_at
+        ev_dt = datetime.fromisoformat(ts)
+        if ev_dt.tzinfo is None:
+            ev_dt = ev_dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return 0.5
+    days = max(0.0, (now - ev_dt).total_seconds() / 86400.0)
+    # 半衰期 30 天: exp(-days * ln(2) / 30)
+    import math
+    return round(math.exp(-days * 0.6931 / 30.0), 3)
+
+
+def _enforce_source_diversity_scored(
+    scored: list[tuple[float, float, float, dict]], num: int, min_sources: int = 2,
+) -> list[tuple[float, float, float, dict]]:
+    """同 _enforce_source_diversity 但 tuple 是 4 元 (final, cos, trust, event)."""
+    if not scored:
+        return []
+    out = list(scored[:num])
+    sources_in_top = {item[3].get("source_type") for item in out}
+    if len(sources_in_top) >= min_sources:
+        return out
+    dominant = next(iter(sources_in_top))
+    for s_final, s_cos, s_trust, e in scored[num:]:
+        if e.get("source_type") != dominant:
+            out[-1] = (s_final, s_cos, s_trust, e)
+            break
+    return out
 
 
 def _event_to_embed_text(e: dict) -> str:
@@ -828,11 +897,12 @@ def _build_evidence_from_event(
     span_start: int,
     span_end: int,
     cosine_score: float | None = None,
+    composite_score: float | None = None,
 ) -> Evidence:
     """从真 events 表的 row dict 构 Evidence.
 
-    cosine_score: 章节 vs event 的 embedding cosine, None 表示走 fallback
-                  (没用 embedding). 若给了 cosine, 直接当 citation_strength.
+    cosine_score: 章节 vs event 的 embedding cosine, 用作 citation_strength
+    composite_score: cosine + trust + recency 综合分, payload 调试用
     """
     import random
     eid = event["id"]
@@ -845,13 +915,12 @@ def _build_evidence_from_event(
         or payload.get("external_url")
         or payload.get("url")
     )
-    # 优先 event 自己的 trust_score, 没有给个合理范围
+    # event 自己的 trust_score (插件上报的真值); 没有 fallback 到 source_type
     trust_score = event.get("trust_score")
     if trust_score is None:
-        # 基于 source_type 给个默认: github 0.85 / claude_code 0.75 / cursor 0.7 / 其它 0.6
         st = event.get("source_type", "")
         trust_score = {"github": 0.85, "claude_code": 0.75, "cursor": 0.70}.get(st, 0.60)
-    # citation_strength: 用真 cosine 优先 (0-1 范围), 没有则按 trust_score × 噪声
+    # citation_strength: 用真 cosine 优先 (0-1), 没有则按 trust_score × 噪声
     if cosine_score is not None:
         citation_strength = round(max(0.0, min(1.0, cosine_score)), 3)
     else:

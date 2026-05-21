@@ -168,6 +168,10 @@ def pr_to_event(pr: dict[str, Any], repo: str) -> dict[str, Any]:
         f"{body[:1500]}"
     )
     occurred = pr.get("merged_at") or pr.get("closed_at") or pr.get("updated_at") or pr.get("created_at")
+    # trust_score: merged PR 最权威 (实际合入), open PR 中, closed-unmerged 低
+    authority = {"merged": 0.95, "closed": 0.75, "open": 0.70}.get(state_label, 0.70)
+    confidence = 1.0 if len(body) >= 50 else (0.7 if body else 0.5)
+    trust_score = round(0.7 * authority + 0.3 * confidence, 3)
     return {
         "source_type": "github",
         "source_ref": repo,
@@ -188,8 +192,13 @@ def pr_to_event(pr: dict[str, Any], repo: str) -> dict[str, Any]:
             "additions": pr.get("additions"),
             "deletions": pr.get("deletions"),
             "changed_files": pr.get("changed_files"),
+            "trust_components": {
+                "source_authority": authority,
+                "extraction_confidence": confidence,
+            },
         },
         "tags": ["github", state_label, pr.get("base", {}).get("ref") or ""],
+        "trust_score": trust_score,
     }
 
 
@@ -206,6 +215,10 @@ def issue_to_event(iss: dict[str, Any], repo: str) -> dict[str, Any] | None:
         f"{body[:1500]}"
     )
     occurred = iss.get("closed_at") or iss.get("updated_at") or iss.get("created_at")
+    # trust_score: closed issue 通常是已确认问题 (有解决方案) 比 open 高
+    authority = {"closed": 0.80, "open": 0.65}.get(state or "open", 0.65)
+    confidence = 1.0 if len(body) >= 50 else (0.7 if body else 0.4)
+    trust_score = round(0.7 * authority + 0.3 * confidence, 3)
     return {
         "source_type": "github",
         "source_ref": repo,
@@ -222,8 +235,13 @@ def issue_to_event(iss: dict[str, Any], repo: str) -> dict[str, Any] | None:
             "state": state,
             "html_url": iss.get("html_url"),
             "labels": [lbl.get("name") for lbl in iss.get("labels", [])],
+            "trust_components": {
+                "source_authority": authority,
+                "extraction_confidence": confidence,
+            },
         },
         "tags": ["github", state] + [lbl.get("name", "") for lbl in iss.get("labels", [])],
+        "trust_score": trust_score,
     }
 
 
@@ -234,6 +252,10 @@ def commit_to_event(commit: dict[str, Any], repo: str) -> dict[str, Any]:
     author_block = commit.get("commit", {}).get("author") or {}
     occurred = author_block.get("date") or datetime.now(timezone.utc).isoformat()
     title_line = msg.split("\n", 1)[0][:80]
+    # commit 默认 authority 0.85 (实际入库的代码改动)
+    authority = 0.85
+    confidence = 1.0 if len(msg) >= 30 else (0.7 if msg else 0.4)
+    trust_score = round(0.7 * authority + 0.3 * confidence, 3)
     return {
         "source_type": "github",
         "source_ref": repo,
@@ -253,8 +275,13 @@ def commit_to_event(commit: dict[str, Any], repo: str) -> dict[str, Any]:
             "sha": sha,
             "html_url": commit.get("html_url"),
             "stats": commit.get("stats"),
+            "trust_components": {
+                "source_authority": authority,
+                "extraction_confidence": confidence,
+            },
         },
         "tags": ["github", "commit"],
+        "trust_score": trust_score,
     }
 
 

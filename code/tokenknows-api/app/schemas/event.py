@@ -52,6 +52,9 @@ class EventCreate(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     content_hash: str           # SHA-256(content) - 用于去重
     tags: list[str] = Field(default_factory=list)
+    # 插件按 source 算的 trust_score (0-1).
+    # 分量在 payload.trust_components: {source_authority, extraction_confidence}
+    trust_score: float | None = None
 
 
 class Event(EventCreate):
@@ -61,7 +64,6 @@ class Event(EventCreate):
     project_id: str
     ingested_at: datetime
     redaction_state: Literal["raw", "screened", "confirmed", "exported"] = "raw"
-    trust_score: float | None = None     # B 阶段计算; 暂为 None
     is_private: bool = False             # PRD §5.4 D2 敏感来源遮蔽
 
 

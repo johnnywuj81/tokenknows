@@ -143,6 +143,29 @@ def jsonl_entry_to_event(
     # 事件类型: tool_use 用 tool_call, 纯文本对话用 ai_conversation_turn
     event_type = "tool_call" if tool_calls else "ai_conversation_turn"
 
+    # trust_score (0-1):
+    #   source_authority:
+    #     · assistant + tool_call (实际"做事") = 0.85
+    #     · assistant + 纯文本 (推理/解释)    = 0.80
+    #     · user prompt (用户意图, 高价值)    = 0.70
+    #   extraction_confidence: 按文本长度
+    #     · ≥50 字符 = 1.0
+    #     · 10-50 字 = 0.7
+    #     · <10 字   = 0.4 (tool_result 占位 / 错误)
+    if role == "assistant" and tool_calls:
+        authority = 0.85
+    elif role == "assistant":
+        authority = 0.80
+    else:
+        authority = 0.70
+    if len(text) >= 50:
+        confidence = 1.0
+    elif len(text) >= 10:
+        confidence = 0.7
+    else:
+        confidence = 0.4
+    trust_score = round(0.6 * authority + 0.4 * confidence, 3)
+
     return {
         "source_type": "claude_code",
         "source_ref": str(file_path.parent.name),  # projectDir e.g. "-Users-wujun-TokenKnows"
@@ -160,8 +183,13 @@ def jsonl_entry_to_event(
             "git_branch": entry.get("gitBranch"),
             "version": entry.get("version"),
             "tool_calls": tool_calls,
+            "trust_components": {
+                "source_authority": authority,
+                "extraction_confidence": confidence,
+            },
         },
         "tags": [t for t in [entry.get("gitBranch"), role] if t],
+        "trust_score": trust_score,
     }
 
 

@@ -41,6 +41,7 @@ interface EventCreate {
   content_hash: string
   payload: Record<string, unknown>
   tags: string[]
+  trust_score: number
 }
 
 let buffer: EventCreate[] = []
@@ -101,6 +102,12 @@ function onSave(doc: vscode.TextDocument): void {
   const bucketTime = now.slice(0, 16) // YYYY-MM-DDTHH:MM (分钟粒度)
   const dedupHash = sha256(`${doc.uri.fsPath}:${sha}:${bucketTime}`)
 
+  // trust_score: code_change 默认 0.70 (实际保存 = 用户主动行为)
+  // extraction_confidence: 1.0 (我们有 sha256 + line_count, 元数据完整)
+  const authority = 0.70
+  const confidence = 1.0
+  const trustScore = Math.round((0.7 * authority + 0.3 * confidence) * 1000) / 1000
+
   const ev: EventCreate = {
     source_type: 'vscode',
     source_ref: ref,
@@ -119,8 +126,13 @@ function onSave(doc: vscode.TextDocument): void {
       line_count: lineCount,
       char_count: content.length,
       content_sha256: sha,
+      trust_components: {
+        source_authority: authority,
+        extraction_confidence: confidence,
+      },
     },
     tags: ['vscode', doc.languageId, ref],
+    trust_score: trustScore,
   }
   buffer.push(ev)
   updateStatusBar()

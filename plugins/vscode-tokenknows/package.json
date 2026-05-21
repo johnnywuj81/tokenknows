@@ -2,7 +2,7 @@
   "name": "tokenknows-vscode",
   "displayName": "TokenKnows · 代码事件采集",
   "description": "把 VS Code 里的文件保存 / 切换等研发事件实时推到 TokenKnows 工作台",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "tokenknows",
   "repository": {
     "type": "git",

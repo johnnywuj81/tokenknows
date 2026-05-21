@@ -167,6 +167,27 @@ def bubble_to_event(
     ws_uri = conv_meta.get("workspaceRootUri") or conv_meta.get("workspaceURI") or ""
     source_ref = ws_uri.replace("file://", "") if ws_uri else conv_id[:8]
 
+    # trust_score (0-1):
+    #   source_authority:
+    #     · assistant + 实质文本 = 0.80
+    #     · user prompt          = 0.70
+    #     · assistant + 仅代码建议 = 0.55 (没真"说话")
+    #   extraction_confidence: 按文本长度
+    has_real_text = bool((bubble.get("text") or "").strip())
+    if role == "assistant" and has_real_text:
+        authority = 0.80
+    elif role == "user":
+        authority = 0.70
+    else:
+        authority = 0.55
+    if len(text) >= 50:
+        confidence = 1.0
+    elif len(text) >= 10:
+        confidence = 0.7
+    else:
+        confidence = 0.4
+    trust_score = round(0.6 * authority + 0.4 * confidence, 3)
+
     return {
         "source_type": "cursor",
         "source_ref": source_ref,
@@ -185,8 +206,13 @@ def bubble_to_event(
             "token_count": bubble.get("tokenCount"),
             "unified_mode": conv_meta.get("unifiedMode"),
             "is_agentic": conv_meta.get("isAgentic"),
+            "trust_components": {
+                "source_authority": authority,
+                "extraction_confidence": confidence,
+            },
         },
         "tags": ["cursor", role],
+        "trust_score": trust_score,
     }
 
 
