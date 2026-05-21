@@ -630,32 +630,31 @@ _MOCK_EVENT_TEMPLATES: list[dict] = [
 
 
 async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
-    """阶段 4 · 证据链回填 (★ 用真 events).
+    """阶段 4 · 证据链回填 · embedding cosine 重排.
 
-    选择策略 (MVP):
-        - 拉 project 最近 30 天 events (limit 300)
-        - 跨 source_type 多样性: 优先每章混入 claude_code / github / cursor 各一
-        - 同 chapter 按 occurred_at desc 取 3-4 条
-        - 同 event_id 不重复 (一章里)
+    流程:
+        1. 拉 project 最近 30 天 events (limit 300)
+        2. 批量 embed (nomic-embed-text:latest, 768d): events + chapters
+        3. 每章 cosine 排序, 取 top-4 (强制 ≥2 个 source_type 多样性)
+        4. citation_strength = 真 cosine score (而非 random)
 
-    生产可换: chapter title embedding × event content embedding cosine
+    fallback:
+        - 没真 events → reason=no_events
+        - embedding 调用失败 → 回退到跨源 round-robin (现 _pick_diverse_events)
     """
     import random
+    from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
 
     asset = _assets[asset_id]
     db = get_db()
-    week_ago_30 = (
-        _now() - timedelta(days=30)
-    ).isoformat()
+    week_ago_30 = (_now() - timedelta(days=30)).isoformat()
 
-    # 一次拉够, in-memory 切片
     all_events, _ = db.list_events(
         project_id=asset.project_id,
         from_iso=week_ago_30,
         limit=300,
     )
     if not all_events:
-        # fallback: 没真 events → 跳过 (老 demo asset 仍可看)
         logger.warning(
             "evidence_stage_no_events", asset_id=asset_id, project_id=asset.project_id
         )
@@ -667,40 +666,132 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
             "reason": "no events in project, run plugins first",
         }
 
-    # 按 source_type 分桶, 用于跨源采样
+    chapters = _chapters.get(asset_id, [])
+    if not chapters:
+        return {"evidence_total": 0, "fallback_used": True, "chapters_with_evidence": 0}
+
+    # ── 1. 准备 embedding 文本 ─────────────────────────────
+    event_texts = [_event_to_embed_text(e) for e in all_events]
+    chapter_texts = [_chapter_to_embed_text(c) for c in chapters]
+
+    # ── 2. 批量 embed ─────────────────────────────────────
+    use_embedding = True
+    event_vecs: list[list[float]] = []
+    chapter_vecs: list[list[float]] = []
+    try:
+        # 一次 batch 同时 embed events + chapters, 减少模型加载次数
+        combined = await embed_batch(event_texts + chapter_texts)
+        event_vecs = combined[: len(event_texts)]
+        chapter_vecs = combined[len(event_texts) :]
+        logger.info(
+            "evidence_embedding_done",
+            asset_id=asset_id,
+            events=len(event_vecs),
+            chapters=len(chapter_vecs),
+        )
+    except EmbeddingError as e:
+        logger.warning(
+            "evidence_embedding_failed_fallback",
+            asset_id=asset_id, error=str(e),
+        )
+        use_embedding = False
+
+    # ── 3. 为每章选 top-4 ─────────────────────────────────
     by_source: dict[str, list[dict]] = {}
     for e in all_events:
         by_source.setdefault(e.get("source_type", "other"), []).append(e)
 
-    chapters = _chapters.get(asset_id, [])
     total_evidence = 0
-    for ch in chapters:
-        # 每章 3-4 条, 跨源轮询
-        num = random.randint(3, 4)
-        chosen: list[dict] = _pick_diverse_events(by_source, num)
+    avg_cos_per_chapter: list[float] = []
+    for ch_idx, ch in enumerate(chapters):
+        num = 4    # 固定 4, 让 demo 稳定
+        if use_embedding:
+            ch_vec = chapter_vecs[ch_idx]
+            scored: list[tuple[float, dict]] = [
+                (cosine(ch_vec, ev), all_events[i])
+                for i, ev in enumerate(event_vecs)
+            ]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            chosen = _enforce_source_diversity(scored, num)
+            avg_cos_per_chapter.append(
+                round(sum(s for s, _ in scored[:num]) / num, 3)
+            )
+        else:
+            # fallback: 现 round-robin
+            scored = [(0.0, e) for e in _pick_diverse_events(by_source, num)]
+            chosen = scored
+            avg_cos_per_chapter.append(0.0)
+
         ev_list: list[Evidence] = []
         content_len = max(50, len(ch.content))
-        for idx, ev_raw in enumerate(chosen):
+        for idx, (score, ev_raw) in enumerate(chosen):
             span_start = random.randint(0, max(1, content_len - 50))
             span_end = min(content_len, span_start + random.randint(20, 50))
-            ev_list.append(_build_evidence_from_event(ev_raw, ch.id, idx, span_start, span_end))
+            ev_list.append(
+                _build_evidence_from_event(
+                    ev_raw, ch.id, idx, span_start, span_end,
+                    cosine_score=score if use_embedding else None,
+                )
+            )
         _evidence_by_chapter[ch.id] = ev_list
         total_evidence += len(ev_list)
 
     logger.info(
-        "evidence_linked_real",
+        "evidence_reranked",
         asset_id=asset_id,
         events_in_window=len(all_events),
         sources=list(by_source.keys()),
         total_evidence=total_evidence,
+        method="embedding_cosine" if use_embedding else "round_robin_fallback",
+        avg_cosine_per_chapter=avg_cos_per_chapter,
     )
     return {
         "evidence_total": total_evidence,
         "evidence_stale": 0,
-        "fallback_used": False,
+        "fallback_used": not use_embedding,
         "chapters_with_evidence": len(chapters),
         "real_event_pool_size": len(all_events),
+        "rerank_method": "embedding_cosine" if use_embedding else "round_robin",
+        "avg_cosine_per_chapter": avg_cos_per_chapter,
     }
+
+
+def _event_to_embed_text(e: dict) -> str:
+    """events 表的 dict → 给 embedding 的文本.
+
+    用 title + 前 500 字内容, 含 source_type 提高跨源区分.
+    """
+    title = e.get("title") or ""
+    content = (e.get("content") or "")[:500]
+    src = e.get("source_type", "")
+    return f"[{src}] {title}\n\n{content}"
+
+
+def _chapter_to_embed_text(ch: "Chapter") -> str:
+    """章节 → embedding 文本 (标题 + 前 500 字)."""
+    return f"{ch.title}\n\n{(ch.content or '')[:500]}"
+
+
+def _enforce_source_diversity(
+    scored: list[tuple[float, dict]], num: int, min_sources: int = 2,
+) -> list[tuple[float, dict]]:
+    """按 cosine 排序取 top-N, 但若 top-N 全 1 个 source_type, 强行换 1 条进来.
+
+    e.g. cosine top-4 全 github → 把第 4 名换成 cosine 最高的非 github 那条.
+    """
+    if not scored:
+        return []
+    out = list(scored[:num])
+    sources_in_top = {item[1].get("source_type") for item in out}
+    if len(sources_in_top) >= min_sources:
+        return out
+    # 找一个外族最佳
+    dominant_source = next(iter(sources_in_top))
+    for s, e in scored[num:]:
+        if e.get("source_type") != dominant_source:
+            out[-1] = (s, e)
+            break
+    return out
 
 
 def _pick_diverse_events(by_source: dict[str, list[dict]], num: int) -> list[dict]:
@@ -736,8 +827,13 @@ def _build_evidence_from_event(
     idx: int,
     span_start: int,
     span_end: int,
+    cosine_score: float | None = None,
 ) -> Evidence:
-    """从真 events 表的 row dict 构 Evidence."""
+    """从真 events 表的 row dict 构 Evidence.
+
+    cosine_score: 章节 vs event 的 embedding cosine, None 表示走 fallback
+                  (没用 embedding). 若给了 cosine, 直接当 citation_strength.
+    """
     import random
     eid = event["id"]
     author = event.get("author") or {}
@@ -755,7 +851,11 @@ def _build_evidence_from_event(
         # 基于 source_type 给个默认: github 0.85 / claude_code 0.75 / cursor 0.7 / 其它 0.6
         st = event.get("source_type", "")
         trust_score = {"github": 0.85, "claude_code": 0.75, "cursor": 0.70}.get(st, 0.60)
-    citation_strength = round(trust_score * (0.85 + random.random() * 0.15), 3)
+    # citation_strength: 用真 cosine 优先 (0-1 范围), 没有则按 trust_score × 噪声
+    if cosine_score is not None:
+        citation_strength = round(max(0.0, min(1.0, cosine_score)), 3)
+    else:
+        citation_strength = round(trust_score * (0.85 + random.random() * 0.15), 3)
 
     # citation_text: e.g. "PR #127 由 @alice 合并于 2026-05-21"
     src_type = event.get("source_type", "?")
