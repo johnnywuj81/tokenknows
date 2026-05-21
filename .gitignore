@@ -72,3 +72,4 @@ venv/
 
 # 本地 docs 软链 (绝对路径,跨机器无效;请在 clone 后手工建)
 code/tokenknows-web/docs/
+actions-runner/

@@ -1,97 +1,34 @@
 /**
- * Events / Stats / Todos handlers · 工作台数据 (T03)
+ * Stats / Todos handlers · 工作台 (T03)
+ *
+ * 注意 (Plugin Integration 后):
+ *   - events 接口 (GET /projects/:id/events + GET /events/:id) 已切换到
+ *     真后端 (Claude Code 插件 → SQLite events 表).
+ *   - 本文件只保留 stats / todos 两个 mock, 等后端补全后再去掉.
  *
  * 设计依据:
- *   - TDD §6.1: GET /projects/:id/events?from&to + GET /projects/:id/stats + GET /projects/:id/todos
+ *   - TDD §6.1: GET /projects/:id/stats + GET /projects/:id/todos
  *   - SharedFoundations §5.3: queryKey 表
- *   - TaskTechDesign T03: 30s polling, cursor 分页
  */
 
 import { http, HttpResponse, delay } from 'msw'
-import type { Event, EventSourceType, ProjectStats, TodoItem } from '@/types/api'
-import { fixtureEvents } from '../fixtures/events'
+import type { ProjectStats, TodoItem } from '@/types/api'
 import { fixtureTodos } from '../fixtures/todos'
 
 const BASE = '/api/v1'
 
-// 内存可变事件 - 后续 polling 模拟新事件出现
-const events: Event[] = [...fixtureEvents]
-
-// 简单内存 stats 派生
-function statsForProject(projectId: string): ProjectStats {
-  const projEvents = events.filter((e) => e.project_id === projectId)
-  const now = Date.now()
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000
-  const eventsThisWeek = projEvents.filter(
-    (e) => new Date(e.occurred_at).getTime() >= weekAgo,
-  ).length
+// MVP 简单 stats (events 数走真后端时这里不再准确; 待后端补 /stats 端点)
+function statsForProject(_projectId: string): ProjectStats {
   return {
-    events_this_week: eventsThisWeek,
+    events_this_week: 0,    // 真值在浏览器拉 /events?from=... 算
     assets_pending_review: 2,
     datasources_total: 3,
     datasources_healthy: 3,
   }
 }
 
-const ERROR_MODE = new URLSearchParams(
-  typeof window !== 'undefined' ? window.location.search : '',
-).get('mock_error')
-
 export const eventHandlers = [
-  // 事件流(支持 source_type / author 筛选 + cursor 分页 + from/to)
-  http.get(`${BASE}/projects/:id/events`, async ({ params, request }) => {
-    await delay(150)
-    if (ERROR_MODE === 'events') {
-      return HttpResponse.json(
-        { code: 'SERVER_ERROR', detail: 'mocked 500' },
-        { status: 500 },
-      )
-    }
-    const projectId = params.id as string
-    const url = new URL(request.url)
-    const sourceType = url.searchParams.get('source_type') as EventSourceType | null
-    const author = url.searchParams.get('author')
-    const cursor = url.searchParams.get('cursor')
-    const limit = Number(url.searchParams.get('limit') ?? 20)
-
-    let filtered = events.filter((e) => e.project_id === projectId)
-    if (sourceType) filtered = filtered.filter((e) => e.source_type === sourceType)
-    if (author) {
-      filtered = filtered.filter(
-        (e) => e.author?.name === author || e.author?.email === author,
-      )
-    }
-
-    // cursor = 上一批末尾的 id
-    let startIdx = 0
-    if (cursor) {
-      const idx = filtered.findIndex((e) => e.id === cursor)
-      if (idx >= 0) startIdx = idx + 1
-    }
-    const slice = filtered.slice(startIdx, startIdx + limit)
-    const nextCursor = startIdx + limit < filtered.length ? slice[slice.length - 1]?.id : null
-
-    return HttpResponse.json({
-      data: slice,
-      meta: {
-        total: filtered.length,
-        cursor: nextCursor,
-        has_more: nextCursor !== null,
-      },
-    })
-  }),
-
-  // 事件详情(T04 用,提前实现)
-  http.get(`${BASE}/events/:id`, async ({ params }) => {
-    await delay(80)
-    const e = events.find((x) => x.id === params.id)
-    if (!e) {
-      return HttpResponse.json({ code: 'NOT_FOUND', detail: '事件不存在' }, { status: 404 })
-    }
-    return HttpResponse.json(e)
-  }),
-
-  // 项目统计
+  // 项目统计 (events_this_week 待后端补真端点; 其余 mock)
   http.get(`${BASE}/projects/:id/stats`, async ({ params }) => {
     await delay(80)
     return HttpResponse.json(statsForProject(params.id as string))

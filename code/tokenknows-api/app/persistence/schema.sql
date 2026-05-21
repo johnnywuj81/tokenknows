@@ -54,3 +54,21 @@ CREATE TABLE IF NOT EXISTS publish_records (
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS publish_records_asset_idx ON publish_records(asset_id, published_at DESC);
+
+-- Events · 插件采集的研发事件 (PRD §7.2.1)
+-- content_hash 唯一索引保 ingest 幂等
+CREATE TABLE IF NOT EXISTS events (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL,
+    source_type     TEXT NOT NULL,
+    event_type      TEXT NOT NULL,
+    occurred_at     TEXT NOT NULL,
+    ingested_at     TEXT NOT NULL,
+    content_hash    TEXT NOT NULL,
+    json            TEXT NOT NULL,
+    UNIQUE (project_id, content_hash)
+);
+CREATE INDEX IF NOT EXISTS events_project_occurred_idx
+    ON events(project_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS events_source_idx
+    ON events(project_id, source_type, occurred_at DESC);

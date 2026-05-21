@@ -265,6 +265,87 @@ class SqliteStore:
         )
         return [json.loads(r["json"]) for r in rows]
 
+    # ─── Events (插件采集) ──────────────────────────────
+
+    def upsert_event(
+        self,
+        event_id: str,
+        project_id: str,
+        source_type: str,
+        event_type: str,
+        occurred_at: str,
+        ingested_at: str,
+        content_hash: str,
+        json_str: str,
+    ) -> bool:
+        """INSERT OR IGNORE 实现幂等. 返回 True=新增 / False=已存在."""
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                INSERT OR IGNORE INTO events
+                    (id, project_id, source_type, event_type, occurred_at,
+                     ingested_at, content_hash, json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, project_id, source_type, event_type, occurred_at,
+                 ingested_at, content_hash, json_str),
+            )
+            return cur.rowcount > 0
+
+    def list_events(
+        self,
+        project_id: str,
+        source_type: str | None = None,
+        from_iso: str | None = None,
+        to_iso: str | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """游标分页: cursor 是 occurred_at, 从该时间倒序往前.
+        返回 (events_list, total_for_project_filtered).
+        """
+        where = ["project_id = ?"]
+        params: list[Any] = [project_id]
+        if source_type:
+            where.append("source_type = ?")
+            params.append(source_type)
+        if from_iso:
+            where.append("occurred_at >= ?")
+            params.append(from_iso)
+        if to_iso:
+            where.append("occurred_at <= ?")
+            params.append(to_iso)
+        # total 不含 cursor 过滤
+        total_where_sql = " AND ".join(where)
+        total_params = tuple(params)
+
+        if cursor:
+            where.append("occurred_at < ?")
+            params.append(cursor)
+        where_sql = " AND ".join(where)
+
+        rows = self._query(
+            f"""
+            SELECT json FROM events
+            WHERE {where_sql}
+            ORDER BY occurred_at DESC
+            LIMIT ?
+            """,
+            tuple(params + [limit]),
+        )
+        events = [json.loads(r["json"]) for r in rows]
+        total = self._query(
+            f"SELECT COUNT(*) AS n FROM events WHERE {total_where_sql}",
+            total_params,
+        )[0]["n"]
+        return events, total
+
+    def get_event(self, event_id: str) -> dict[str, Any] | None:
+        rows = self._query("SELECT json FROM events WHERE id = ?", (event_id,))
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
     # ─── 调试 ────────────────────────────────────────
 
     def stats(self) -> dict[str, int]:
@@ -273,4 +354,5 @@ class SqliteStore:
             "chapters": self._query("SELECT COUNT(*) AS n FROM chapters")[0]["n"],
             "evidence": self._query("SELECT COUNT(*) AS n FROM evidence")[0]["n"],
             "publish_records": self._query("SELECT COUNT(*) AS n FROM publish_records")[0]["n"],
+            "events": self._query("SELECT COUNT(*) AS n FROM events")[0]["n"],
         }
