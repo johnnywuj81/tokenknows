@@ -336,6 +336,8 @@ export interface PublishRecord {
   url: string | null
   published_at: string
   published_by: string
+  visibility?: 'team' | 'public' | null    // T11 公开链接时
+  error?: string | null                    // status=failed 时
 }
 
 // ────────────────────────────────────────────────────────────────────

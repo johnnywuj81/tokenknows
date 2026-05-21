@@ -38,6 +38,7 @@ import {
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { useDocumentUiStore } from '@/stores/documentUiStore'
 import { useAsset } from '../documents/hooks/useAsset'
 import {
   useRedactionScan,
@@ -164,8 +165,11 @@ export default function RedactionPage() {
               description="本文档章节内容已通过 PII / Token / 内部代号 / IP 等正则扫描, 可直接进入发布。"
               action={{
                 label: '进入发布 (T11)',
-                onClick: () =>
-                  projectId && navigate(`/projects/${projectId}/documents/${docId}/publish`),
+                onClick: () => {
+                  if (!projectId || !docId) return
+                  useDocumentUiStore.getState().openPublish()
+                  navigate(`/projects/${projectId}/documents/${docId}`)
+                },
               }}
             />
           ) : (
@@ -291,9 +295,11 @@ export default function RedactionPage() {
             type="button"
             size="sm"
             disabled={pendingCount > 0}
-            onClick={() =>
-              projectId && navigate(`/projects/${projectId}/documents/${docId}/publish`)
-            }
+            onClick={() => {
+              if (!projectId || !docId) return
+              useDocumentUiStore.getState().openPublish()
+              navigate(`/projects/${projectId}/documents/${docId}`)
+            }}
             className="font-ui text-caption"
           >
             进入发布 (T11)

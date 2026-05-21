@@ -25,6 +25,9 @@ interface DocumentUiState {
   regenerateOpen: boolean
   regenerateChapterId: string | null
 
+  // T11 发布对话框
+  publishOpen: boolean
+
   // actions
   /** 打开抽屉: 必须传 chapterId, evidenceId 可选 (默认聚焦第 1 条). */
   openEvidence: (chapterId: string, evidenceId?: string | null) => void
@@ -34,6 +37,8 @@ interface DocumentUiState {
   closeEventDrawer: () => void
   openRegenerate: (chapterId: string) => void
   closeRegenerate: () => void
+  openPublish: () => void
+  closePublish: () => void
 }
 
 export const useDocumentUiStore = create<DocumentUiState>((set) => ({
@@ -44,6 +49,7 @@ export const useDocumentUiStore = create<DocumentUiState>((set) => ({
   activeEventId: null,
   regenerateOpen: false,
   regenerateChapterId: null,
+  publishOpen: false,
 
   openEvidence: (chapterId, evidenceId = null) =>
     set({ evidenceOpen: true, evidenceChapterId: chapterId, activeEvidenceId: evidenceId }),
@@ -54,4 +60,6 @@ export const useDocumentUiStore = create<DocumentUiState>((set) => ({
   closeEventDrawer: () => set({ eventDrawerOpen: false, activeEventId: null }),
   openRegenerate: (chapterId) => set({ regenerateOpen: true, regenerateChapterId: chapterId }),
   closeRegenerate: () => set({ regenerateOpen: false, regenerateChapterId: null }),
+  openPublish: () => set({ publishOpen: true }),
+  closePublish: () => set({ publishOpen: false }),
 }))

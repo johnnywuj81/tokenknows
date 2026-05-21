@@ -22,6 +22,7 @@ import { ChapterBlock } from './page/components/ChapterBlock'
 import { DocSidebar } from './page/components/DocSidebar'
 import { EvidenceDrawer } from './page/components/EvidenceDrawer'
 import { RegenerateDialog } from './page/components/RegenerateDialog'
+import { PublishDialog } from '../publish/PublishDialog'
 
 export default function DocumentPage() {
   const { id: projectId, docId } = useParams<{ id: string; docId: string }>()
@@ -34,6 +35,7 @@ export default function DocumentPage() {
   const openRegenerate = useDocumentUiStore((s) => s.openRegenerate)
   const regenerateChapterId = useDocumentUiStore((s) => s.regenerateChapterId)
   const regenerateOpen = useDocumentUiStore((s) => s.regenerateOpen)
+  const openPublish = useDocumentUiStore((s) => s.openPublish)
 
   const handleViewEvidence = useCallback(
     (chapterId: string, evidenceId?: string) => {
@@ -96,7 +98,12 @@ export default function DocumentPage() {
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <DocHeader asset={asset} onSubmit={handleSubmitForReview} />
+      <DocHeader
+        asset={asset}
+        onSubmit={handleSubmitForReview}
+        submitting={submitMutation.isPending}
+        onPublish={openPublish}
+      />
 
       <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         {/* 左 · 大纲 */}
@@ -139,6 +146,9 @@ export default function DocumentPage() {
 
       {/* T08 · 重生成对话框 */}
       <RegenerateDialog assetId={docId} />
+
+      {/* T11 · 发布对话框 */}
+      <PublishDialog assetId={docId} />
     </div>
   )
 }

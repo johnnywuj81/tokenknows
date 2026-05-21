@@ -145,8 +145,11 @@ export default function ReviewPage() {
         chapters={chapters}
         projectId={projectId}
         onAllApproved={() => {
-          // T11 发布入口待接, 暂时返回文档列表
-          if (projectId) navigate(`/projects/${projectId}/documents`)
+          // T11 进入发布: 跳回文档页 + 触发 PublishDialog (经 store)
+          if (projectId && docId) {
+            useDocumentUiStore.getState().openPublish()
+            navigate(`/projects/${projectId}/documents/${docId}`)
+          }
         }}
       />
 

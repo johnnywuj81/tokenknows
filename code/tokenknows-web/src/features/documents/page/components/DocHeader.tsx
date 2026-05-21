@@ -6,7 +6,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Loader2 } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Asset, AssetStatus, AssetType } from '@/types/api'
@@ -17,6 +17,7 @@ interface DocHeaderProps {
   saving?: boolean
   onSubmit?: () => void
   submitting?: boolean
+  onPublish?: () => void
 }
 
 const TYPE_LABEL: Record<AssetType, string> = {
@@ -42,10 +43,17 @@ const STATUS_META: Record<
   archived: { label: '已归档', bg: 'bg-bg-warm', text: 'text-text-subtle' },
 }
 
-export function DocHeader({ asset, saving, onSubmit, submitting }: DocHeaderProps) {
+export function DocHeader({
+  asset,
+  saving,
+  onSubmit,
+  submitting,
+  onPublish,
+}: DocHeaderProps) {
   const navigate = useNavigate()
   const statusMeta = STATUS_META[asset.status]
   const canSubmit = asset.status === 'draft'
+  const canPublish = asset.status === 'approved' || asset.status === 'published'
 
   return (
     <header className="flex items-start justify-between gap-4 border-b border-border-subtle bg-bg-card px-6 py-3">
@@ -105,6 +113,16 @@ export function DocHeader({ asset, saving, onSubmit, submitting }: DocHeaderProp
                 提交审批
               </>
             )}
+          </Button>
+        ) : null}
+        {canPublish && onPublish ? (
+          <Button
+            onClick={onPublish}
+            variant={asset.status === 'published' ? 'outline' : 'default'}
+            className="font-ui"
+          >
+            <Upload className="size-3.5" />
+            {asset.status === 'published' ? '再次发布' : '发布'}
           </Button>
         ) : null}
       </div>

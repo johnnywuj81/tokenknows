@@ -37,6 +37,7 @@ from app.schemas.asset import (
     ChapterGeneratedBy,
     Evidence,
     EvidencePreview,
+    PublishRecord,
     RedactionItem,
     RedactionScanJob,
 )
@@ -58,6 +59,8 @@ _sse_queues: dict[str, list[asyncio.Queue]] = {}
 _evidence_by_chapter: dict[str, list[Evidence]] = {}
 # T10: asset_id → RedactionScanJob
 _redaction_jobs: dict[str, RedactionScanJob] = {}
+# T11/T12: publish_record_id → PublishRecord
+_publish_records: dict[str, PublishRecord] = {}
 _state_lock = asyncio.Lock()
 
 
@@ -948,6 +951,89 @@ def submit_asset_for_review(asset_id: str) -> Asset | None:
 def _find_chapter(asset_id: str, chapter_id: str) -> Chapter | None:
     chapters = _chapters.get(asset_id, [])
     return next((c for c in chapters if c.id == chapter_id), None)
+
+
+# ─── T11/T12 · 发布 ──────────────────────────────────────────
+
+
+def publish_asset(
+    asset_id: str,
+    destinations: list[str],
+    publish_mode: str,
+    visibility: str | None = None,
+    user_id: str | None = None,
+) -> list[PublishRecord]:
+    """T11 · 创建多渠道发布记录. 每个 destination 一条 record.
+
+    MVP: 不实际渲染 PDF/DOCX, 也不实际推到 Slack/Feishu, 只生成记录 + URL.
+    """
+    asset = _assets.get(asset_id)
+    if asset is None:
+        raise ValueError("Asset not found")
+
+    if not destinations:
+        raise ValueError("至少选择一个发布渠道")
+
+    valid_destinations = {"internal", "public_link", "export_md"}
+    if any(d not in valid_destinations for d in destinations):
+        raise ValueError(f"未知 destination, 允许: {sorted(valid_destinations)}")
+
+    if publish_mode not in {"full", "summary_with_backlink"}:
+        raise ValueError("publish_mode 必须是 full 或 summary_with_backlink")
+
+    records: list[PublishRecord] = []
+    for dest in destinations:
+        rec_id = f"pub-{uuid4().hex[:10]}"
+        # 计算 URL
+        token = uuid4().hex[:16]
+        if dest == "internal":
+            url: str | None = f"/internal/assets/{asset_id}/v{asset.current_version}"
+            dest_ref: str | None = url
+        elif dest == "public_link":
+            url = f"https://share.tokenknows.dev/p/{token}"
+            dest_ref = token
+        elif dest == "export_md":
+            url = f"/api/v1/publish-records/{rec_id}/download"
+            dest_ref = f"asset-{asset_id}-v{asset.current_version}.md"
+        else:
+            url = None
+            dest_ref = None
+
+        record = PublishRecord(
+            id=rec_id,
+            asset_id=asset_id,
+            asset_version=asset.current_version or 1,
+            destination=dest,
+            destination_ref=dest_ref,
+            publish_mode=publish_mode,
+            status="success",
+            url=url,
+            published_at=_now().isoformat(),
+            published_by=user_id or "anonymous",
+            visibility=visibility if dest == "public_link" else None,
+        )
+        _publish_records[rec_id] = record
+        records.append(record)
+
+    # 推进 asset 状态 → published
+    asset.status = "published"
+    asset.updated_at = _now()
+
+    logger.info(
+        "asset_published",
+        asset_id=asset_id,
+        destinations=destinations,
+        records=[r.id for r in records],
+    )
+    return records
+
+
+def get_publish_record(record_id: str) -> PublishRecord | None:
+    return _publish_records.get(record_id)
+
+
+def list_publish_records_for_asset(asset_id: str) -> list[PublishRecord]:
+    return [r for r in _publish_records.values() if r.asset_id == asset_id]
 
 
 # ─── T10 · 脱敏扫描 (同步, 正则) ─────────────────────────────

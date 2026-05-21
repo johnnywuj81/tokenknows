@@ -138,3 +138,23 @@ class RedactionScanJob(BaseModel):
     status: str  # 'pending' / 'running' / 'done' / 'failed'
     progress: float = 1.0  # 0-1
     items: list[RedactionItem]
+
+
+# ─── T11/T12 · 发布 ─────────────────────────────────────────────
+
+
+class PublishRecord(BaseModel):
+    """T11/T12 单条发布记录 (asset → 渠道)."""
+
+    id: str
+    asset_id: str
+    asset_version: int
+    destination: str           # 'internal' / 'public_link' / 'export_md'
+    destination_ref: str | None  # e.g. "/internal/asset/xxx" / public url token / file path
+    publish_mode: str          # 'full' / 'summary_with_backlink'
+    status: str                # 'pending' / 'success' / 'failed' / 'revoked'
+    url: str | None
+    published_at: str          # ISO 8601
+    published_by: str
+    visibility: str | None = None  # 公开链接时: 'team' / 'public'
+    error: str | None = None       # status=failed 时

@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel
 
-from app.schemas.asset import Asset, Chapter, Evidence, RedactionScanJob
+from app.schemas.asset import Asset, Chapter, Evidence, PublishRecord, RedactionScanJob
 from app.schemas.generation import (
     GenerateAssetRequest,
     GenerationProgress,
@@ -245,6 +245,61 @@ async def exempt_redaction(
     if job is None:
         raise HTTPException(404, detail="尚未扫描")
     return job
+
+
+# ─── T11/T12 · 发布 ────────────────────────────────────────────
+
+
+class PublishRequest(BaseModel):
+    """T11 · 发布请求."""
+
+    destinations: list[str]    # ['internal', 'public_link', 'export_md']
+    publish_mode: str          # 'full' / 'summary_with_backlink'
+    visibility: str | None = None  # 公开链接时: 'team' / 'public'
+
+
+@router.post(
+    "/assets/{asset_id}/publish",
+    response_model=list[PublishRecord],
+    status_code=201,
+)
+async def publish_asset(asset_id: str, body: PublishRequest) -> list[PublishRecord]:
+    """T11 · 多渠道发布. 返回每个渠道的 PublishRecord."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    try:
+        return svc.publish_asset(
+            asset_id=asset_id,
+            destinations=body.destinations,
+            publish_mode=body.publish_mode,
+            visibility=body.visibility,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+
+@router.get(
+    "/publish-records/{record_id}",
+    response_model=PublishRecord,
+)
+async def get_publish_record(record_id: str) -> PublishRecord:
+    """T12 · 单条发布记录详情 (回执页)."""
+    record = svc.get_publish_record(record_id)
+    if record is None:
+        raise HTTPException(404, detail="Publish record not found")
+    return record
+
+
+@router.get(
+    "/assets/{asset_id}/publish-records",
+    response_model=list[PublishRecord],
+)
+async def list_asset_publish_records(asset_id: str) -> list[PublishRecord]:
+    """T12 · 文档的发布历史 (按时间倒序)."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    records = svc.list_publish_records_for_asset(asset_id)
+    return sorted(records, key=lambda r: r.published_at, reverse=True)
 
 
 @router.post(
