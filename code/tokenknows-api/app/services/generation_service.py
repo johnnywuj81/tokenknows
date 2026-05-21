@@ -765,6 +765,21 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
         _evidence_by_chapter[ch.id] = ev_list
         total_evidence += len(ev_list)
 
+        # T07-fix · 后处理 chapter content 的 [N] 标签:
+        # LLM 经常输出跳号 / 超量 (例如 [1][3][5] 或 [1]..[7] 但只 4 evidence)
+        # 统一重编号 [1..len(ev_list)] 按出现顺序, 超出的标签删掉避免死链.
+        if ch.content and ev_list:
+            normalized, tag_count = _normalize_evidence_tags(ch.content, len(ev_list))
+            if normalized != ch.content:
+                logger.info(
+                    "chapter_tags_normalized",
+                    asset_id=asset_id,
+                    chapter_id=ch.id,
+                    tags_in_content=tag_count,
+                    evidence_count=len(ev_list),
+                )
+                ch.content = normalized
+
     logger.info(
         "evidence_reranked",
         asset_id=asset_id,
@@ -834,6 +849,39 @@ def _event_to_embed_text(e: dict) -> str:
     content = (e.get("content") or "")[:500]
     src = e.get("source_type", "")
     return f"[{src}] {title}\n\n{content}"
+
+
+# 角标正则: 匹配独立的 [数字], 不会吃掉 markdown 链接 [text](url) 或 [text][ref]
+# 用负向后查避免 ![alt](src) 那种图片语法
+_EVIDENCE_TAG_RE = re.compile(r"(?<!\!)\[(\d+)\](?!\(|\[)")
+
+
+def _normalize_evidence_tags(content: str, k: int) -> tuple[str, int]:
+    """把 chapter content 里的 [N] 标签重编号为 [1..k] 按出现顺序.
+
+    - LLM 经常输出 [1] [3] [5] 这种跳号, 或 [1] [2] [3] [4] [5] 超量
+    - k 是本章可用 evidence 数, 取 len(ev_list)
+    - 超过 k 的标签会被静默去掉 (没有对应 evidence 时不留死链)
+    - 不动 markdown 链接 [text](url) / 引用 [ref][1]
+
+    返回 (new_content, found_count) — found_count 是发现的 [N] 数量, 调试用.
+    """
+    if k <= 0:
+        # 没 evidence, 把所有 [N] 都剥掉, 不留死链
+        cleaned = _EVIDENCE_TAG_RE.sub("", content)
+        return cleaned, 0
+
+    count = 0
+
+    def _replace(_m: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        if count <= k:
+            return f"[{count}]"
+        return ""  # 超过 k 的标签直接删, 避免点了 [5] 找不到证据
+
+    new_content = _EVIDENCE_TAG_RE.sub(_replace, content)
+    return new_content, count
 
 
 def _chapter_to_embed_text(ch: "Chapter") -> str:
@@ -1154,6 +1202,11 @@ async def regenerate_chapter(
     new_content = response.text.strip()
     if len(new_content) < 30:
         raise ValueError(f"LLM 返回内容过短: {new_content!r}")
+
+    # T07-fix · 重生成后的 content 也要规范化 [N] 角标, 否则会和已有 evidence 错位
+    existing_evidence = _evidence_by_chapter.get(chapter_id, [])
+    if existing_evidence:
+        new_content, _ = _normalize_evidence_tags(new_content, len(existing_evidence))
 
     # P3 · diff 准备: 把旧内容快照存进 history (前端 T12 diff 视图用)
     previous_content = chapter.content
