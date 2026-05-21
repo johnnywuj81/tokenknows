@@ -22,6 +22,7 @@ import { ProjectStats } from './components/ProjectStats'
 import { EventStream } from './components/EventStream'
 import { TodoList } from './components/TodoList'
 import { EmptyWorkbench } from './components/EmptyWorkbench'
+import { EventDrawer } from './components/EventDrawer'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 
@@ -101,6 +102,9 @@ export default function WorkbenchPage() {
           onRetry={() => todosQuery.refetch()}
         />
       </div>
+
+      {/* T04 · 事件详情抽屉 (点击 EventStream 卡片触发) */}
+      <EventDrawer />
     </div>
   )
 }

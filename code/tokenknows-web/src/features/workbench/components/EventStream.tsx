@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
+import { useDocumentUiStore } from '@/stores/documentUiStore'
 import { useEventStream } from '../hooks/useEventStream'
 import type { Event, EventSourceType } from '@/types/api'
 import { EventCard } from './EventCard'
@@ -28,6 +29,7 @@ export function EventStream({ projectId }: EventStreamProps) {
   const navigate = useNavigate()
   const [sourceType, setSourceType] = useState<EventSourceType | null>(null)
   const query = useEventStream(projectId, sourceType ? { source_type: sourceType } : {})
+  const openEventDrawer = useDocumentUiStore((s) => s.openEventDrawer)
 
   const allEvents = useMemo(
     () => (query.data?.pages ?? []).flatMap((p) => p.data),
@@ -133,9 +135,8 @@ export function EventStream({ projectId }: EventStreamProps) {
   )
 
   function handleClick(e: Event) {
-    if (!projectId) return
-    // T04 事件详情用 URL query 触发,这里预先实现
-    navigate(`/projects/${projectId}?event=${e.id}`)
+    // T04 · 打开事件详情抽屉 (store-based, 与 T07 EvidenceDrawer 一致)
+    openEventDrawer(e.id)
   }
 }
 
