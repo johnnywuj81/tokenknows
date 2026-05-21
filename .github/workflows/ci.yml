@@ -48,6 +48,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Vitest (skip if no test files yet)
+        run: |
+          if find src -name "*.test.ts" -o -name "*.test.tsx" 2>/dev/null | grep -q .; then
+            npm test
+          else
+            echo "no .test files yet, skip"
+          fi
+
   # ─── 后端 · 模块导入冒烟 + ruff ───────────────────────────
   api:
     name: API · ruff + import smoke
