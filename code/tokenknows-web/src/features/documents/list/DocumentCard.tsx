@@ -176,6 +176,7 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
             coverage={asset.metrics.coverage}
             citation={asset.metrics.citation_density}
             slop={asset.metrics.slop_score}
+            similarity={asset.metrics.similarity}
           />
         ) : null}
       </button>
@@ -188,7 +189,14 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
   )
 }
 
-function Metrics({ coverage, citation, slop }: { coverage: number; citation: number; slop: number }) {
+interface MetricsProps {
+  coverage: number
+  citation: number
+  slop: number
+  similarity: number
+}
+
+function Metrics({ coverage, citation, slop, similarity }: MetricsProps) {
   return (
     <ul className="flex w-full items-center gap-3 pt-1 font-ui text-caption text-text-muted">
       <li>
@@ -204,6 +212,24 @@ function Metrics({ coverage, citation, slop }: { coverage: number; citation: num
             slop > 0.2 ? 'text-warning' : 'text-text-secondary',
           )}
         >{Math.round(slop * 100)}%</strong>
+      </li>
+      <li
+        title={
+          similarity > 0.85
+            ? '与项目内既往文档高度重合 — 可能在重复劳动'
+            : '与项目内既往文档的最大相似度 (越低越独立)'
+        }
+      >
+        相似 <strong
+          className={cn(
+            'font-mono tabular-nums',
+            similarity > 0.85
+              ? 'text-danger'
+              : similarity > 0.6
+                ? 'text-warning'
+                : 'text-text-secondary',
+          )}
+        >{Math.round(similarity * 100)}%</strong>
       </li>
     </ul>
   )

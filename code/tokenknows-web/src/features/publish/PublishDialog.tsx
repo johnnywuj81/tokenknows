@@ -158,6 +158,24 @@ export function PublishDialog({ assetId }: PublishDialogProps) {
               </div>
             ) : null}
 
+            {/* 高相似度警告: 与项目内既往 asset outline cosine > 0.85 时提示 */}
+            {!blocked && asset?.metrics && asset.metrics.similarity > 0.85 ? (
+              <div
+                className="flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-warning"
+                role="alert"
+              >
+                <ShieldAlert className="size-4 mt-0.5 shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="font-ui text-body-sm font-medium">
+                    与项目内既往文档相似度 {Math.round(asset.metrics.similarity * 100)}%
+                  </p>
+                  <p className="font-ui text-caption">
+                    可能在重复劳动 / 内容陈旧。建议查看历史文档或先 regenerate 加入新证据再发布。
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             {/* 渠道选择 */}
             <fieldset>
               <legend className="font-ui text-caption font-medium text-text-secondary">
