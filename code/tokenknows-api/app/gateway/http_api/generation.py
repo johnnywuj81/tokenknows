@@ -112,6 +112,48 @@ async def list_chapter_evidence(asset_id: str, chapter_id: str) -> list[Evidence
     return svc.list_chapter_evidence(asset_id, chapter_id)
 
 
+class RegenerateChapterRequest(BaseModel):
+    """T08 · 重生成单章节请求."""
+
+    instruction: str
+    model: str | None = None       # e.g. "minimax-m2:cloud" (override task default)
+    provider: str | None = None    # e.g. "ollama" / "anthropic" (override task default)
+
+
+@router.post(
+    "/assets/{asset_id}/chapters/{chapter_id}/regenerate",
+    response_model=Chapter,
+)
+async def regenerate_chapter(
+    asset_id: str,
+    chapter_id: str,
+    body: RegenerateChapterRequest,
+) -> Chapter:
+    """T08 · 用用户指令重生成本章节. 同步等 LLM 完成后返回新章节.
+
+    前端 mutation 流程:
+      isPending → ChapterBlock regenerating=true (锁编辑)
+      onSuccess → invalidateQueries chapters + evidence
+    """
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    try:
+        updated = await svc.regenerate_chapter(
+            asset_id=asset_id,
+            chapter_id=chapter_id,
+            instruction=body.instruction.strip(),
+            model_override=body.model,
+            provider_override=body.provider,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except Exception as exc:  # LLM 调用全失败 / circuit open
+        raise HTTPException(503, detail=f"LLM 重生成失败: {exc}") from exc
+    if updated is None:
+        raise HTTPException(404, detail="Chapter not found")
+    return updated
+
+
 # ─── 删除 / 克隆 (T05 列表卡更多菜单) ────────────────────────────
 
 

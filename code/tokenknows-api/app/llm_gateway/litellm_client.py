@@ -63,6 +63,18 @@ def _build_litellm_kwargs(
         base_kwargs["api_key"] = settings.minimax_api_key
         base_kwargs["api_base"] = settings.minimax_base_url
 
+    elif provider == "ollama":
+        # Ollama (本地 daemon 或 Ollama Cloud, 都用 OpenAI-compatible /v1/chat).
+        # 模型 e.g. "gpt-oss:20b" / "minimax-m2:cloud" / "qwen3.5:397b-cloud".
+        # LiteLLM 用 openai/ 前缀走 generic OpenAI client.
+        base_kwargs["model"] = f"openai/{model}"
+        base_kwargs["api_key"] = settings.ollama_api_key or "ollama-local"
+        base_kwargs["api_base"] = settings.ollama_base_url
+        # ⚠ Ollama 的 reasoning 模型 (gpt-oss / minimax-m2) 在 OpenAI 兼容端点
+        # 默认会把答案放在 "reasoning" 字段, content 为空. 传 think=false
+        # 让模型把答案直接放进 content. 兼容性: 非 reasoning 模型会忽略.
+        base_kwargs["extra_body"] = {"think": False}
+
     else:
         raise AdapterError(provider, ValueError(f"Unknown provider: {provider}"))
 
@@ -93,9 +105,17 @@ async def call_llm(
         raise AdapterError(provider, exc) from exc
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    # 解析 LiteLLM 统一响应 (OpenAI 格式)
+    # 解析 LiteLLM 统一响应 (OpenAI 格式).
+    # 兜底: 部分 reasoning 模型 (e.g. Ollama 的 minimax-m2:cloud) 会把答案放
+    # 在 message.reasoning, content 为空. 这时用 reasoning 作为 text.
     choice = response.choices[0]
     text = choice.message.content or ""
+    if not text:
+        reasoning = getattr(choice.message, "reasoning", None) or getattr(
+            choice.message, "reasoning_content", None
+        )
+        if reasoning:
+            text = reasoning
     usage_obj = response.usage
     usage = {
         "prompt_tokens": getattr(usage_obj, "prompt_tokens", 0),

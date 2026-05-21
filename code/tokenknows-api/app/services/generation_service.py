@@ -304,18 +304,15 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
 
 
 async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
-    """阶段 3 · 章节正文生成 (per-chapter LLM call).
+    """阶段 3 · 章节正文生成 (per-chapter LLM call · ★ 真 LLM).
 
-    MVP 占位: 每章 sleep 0.5s + 写一段 placeholder markdown.
-    生产: 每章一次 llm_gateway.generate(task=req.type, messages=[...]).
+    每章一次 router.generate(task=req.type, ...) 并行执行 (asyncio.gather).
+    失败的章节回退到 _placeholder_content 保证 demo 不挂.
 
-    titles 优先从 outline 阶段产出读 (LLM 生成的标题),
-    fallback 到 _OUTLINE_TEMPLATES.
+    titles 优先从 outline 阶段产出读 (LLM 真生成的标题), 没有则 fallback 模板.
     """
     settings = get_settings()
-    asset = _assets[asset_id]
     progress = _progress[asset_id]
-    # 找 outline 阶段的 titles (LLM 真生成的) - 不见才 fallback
     outline_stage = next(
         (s for s in progress.stages if s.name == "outline"), None
     )
@@ -324,28 +321,14 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     ) or _OUTLINE_TEMPLATES[req.type]
     provider = req.provider_override or settings.task_provider(req.type)
     model = req.model_override or settings.task_model(req.type)
+    asset = _assets[asset_id]
 
-    chapters: list[Chapter] = []
-    for idx, title in enumerate(outline):
-        await asyncio.sleep(0.5)  # 模拟单章 LLM 调用
-        chapters.append(
-            Chapter(
-                id=f"chapter-{uuid4().hex[:8]}",
-                asset_id=asset_id,
-                asset_version=1,
-                order_index=idx,
-                title=title,
-                content=_placeholder_content(title, req.type),
-                generated_by=ChapterGeneratedBy(
-                    model=model,
-                    provider=provider,
-                    latency_ms=500,
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                ),
-            )
+    # 并行调 LLM 生章节 - 收集 (content, latency_ms, usage, fallback_used)
+    async def gen_one(idx: int, title: str) -> tuple[int, str, str, dict, bool, int]:
+        result = await _call_chapter_llm(
+            asset.type, title, req.time_window, asset.project_id, provider, model
         )
-        # 推 chapter_completed 事件 - 前端可以增量渲染
+        # 推增量 SSE
         await _publish_event(
             asset_id,
             SseEvent(
@@ -356,13 +339,109 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
                 ts=_now(),
             ),
         )
+        return (idx, title, result["content"], result["usage"], result["fallback_used"], result["latency_ms"])
+
+    results = await asyncio.gather(*(gen_one(i, t) for i, t in enumerate(outline)))
+    results.sort(key=lambda x: x[0])
+
+    chapters: list[Chapter] = []
+    for idx, title, content, usage, fb_used, latency in results:
+        chapters.append(
+            Chapter(
+                id=f"chapter-{uuid4().hex[:8]}",
+                asset_id=asset_id,
+                asset_version=1,
+                order_index=idx,
+                title=title,
+                content=content,
+                generated_by=ChapterGeneratedBy(
+                    model=model,
+                    provider=provider,
+                    latency_ms=latency,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                ),
+            )
+        )
 
     _chapters[asset_id] = chapters
     return {
         "chapters_completed": len(chapters),
         "provider_used": provider,
         "model_used": model,
+        "fallback_used_count": sum(1 for r in results if r[4]),
     }
+
+
+async def _call_chapter_llm(
+    asset_type: AssetType,
+    title: str,
+    time_window: str,
+    project_id: str,
+    provider: str,
+    model: str,
+) -> dict[str, Any]:
+    """单章节 LLM 调用 · 失败回退到 placeholder content.
+
+    返回 {content, usage, fallback_used, latency_ms}.
+    """
+    type_label = {
+        "weekly_report": "项目周报",
+        "tech_design": "技术方案",
+        "adr": "ADR 架构决策记录",
+        "incident": "问题复盘报告",
+    }[asset_type]
+
+    system_prompt = (
+        "你是 AI 研发知识资产平台的章节生成器。根据章节标题生成 200-400 字的"
+        "markdown 草稿, 风格客观、要点清晰。允许包含 `[1] [2] [3]` 形式的"
+        "证据角标占位 (后续阶段会回填真证据)。直接输出 markdown, 不要前置说明。"
+    )
+    user_prompt = (
+        f"文档类型: {type_label}\n"
+        f"时间范围: {time_window}\n"
+        f"当前章节标题: {title}\n\n"
+        "请生成本章节的 markdown 草稿 (200-400 字, 含 2-3 个 [N] 引用占位)."
+    )
+
+    router = await get_router()
+    try:
+        response = await router.generate(
+            task=asset_type,
+            messages=[
+                LLMMessage(role="system", content=system_prompt),
+                LLMMessage(role="user", content=user_prompt),
+            ],
+            options=LLMOptions(
+                temperature=0.5,
+                max_tokens=800,
+                timeout_seconds=90,
+            ),
+            project_id=project_id,
+            provider_override=provider,
+            model_override=model,
+        )
+        content = response.text.strip()
+        if len(content) < 30:
+            raise ValueError(f"LLM 返回内容过短: {content!r}")
+        return {
+            "content": content,
+            "usage": response.usage,
+            "fallback_used": response.fallback_used,
+            "latency_ms": response.latency_ms,
+        }
+    except Exception as exc:
+        logger.warning(
+            "chapter_llm_failed_fallback",
+            title=title,
+            error=str(exc),
+        )
+        return {
+            "content": _placeholder_content(title, asset_type),
+            "usage": {},
+            "fallback_used": True,
+            "latency_ms": 0,
+        }
 
 
 # T07 Mock Event 模板: 真后端会查 fixture events / DB 真 events.
@@ -609,6 +688,130 @@ def list_chapters(asset_id: str) -> list[Chapter]:
 def list_chapter_evidence(asset_id: str, chapter_id: str) -> list[Evidence]:
     """T07 抽屉打开时一次性加载本章所有 Evidence."""
     return _evidence_by_chapter.get(chapter_id, [])
+
+
+# ─── T08 · 章节重生成 ────────────────────────────────────────────
+
+
+async def regenerate_chapter(
+    asset_id: str,
+    chapter_id: str,
+    instruction: str,
+    user_id: str | None = None,
+    model_override: str | None = None,
+    provider_override: str | None = None,
+) -> Chapter | None:
+    """T08 · 用用户指令重生成单章节内容.
+
+    流程:
+      1. 找到 chapter
+      2. router.generate(task=asset.type, ...) 注入 instruction
+      3. 更新 chapter.content + generated_by + regeneration_history
+      4. 失败 → 抛, 不动 chapter
+      5. 推 SSE chapter_completed 让前端订阅者同步
+
+    返回更新后的 Chapter, 找不到返回 None.
+    """
+    chapters = _chapters.get(asset_id, [])
+    chapter = next((c for c in chapters if c.id == chapter_id), None)
+    if chapter is None:
+        return None
+
+    asset = _assets.get(asset_id)
+    if asset is None:
+        return None
+
+    settings = get_settings()
+    provider = provider_override or settings.task_provider(asset.type)
+    model = model_override or settings.task_model(asset.type)
+    type_label = {
+        "weekly_report": "项目周报",
+        "tech_design": "技术方案",
+        "adr": "ADR 架构决策记录",
+        "incident": "问题复盘报告",
+    }[asset.type]
+
+    system_prompt = (
+        "你是 AI 研发知识资产平台的章节重写助手。根据用户指令重写指定章节,"
+        "保留 markdown 格式与 [N] 证据角标占位风格 (后续阶段回填). 直接输出"
+        "新的 markdown 内容, 不要解释、不要前置说明。"
+    )
+    user_prompt = (
+        f"文档类型: {type_label}\n"
+        f"章节标题: {chapter.title}\n\n"
+        f"现有章节内容 (作为参考, 不必照搬):\n```markdown\n{chapter.content}\n```\n\n"
+        f"用户重生成指令:\n{instruction}\n\n"
+        "请按指令产出本章节的新版本 markdown (200-500 字)."
+    )
+
+    router = await get_router()
+    response = await router.generate(
+        task=asset.type,
+        messages=[
+            LLMMessage(role="system", content=system_prompt),
+            LLMMessage(role="user", content=user_prompt),
+        ],
+        options=LLMOptions(
+            temperature=0.6,
+            max_tokens=900,
+            timeout_seconds=90,
+        ),
+        project_id=asset.project_id,
+        user_id=user_id,
+        provider_override=provider,
+        model_override=model,
+    )
+    new_content = response.text.strip()
+    if len(new_content) < 30:
+        raise ValueError(f"LLM 返回内容过短: {new_content!r}")
+
+    chapter.content = new_content
+    chapter.generated_by = ChapterGeneratedBy(
+        model=model,
+        provider=provider,
+        latency_ms=response.latency_ms,
+        prompt_tokens=response.usage.get("prompt_tokens", 0),
+        completion_tokens=response.usage.get("completion_tokens", 0),
+    )
+    chapter.regeneration_history.append(
+        {
+            "at": _now().isoformat(),
+            "user_id": user_id or "anonymous",
+            "instruction": instruction,
+            "model": f"{provider}/{model}",
+        }
+    )
+    asset.updated_at = _now()
+
+    # 推 SSE 通知其它订阅者 (例如同步的协作端).
+    # 复用 stage="content" - regenerate 是 content 阶段的局部重跑.
+    await _publish_event(
+        asset_id,
+        SseEvent(
+            event="chapter_completed",
+            asset_id=asset_id,
+            stage="content",
+            payload={
+                "chapter_id": chapter_id,
+                "order_index": chapter.order_index,
+                "regenerated": True,
+                "provider": response.provider,
+                "model": response.model_used,
+                "fallback_used": response.fallback_used,
+            },
+            ts=_now(),
+        ),
+    )
+    logger.info(
+        "chapter_regenerated",
+        asset_id=asset_id,
+        chapter_id=chapter_id,
+        provider=response.provider,
+        model=response.model_used,
+        fallback_used=response.fallback_used,
+        tokens=response.usage,
+    )
+    return chapter
 
 
 

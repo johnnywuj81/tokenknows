@@ -29,22 +29,32 @@ from app.llm_gateway.interface import (
 )
 from app.llm_gateway.litellm_client import call_llm
 
-# 哪些 provider 是 cloud (写 egress_log)
-CLOUD_PROVIDERS = {"anthropic", "openai", "minimax"}
+# 哪些 provider 是 cloud (写 egress_log).
+# Ollama 包含本地 (gpt-oss:20b) 和 cloud (xxx:cloud) 模型; 为保守起见
+# 列为 cloud, 所有调用都审计.
+CLOUD_PROVIDERS = {"anthropic", "openai", "minimax", "ollama"}
 
-# fallback 链: 主 provider 失败时按序尝试
+# fallback 链: 主 provider 失败时按序尝试.
+# Ollama 放在每条链尾兜底 - 当外网 / 第三方 key 都不可用时仍能产出.
 FALLBACK_CHAIN: dict[str, list[tuple[str, str]]] = {
     "anthropic": [
         ("openai", "gpt-4o"),
         ("minimax", "abab6.5s-chat"),
+        ("ollama", "minimax-m2:cloud"),
     ],
     "openai": [
         ("anthropic", "claude-sonnet-4-5-20250929"),
         ("minimax", "abab6.5s-chat"),
+        ("ollama", "minimax-m2:cloud"),
     ],
     "minimax": [
         ("openai", "gpt-4o-mini"),
         ("anthropic", "claude-haiku-4-5"),
+        ("ollama", "minimax-m2:cloud"),
+    ],
+    "ollama": [
+        ("anthropic", "claude-haiku-4-5"),
+        ("openai", "gpt-4o-mini"),
     ],
 }
 

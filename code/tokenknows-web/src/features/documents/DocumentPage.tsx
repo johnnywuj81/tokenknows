@@ -133,8 +133,8 @@ export default function DocumentPage() {
       {/* T07 · 证据链抽屉 */}
       <EvidenceDrawer assetId={docId} />
 
-      {/* T08 stub - 重生成对话框 */}
-      <RegenerateDialog />
+      {/* T08 · 重生成对话框 */}
+      <RegenerateDialog assetId={docId} />
     </div>
   )
 }

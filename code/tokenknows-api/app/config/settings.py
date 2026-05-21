@@ -20,7 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 #   1. 先清掉 process env 里的空值
 #   2. 用 dotenv override=True 让 .env.local 强制覆盖剩余的 process env
 _env_path = Path(__file__).parent.parent.parent / ".env.local"
-for _key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY"):
+for _key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY", "OLLAMA_API_KEY"):
     if os.environ.get(_key, "").strip() == "":
         os.environ.pop(_key, None)
 if _env_path.exists():
@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     minimax_base_url: str = Field(
         default="https://api.minimaxi.com/v1",
         alias="MINIMAX_BASE_URL",
+    )
+    # Ollama (本地或 Ollama Cloud, OpenAI-compatible endpoint)
+    # ⚠ Ollama Cloud 模型 (后缀 ":cloud") 实际走 Ollama 后端到云厂商;
+    #   仍属于云出域, 会被 audit 但走 ollama 单一通道.
+    ollama_api_key: str | None = Field(default=None, alias="OLLAMA_API_KEY")
+    ollama_base_url: str = Field(
+        default="http://localhost:11434/v1",
+        alias="OLLAMA_BASE_URL",
     )
 
     # ─── LLM Gateway 三层出域门禁 ─────────────────────────────────
@@ -106,7 +114,11 @@ class Settings(BaseSettings):
     # 防止 shell env 注入空 key (如 Claude Code CLI 注入的 ANTHROPIC_API_KEY="")
     # 覆盖 .env.local 里的真实值. pydantic-settings 默认 process env > env_file.
     @field_validator(
-        "anthropic_api_key", "openai_api_key", "minimax_api_key", mode="before"
+        "anthropic_api_key",
+        "openai_api_key",
+        "minimax_api_key",
+        "ollama_api_key",
+        mode="before",
     )
     @classmethod
     def _empty_string_to_none(cls, v: object) -> object:
@@ -148,11 +160,16 @@ class Settings(BaseSettings):
         return mapping[task]
 
     def provider_key(self, provider: str) -> str | None:
-        """根据 provider 查询对应的 API key."""
+        """根据 provider 查询对应的 API key.
+
+        Ollama 不需要真 key (本地 daemon 不鉴权), 但为了通过 call_llm 的
+        "key 未配置" 短路, 返回固定占位 "ollama-local".
+        """
         return {
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
             "minimax": self.minimax_api_key,
+            "ollama": self.ollama_api_key or "ollama-local",
         }.get(provider)
 
 
