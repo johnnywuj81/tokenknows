@@ -20,12 +20,14 @@ MVP 简化:
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
 from app.config.logging import logger
 from app.config.settings import get_settings
+from app.llm_gateway import LLMMessage, LLMOptions, get_router
 from app.schemas.asset import (
     Asset,
     AssetMetrics,
@@ -219,14 +221,82 @@ async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
 
 
 async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
-    """阶段 2 · 主题聚类 + 大纲.
+    """阶段 2 · 主题聚类 + 大纲 (★ 真 LLM 调用).
 
-    MVP 占位: 用 _OUTLINE_TEMPLATES.
-    生产: llm_gateway.generate(task="outline", json_mode=True, structured output).
+    走 llm_gateway → router.generate (三层出域门禁 + CircuitBreaker + egress_log).
+    JSON mode 严格输出 {chapters: [titles...]}.
+    失败回退到 _OUTLINE_TEMPLATES 保证 demo 不挂.
     """
-    await asyncio.sleep(1.2)
-    outline = _OUTLINE_TEMPLATES[req.type]
-    return {"chapters_total": len(outline), "titles": outline}
+    asset = _assets[asset_id]
+    type_label = {
+        "weekly_report": "项目周报",
+        "tech_design": "技术方案",
+        "adr": "ADR 架构决策记录",
+        "incident": "问题复盘报告",
+    }[req.type]
+    fallback = _OUTLINE_TEMPLATES[req.type]
+
+    system_prompt = (
+        "你是 AI 研发知识资产平台的文档大纲生成器。严格按 JSON schema 输出, 不要任何额外文字。\n"
+        'JSON schema: {"chapters": ["章节1", "章节2", ...]}\n'
+        "约束: 章节标题简洁(≤8 字符), 数量 5-7 个, 顺序符合该文档类型的标准结构。"
+    )
+    user_prompt = (
+        f"为「{type_label}」文档生成章节大纲。\n"
+        f"时间范围: {req.time_window}\n"
+        f"参考标准结构 (你可微调以贴合本次主题): {' / '.join(fallback)}"
+    )
+
+    router = await get_router()
+    try:
+        response = await router.generate(
+            task=req.type,
+            messages=[
+                LLMMessage(role="system", content=system_prompt),
+                LLMMessage(role="user", content=user_prompt),
+            ],
+            options=LLMOptions(
+                temperature=0.3,
+                max_tokens=400,
+                json_mode=True,
+                timeout_seconds=60,
+            ),
+            project_id=asset.project_id,
+        )
+        parsed = json.loads(response.text)
+        outline = parsed.get("chapters", [])
+        if not isinstance(outline, list) or len(outline) < 3:
+            raise ValueError(f"LLM 返回大纲不合理: {outline!r}")
+        logger.info(
+            "outline_llm_success",
+            asset_id=asset_id,
+            provider=response.provider,
+            model=response.model_used,
+            chapters=len(outline),
+            tokens=response.usage,
+            fallback_used=response.fallback_used,
+        )
+        return {
+            "chapters_total": len(outline),
+            "titles": outline,
+            "provider_used": response.provider,
+            "model_used": response.model_used,
+            "tokens": response.usage,
+            "fallback_used": response.fallback_used,
+        }
+    except Exception as exc:
+        logger.warning(
+            "outline_llm_failed_fallback",
+            asset_id=asset_id,
+            error=str(exc),
+        )
+        # 不抛 - 用 fallback 大纲让流水线继续
+        return {
+            "chapters_total": len(fallback),
+            "titles": fallback,
+            "llm_fallback_to_template": True,
+            "llm_error": str(exc),
+        }
 
 
 async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
@@ -234,10 +304,20 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
 
     MVP 占位: 每章 sleep 0.5s + 写一段 placeholder markdown.
     生产: 每章一次 llm_gateway.generate(task=req.type, messages=[...]).
+
+    titles 优先从 outline 阶段产出读 (LLM 生成的标题),
+    fallback 到 _OUTLINE_TEMPLATES.
     """
     settings = get_settings()
     asset = _assets[asset_id]
-    outline = _OUTLINE_TEMPLATES[req.type]
+    progress = _progress[asset_id]
+    # 找 outline 阶段的 titles (LLM 真生成的) - 不见才 fallback
+    outline_stage = next(
+        (s for s in progress.stages if s.name == "outline"), None
+    )
+    outline = (
+        outline_stage.metadata.get("titles") if outline_stage else None
+    ) or _OUTLINE_TEMPLATES[req.type]
     provider = req.provider_override or settings.task_provider(req.type)
     model = req.model_override or settings.task_model(req.type)
 
