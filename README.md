@@ -5,6 +5,8 @@
 [![status](https://img.shields.io/badge/MVP-15%2F15%20屏完成-d97757)](engineering_handoff/README.md)
 [![polish](https://img.shields.io/badge/打磨-持久化%20%2B%20SSE%20%2B%20diff%20%2B%20TipTap%20Node-788c5d)](engineering_handoff/demo-walkthrough.md)
 [![demo](https://img.shields.io/badge/5%20分钟%20demo-walkthrough.mp4-3d6a96)](engineering_handoff/walkthrough.mp4)
+[![data sources](https://img.shields.io/badge/数据源-claude%20%C2%B7%20github%20%C2%B7%20cursor%20%C2%B7%20vscode%20%C2%B7%20local--docs-3d6a96)](scripts/launchd/README.md)
+[![CI](https://img.shields.io/badge/CI-self--hosted%20macOS%20ARM64-141413)](.github/workflows/ci.yml)
 [![stack](https://img.shields.io/badge/stack-React%2019%20%2B%20FastAPI%20%2B%20Ollama-141413)](engineering_handoff/Architecture.md)
 
 私有化部署的 AI 研发知识资产平台。自动采集 Claude Code / Cursor / VS Code / GitHub 的研发过程,识别架构决策、Bug 复盘、Prompt 模式,生成项目周报 / 技术方案 / ADR / 复盘报告——每段内容都可回溯到原始 PR / 对话/Commit。
@@ -97,34 +99,91 @@ TokenKnows/
 │   ├── tailwind.config.ts                 ← Tailwind 配色 token
 │   ├── tokens.css                         ← CSS 变量
 │   └── tasks/T01–T15.md                   ← 每屏施工任务包
-└── code/
-    └── tokenknows-web/                    ← React 19 + Vite 8 + Tailwind v4 前端
+├── code/
+│   ├── tokenknows-web/                    ← React 19 + Vite 8 + Tailwind v4 前端
+│   └── tokenknows-api/                    ← FastAPI + SQLite + LLM Gateway + 5阶段流水线
+├── plugins/                                ← 5 个数据采集器
+│   ├── claude-code/sync.py                 ← ~/.claude/projects/*.jsonl 增量
+│   ├── github/sync.py                      ← REST API 轮询
+│   ├── cursor/sync.py                      ← state.vscdb 只读
+│   ├── vscode-tokenknows/                  ← VS Code 扩展 .vsix
+│   └── local-docs/sync.py                  ← watchdog .md/.txt
+├── scripts/
+│   └── launchd/                            ← 4 plist + install/uninstall.sh
+└── .github/workflows/ci.yml                ← self-hosted runner 4-job
 ```
 
 ---
 
-## 🚀 进度
+## 📡 数据采集 · 5 个插件并发跑
 
-- ✅ **W1 (W1D1–D5)** — 地基 + T01 认证 + T02 项目向导 + T03 工作台首页
-- ✅ **W2D6** — T05 文档列表
-- ⬜ **W2D7-D8** — T06 文档生成结果页 (产品核心卖点, 1.5 天)
-- ⬜ **W3** — T07 证据抽屉 / T08 重生成 / T04 事件详情 / T09 审批 / T10 脱敏 / T11 发布 / T12 回执
-- ⬜ **W4** — 后端联调 + SSE / E2E / UI 打磨 / demo 视频
+> 全本地, **不需要 ngrok / 公网 webhook tunnel**。崩溃自动重启, 重启系统自动拉起。
 
-详细见 [engineering_handoff/README.md](./engineering_handoff/README.md) 与 [engineering_handoff/TaskTechDesign.md](./engineering_handoff/TaskTechDesign.md)。
+| 插件 | 来源 | 触发模式 | trust_score(典型) |
+|---|---|---|---|
+| **claude-code** | `~/.claude/projects/*.jsonl` | 30s 轮询(增量 offset) | 0.79 (user prompt) / 0.91 (assistant + tool) |
+| **github** | GitHub REST API · PR / Issue / Commit | 5min 轮询 | 0.65 (open issue) / 0.95 (merged PR) |
+| **cursor** | `Cursor/.../state.vscdb` (只读 SQLite) | 60s 轮询 | 0.80 (assistant 对话) |
+| **vscode** | VS Code 扩展 `onDidSaveTextDocument` | buffer + 10s flush | 0.79 (文件保存) |
+| **local-docs** | `~/Documents/*.md` `.txt` (watchdog) | 实时 + 2s debounce | 0.77 (≥500 字) |
+
+### 一键安装
+
+```bash
+# 4 个 python 插件 → macOS LaunchAgent (崩溃重启 + 系统重启拉起)
+./scripts/launchd/install.sh
+# 自定义: TOKENKNOWS_BACKEND=... GITHUB_REPO=... LOCAL_DOCS_DIR=... ./install.sh
+
+# 状态/日志/卸载
+launchctl list | grep com.tokenknows
+tail -f ~/Library/Logs/tokenknows/*.log
+./scripts/launchd/uninstall.sh
+
+# VS Code 扩展 (一次性)
+code --install-extension plugins/vscode-tokenknows/tokenknows-vscode-0.2.0.vsix
+```
+
+详细行为 / 排错 / 多机部署 → [`scripts/launchd/README.md`](./scripts/launchd/README.md)
+
+### trust_score & 证据综合评分
+
+每个插件给 event 计算 trust:
+```
+trust_score = 0.6 × source_authority + 0.4 × extraction_confidence
+```
+后端 _stage_evidence 用 cosine × trust × recency 综合排序选 top-4:
+```
+final = 0.6 × cosine + 0.25 × trust + 0.15 × recency
+```
+recency 半衰期 30 天 (`exp(-days × ln2 / 30)`)。证据强制跨 ≥2 个 source_type, 避免单一来源。
 
 ---
 
-## 🛠 本地启动
+## 🔧 CI · self-hosted runner
+
+GitHub Actions runner 跑在本机 macOS ARM64 (`actions-runner/`), 4 job 并发, 单次 push 约 30s 内绿:
+
+| Job | 内容 | 典型时长 |
+|---|---|---|
+| `web` | tsc --noEmit + ESLint + vite build | ~25s |
+| `api` | ruff check + import smoke + (optional) pytest | ~10s |
+| `plugins` | 4 个 python 插件 py_compile + VS Code 扩展 tsc | ~15s |
+| `status` | 聚合 3 job 结果, 任一失败则 fail | ~2s |
+
+self-hosted 原因: 早期 ubuntu-latest 计费失败, 也避免上传源码到 GitHub-hosted runner。
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+
+---
+
+## 🛠 仅前端跑(快速预览)
 
 ```bash
 cd code/tokenknows-web
-npm install
-npm run dev
-# 默认开 5173 端口, MSW 拦截 /api/v1 请求
+npm install && npm run dev
+# 5173 端口, MSW 拦截部分 /api/v1, 真后端 8001 接 LLM 生成
 ```
 
-用 fixture 账号 `demo@tokenknows.local` + 任意密码登录。
+fixture 账号: `demo@tokenknows.local` + 任意密码。
 
 ---
 
