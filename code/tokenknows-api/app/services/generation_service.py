@@ -1005,26 +1005,193 @@ def _build_evidence_from_event(
 
 
 async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
-    """阶段 5 · 自评卡 (coverage / citation_density / slop / similarity).
+    """阶段 5 · 自评卡 · 真指标 + 1 次 LLM 评估.
 
-    MVP 占位: 随机化但合理的数值.
-    生产: 计算 chapter↔event 引用覆盖比 / TF-IDF 空话检测 / pgvector 相似度.
+    指标派生:
+      - coverage          = avg( min(len(evidence)/4, 1.0) ) 跨章节
+      - citation_density  = avg_cosine_per_chapter (取 evidence 阶段记录的真 cosine)
+      - slop_score        = LLM 评估全文空话比例 (1 JSON call, 0=好/1=差)
+      - similarity        = 跨版本 cosine (current_version 1 时直接 0)
+
+    fallback:
+      - LLM 评 slop 失败 → 启发式 (短句比例 + 模板词频)
+      - embedding 失败 (evidence stage 没记录 cosine) → 用 trust_score 均值代替
     """
-    import random
-    await asyncio.sleep(0.6)
-    metrics = AssetMetrics(
-        coverage=round(0.70 + random.random() * 0.25, 3),
-        citation_density=round(0.55 + random.random() * 0.35, 3),
-        slop_score=round(random.random() * 0.20, 3),
-        similarity=round(random.random() * 0.40, 3),
-    )
-    # 写回 asset
     asset = _assets[asset_id]
+    chapters = _chapters.get(asset_id, [])
+    progress = _progress[asset_id]
+
+    # ── 1. coverage: evidence 数 ÷ 目标 ────────────────────────
+    target_per_chapter = 4
+    coverage_components: list[float] = []
+    for ch in chapters:
+        ev_list = _evidence_by_chapter.get(ch.id, [])
+        ratio = min(len(ev_list) / target_per_chapter, 1.0)
+        coverage_components.append(ratio)
+    coverage = (
+        round(sum(coverage_components) / len(coverage_components), 3)
+        if coverage_components else 0.0
+    )
+
+    # ── 2. citation_density: 用 evidence 阶段保存的 avg_cosine ─
+    citation_density = 0.0
+    try:
+        ev_idx = _stage_index(progress, "evidence")
+        ev_meta = progress.stages[ev_idx].metadata or {}
+        cos_per_ch = ev_meta.get("avg_cosine_per_chapter") or []
+        if cos_per_ch:
+            citation_density = round(sum(cos_per_ch) / len(cos_per_ch), 3)
+        elif chapters:
+            # embedding 失败 fallback: 用 evidence trust_score 均值
+            all_trust = [
+                ev.trust_score or 0.7
+                for ch in chapters
+                for ev in _evidence_by_chapter.get(ch.id, [])
+            ]
+            if all_trust:
+                citation_density = round(sum(all_trust) / len(all_trust), 3)
+    except (IndexError, KeyError, ValueError):
+        citation_density = 0.0
+
+    # ── 3. slop_score: LLM 评全文空话比例 ─────────────────────
+    slop_score, slop_method, slop_reasoning = await _assess_slop_via_llm(
+        asset, chapters, req
+    )
+
+    # ── 4. similarity: 跨版本相似度 (MVP 第 1 版 = 0) ──────────
+    similarity = 0.0
+
+    metrics = AssetMetrics(
+        coverage=coverage,
+        citation_density=citation_density,
+        slop_score=slop_score,
+        similarity=similarity,
+    )
     asset.metrics = metrics
     asset.status = "draft"
     asset.current_version = 1
     asset.updated_at = _now()
-    return metrics.model_dump()
+
+    logger.info(
+        "assess_done",
+        asset_id=asset_id,
+        coverage=coverage,
+        citation_density=citation_density,
+        slop_score=slop_score,
+        slop_method=slop_method,
+        similarity=similarity,
+        chapters=len(chapters),
+    )
+    result = metrics.model_dump()
+    result["_method"] = {
+        "coverage": "evidence_count_ratio",
+        "citation_density": "avg_cosine_per_chapter"
+        if citation_density and "avg_cosine_per_chapter" in (
+            progress.stages[_stage_index(progress, "evidence")].metadata or {}
+        ) else "trust_score_fallback",
+        "slop_score": slop_method,
+        "similarity": "single_version",
+    }
+    result["_slop_reasoning"] = slop_reasoning
+    return result
+
+
+async def _assess_slop_via_llm(
+    asset: Asset,
+    chapters: list["Chapter"],
+    req: GenerateAssetRequest,
+) -> tuple[float, str, str]:
+    """1 次 LLM 调用评全文 slop_score (0..1, 低=好).
+
+    返回 (slop_score, method, reasoning)
+      method ∈ "llm" / "heuristic_fallback"
+    """
+    if not chapters:
+        return 0.0, "no_chapters", "no chapters to assess"
+
+    # 拼章节摘要 (前 200 字/章), 避免 prompt 过长
+    digest_parts = []
+    for ch in chapters[:8]:   # 最多 8 章
+        snippet = (ch.content or "")[:200].replace("\n", " ").strip()
+        digest_parts.append(f"## {ch.title}\n{snippet}")
+    digest = "\n\n".join(digest_parts)
+
+    system_prompt = (
+        "你是一位严格的技术文档审稿人, 评估文档的'空话密度'(slop_score).\n"
+        "空话 = 笼统形容 / 套话 / 无依据断言 / 模板化措辞 (e.g. '本周高效推进各项工作').\n"
+        "返回严格 JSON, 不要任何其它文字, 不要 markdown 代码块:\n"
+        '{"slop_score": 0.0-1.0, "reasoning": "≤30字理由"}\n'
+        "评分尺度:\n"
+        "  0.00-0.15  几乎全是具体事实/数据/引用 (优)\n"
+        "  0.15-0.30  少量套话, 主体扎实 (良)\n"
+        "  0.30-0.50  套话与事实并存 (中)\n"
+        "  0.50-0.80  套话居多, 缺少具体内容 (差)\n"
+        "  0.80-1.00  几乎全是空话 (劣)"
+    )
+    user_prompt = (
+        f"文档类型: {asset.type}\n"
+        f"标题: {asset.title}\n\n"
+        f"全文摘要 (前 8 章, 各 200 字):\n{digest}\n\n"
+        "请输出 JSON."
+    )
+
+    router = await get_router()
+    try:
+        # 复用 asset.type 的 provider 路由 (assess 不另设独立任务键)
+        # 不开 json_mode: ollama 的 reasoning 模型 (minimax-m2) 开了反而返回空
+        response = await router.generate(
+            task=asset.type,
+            messages=[
+                LLMMessage(role="system", content=system_prompt),
+                LLMMessage(role="user", content=user_prompt),
+            ],
+            options=LLMOptions(
+                temperature=0.2,        # 评分要稳, 温度低
+                max_tokens=600,         # reasoning 模型需要足够 tokens 输出 reasoning + JSON
+                timeout_seconds=60,
+            ),
+            project_id=asset.project_id,
+        )
+        text = response.text.strip()
+        if not text:
+            raise ValueError("LLM 返回空 text")
+        # 容错 1: 去掉可能的 markdown 代码块包裹
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text).strip()
+        # 容错 2: 模型在 JSON 前后塞了说明文字 → 提取第一个 { ... } 块
+        m = re.search(r"\{[^{}]*\"slop_score\"[^{}]*\}", text, re.DOTALL)
+        if m:
+            text = m.group(0)
+        parsed = json.loads(text)
+        score = float(parsed.get("slop_score", 0.5))
+        score = max(0.0, min(1.0, score))   # clamp 0..1
+        reasoning = str(parsed.get("reasoning", ""))[:80]
+        return round(score, 3), "llm", reasoning
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+        logger.warning(
+            "assess_slop_llm_parse_failed_fallback",
+            asset_id=asset.id, error=str(e),
+        )
+    except Exception as e:
+        logger.warning(
+            "assess_slop_llm_failed_fallback",
+            asset_id=asset.id, error=str(e),
+        )
+
+    # heuristic fallback: 统计模板套话词频 / 总词
+    cliches = (
+        "本周", "我们将", "高效推进", "稳步推进", "积极", "切实",
+        "持续优化", "进一步", "通过努力", "团队齐心", "成效显著",
+        "顺利完成", "圆满", "充分", "深入", "全面",
+    )
+    all_text = "\n".join((c.content or "") for c in chapters)
+    if not all_text:
+        return 0.5, "heuristic_fallback", "no content"
+    cliche_count = sum(all_text.count(c) for c in cliches)
+    # 估算每 100 字模板词数 → slop 0..1
+    per_100 = cliche_count / max(1, len(all_text) / 100)
+    score = min(1.0, per_100 / 5.0)   # 5/100 字 = 满 slop
+    return round(score, 3), "heuristic_fallback", f"cliches={cliche_count}"
 
 
 def _placeholder_content(title: str, asset_type: AssetType) -> str:
