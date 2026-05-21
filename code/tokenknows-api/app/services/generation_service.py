@@ -414,3 +414,49 @@ def get_progress(asset_id: str) -> GenerationProgress | None:
 
 def list_assets(project_id: str) -> list[Asset]:
     return [a for a in _assets.values() if a.project_id == project_id]
+
+
+def delete_asset(asset_id: str) -> bool:
+    """硬删 (MVP 内存; 生产换软删 status=archived)."""
+    if asset_id not in _assets:
+        return False
+    _assets.pop(asset_id, None)
+    _chapters.pop(asset_id, None)
+    _progress.pop(asset_id, None)
+    _sse_queues.pop(asset_id, None)
+    return True
+
+
+def clone_asset(asset_id: str) -> Asset | None:
+    """复制 asset → 新草稿. 同步复制 chapters (TaskTechDesign T05 决策)."""
+    src = _assets.get(asset_id)
+    if src is None:
+        return None
+    new_id = f"asset-{uuid4().hex[:10]}"
+    now = _now()
+    cloned = src.model_copy(
+        update={
+            "id": new_id,
+            "title": f"{src.title} (副本)",
+            "status": "draft",
+            "current_version": 1,
+            "approval_state": "pending",
+            "redaction_state": "any_unresolved",
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+    _assets[new_id] = cloned
+    # 同步克隆章节 (新 chapter id)
+    src_chapters = _chapters.get(asset_id, [])
+    _chapters[new_id] = [
+        c.model_copy(
+            update={
+                "id": f"chapter-{uuid4().hex[:8]}",
+                "asset_id": new_id,
+                "approval_state": "pending",
+            }
+        )
+        for c in src_chapters
+    ]
+    return cloned

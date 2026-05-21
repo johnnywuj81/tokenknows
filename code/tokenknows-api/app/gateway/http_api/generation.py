@@ -15,6 +15,8 @@ from typing import AsyncIterator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from pydantic import BaseModel
+
 from app.schemas.asset import Asset, Chapter
 from app.schemas.generation import (
     GenerateAssetRequest,
@@ -23,6 +25,13 @@ from app.schemas.generation import (
 from app.services import generation_service as svc
 
 router = APIRouter()
+
+
+class PaginatedAssets(BaseModel):
+    """前端 useInfiniteQuery 期待的分页响应格式 (与 MSW mock 一致)."""
+
+    data: list[Asset]
+    meta: dict
 
 
 # ─── 触发生成 ─────────────────────────────────────────────────────
@@ -41,9 +50,20 @@ async def generate_asset(project_id: str, req: GenerateAssetRequest) -> Asset:
 # ─── 项目级 asset 列表 (MVP 仅返回内存里的) ──────────────────────
 
 
-@router.get("/projects/{project_id}/assets", response_model=list[Asset])
-async def list_project_assets(project_id: str) -> list[Asset]:
-    return svc.list_assets(project_id)
+@router.get(
+    "/projects/{project_id}/assets",
+    response_model=PaginatedAssets,
+)
+async def list_project_assets(project_id: str) -> PaginatedAssets:
+    """前端 useAssets 是 useInfiniteQuery, 期待 { data, meta: { cursor, has_more } }.
+
+    MVP 内存版无真正分页, 一次返回所有.
+    """
+    items = svc.list_assets(project_id)
+    return PaginatedAssets(
+        data=items,
+        meta={"total": len(items), "cursor": None, "has_more": False},
+    )
 
 
 # ─── 单 asset 详情 ────────────────────────────────────────────────
@@ -62,6 +82,26 @@ async def list_chapters(asset_id: str) -> list[Chapter]:
     if svc.get_asset(asset_id) is None:
         raise HTTPException(404, detail="Asset not found")
     return svc.list_chapters(asset_id)
+
+
+# ─── 删除 / 克隆 (T05 列表卡更多菜单) ────────────────────────────
+
+
+@router.delete("/assets/{asset_id}", status_code=204)
+async def delete_asset(asset_id: str) -> None:
+    """硬删 (MVP 内存; 生产换软删 status=archived)."""
+    if not svc.delete_asset(asset_id):
+        raise HTTPException(404, detail="Asset not found")
+    return None
+
+
+@router.post("/assets/{asset_id}/clone", response_model=Asset, status_code=201)
+async def clone_asset(asset_id: str) -> Asset:
+    """克隆为新草稿 (TaskTechDesign T05: '复制'是克隆 asset 而非复制链接)."""
+    cloned = svc.clone_asset(asset_id)
+    if cloned is None:
+        raise HTTPException(404, detail="Asset not found")
+    return cloned
 
 
 # ─── 进度 (polling) ──────────────────────────────────────────────
