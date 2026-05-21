@@ -888,3 +888,81 @@ def update_chapter_content(
                 asset.updated_at = _now()
             return c
     return None
+
+
+# ─── T09 · 审批 (chapter 级 + asset 级) ────────────────────────
+
+
+def approve_chapter(asset_id: str, chapter_id: str) -> Chapter | None:
+    """T09 · 章节级通过. 全部通过时把 asset.approval_state 升 approved + status review→approved."""
+    chapter = _find_chapter(asset_id, chapter_id)
+    if chapter is None:
+        return None
+    chapter.approval_state = "approved"
+    _refresh_asset_approval(asset_id)
+    return chapter
+
+
+def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | None:
+    """T09 · 章节级退回. 任一章节退回时 asset.approval_state = 'rejected'."""
+    chapter = _find_chapter(asset_id, chapter_id)
+    if chapter is None:
+        return None
+    chapter.approval_state = "rejected"
+    # 记录退回理由到 regeneration_history (复用现成字段, 不新建)
+    chapter.regeneration_history.append(
+        {
+            "at": _now().isoformat(),
+            "user_id": "reviewer",
+            "instruction": f"[REJECT] {reason}",
+            "model": "human",
+        }
+    )
+    asset = _assets.get(asset_id)
+    if asset is not None:
+        asset.approval_state = "rejected"
+        asset.updated_at = _now()
+    return chapter
+
+
+def submit_asset_for_review(asset_id: str) -> Asset | None:
+    """T09 · 文档作者提交审批: status draft → in_review."""
+    asset = _assets.get(asset_id)
+    if asset is None:
+        return None
+    asset.status = "in_review"
+    asset.updated_at = _now()
+    # 同时把所有 chapter 的 approval_state 重置为 pending (上一轮 reject 状态清掉)
+    chapters = _chapters.get(asset_id, [])
+    for c in chapters:
+        c.approval_state = "pending"
+    asset.approval_state = "pending"
+    return asset
+
+
+def _find_chapter(asset_id: str, chapter_id: str) -> Chapter | None:
+    chapters = _chapters.get(asset_id, [])
+    return next((c for c in chapters if c.id == chapter_id), None)
+
+
+def _refresh_asset_approval(asset_id: str) -> None:
+    """章节状态变化后, 重算 asset.approval_state.
+
+    规则:
+      - 任一章节 'rejected' → asset.approval_state = 'rejected'
+      - 全部 'approved' → asset.approval_state = 'approved' + status 升 'approved'
+      - 否则 → 'pending'
+    """
+    asset = _assets.get(asset_id)
+    chapters = _chapters.get(asset_id, [])
+    if asset is None or not chapters:
+        return
+
+    if any(c.approval_state == "rejected" for c in chapters):
+        asset.approval_state = "rejected"
+    elif all(c.approval_state == "approved" for c in chapters):
+        asset.approval_state = "approved"
+        asset.status = "approved"
+    else:
+        asset.approval_state = "pending"
+    asset.updated_at = _now()

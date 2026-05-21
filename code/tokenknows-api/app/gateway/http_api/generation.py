@@ -120,6 +120,59 @@ class RegenerateChapterRequest(BaseModel):
     provider: str | None = None    # e.g. "ollama" / "anthropic" (override task default)
 
 
+class RejectChapterRequest(BaseModel):
+    """T09 · 章节退回请求."""
+
+    reason: str
+
+
+# ─── T09 · 审批 endpoints ────────────────────────────────────────
+
+
+@router.post(
+    "/assets/{asset_id}/submit",
+    response_model=Asset,
+)
+async def submit_asset(asset_id: str) -> Asset:
+    """T09 · 作者提交审批 → status=in_review, 章节 approval_state 重置."""
+    asset = svc.submit_asset_for_review(asset_id)
+    if asset is None:
+        raise HTTPException(404, detail="Asset not found")
+    return asset
+
+
+@router.post(
+    "/assets/{asset_id}/chapters/{chapter_id}/approve",
+    response_model=Chapter,
+)
+async def approve_chapter(asset_id: str, chapter_id: str) -> Chapter:
+    """T09 · 章节通过. 全部通过时自动升 asset.status=approved."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    chapter = svc.approve_chapter(asset_id, chapter_id)
+    if chapter is None:
+        raise HTTPException(404, detail="Chapter not found")
+    return chapter
+
+
+@router.post(
+    "/assets/{asset_id}/chapters/{chapter_id}/reject",
+    response_model=Chapter,
+)
+async def reject_chapter(
+    asset_id: str, chapter_id: str, body: RejectChapterRequest
+) -> Chapter:
+    """T09 · 章节退回 (必填 reason). asset.approval_state 立即变 'rejected'."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    if not body.reason.strip():
+        raise HTTPException(422, detail="退回原因不能为空")
+    chapter = svc.reject_chapter(asset_id, chapter_id, body.reason.strip())
+    if chapter is None:
+        raise HTTPException(404, detail="Chapter not found")
+    return chapter
+
+
 @router.post(
     "/assets/{asset_id}/chapters/{chapter_id}/regenerate",
     response_model=Chapter,

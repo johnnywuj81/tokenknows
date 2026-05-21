@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { useDocumentUiStore } from '@/stores/documentUiStore'
+import { useSubmitAsset } from '../review/hooks/useReviewMutations'
 import { useAsset } from './hooks/useAsset'
 import { useChapters } from './hooks/useChapters'
 import { DocHeader } from './page/components/DocHeader'
@@ -50,12 +51,15 @@ export default function DocumentPage() {
     [openRegenerate],
   )
 
+  const submitMutation = useSubmitAsset()
   const handleSubmitForReview = useCallback(() => {
-    // T09 审批入口 - submit 后端 endpoint 待 T09 阶段补
-    if (projectId && docId) {
-      navigate(`/projects/${projectId}/documents/${docId}/review`)
-    }
-  }, [projectId, docId, navigate])
+    if (!projectId || !docId) return
+    submitMutation.mutate(docId, {
+      onSuccess: () => {
+        navigate(`/projects/${projectId}/documents/${docId}/review`)
+      },
+    })
+  }, [projectId, docId, navigate, submitMutation])
 
   const isLoading = assetQuery.isLoading || chaptersQuery.isLoading
   const error = assetQuery.error ?? chaptersQuery.error

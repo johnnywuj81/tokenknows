@@ -41,6 +41,8 @@ interface ChapterBlockProps {
   chapter: Chapter
   /** 重生成中? 重生成与编辑互斥 (任务包 T06 关键决策). */
   regenerating?: boolean
+  /** T09 审批视角下编辑器只读 (无 autosave). */
+  readOnly?: boolean
   onRegenerate?: (chapterId: string) => void
   onViewEvidence?: (chapterId: string, evidenceId?: string) => void
 }
@@ -48,14 +50,17 @@ interface ChapterBlockProps {
 export function ChapterBlock({
   chapter,
   regenerating,
+  readOnly,
   onRegenerate,
   onViewEvidence,
 }: ChapterBlockProps) {
-  const { state, savedContent, handleEdit, error } = useChapterAutosave(chapter)
+  const autosave = useChapterAutosave(chapter)
+  const { state, savedContent, handleEdit, error } = autosave
   const initialHTML = useMemo(
     () => annotateEvidence(toEditorHTML(savedContent), chapter.id),
     [savedContent, chapter.id],
   )
+  const editable = !readOnly && !regenerating
 
   const editor = useEditor(
     {
@@ -67,9 +72,9 @@ export function ChapterBlock({
         Link.configure({ openOnClick: false, autolink: true }),
       ],
       content: initialHTML,
-      editable: !regenerating,
+      editable,
       onUpdate: ({ editor: e }) => {
-        if (regenerating) return
+        if (!editable) return
         handleEdit(e.getHTML())
       },
     },
@@ -85,10 +90,10 @@ export function ChapterBlock({
     }
   }, [savedContent, editor, chapter.id])
 
-  // editable 跟随 regenerating
+  // editable 跟随 regenerating / readOnly
   useEffect(() => {
-    editor?.setEditable(!regenerating)
-  }, [editor, regenerating])
+    editor?.setEditable(editable)
+  }, [editor, editable])
 
   return (
     <article
