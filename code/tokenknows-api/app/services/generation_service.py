@@ -1011,11 +1011,13 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
       - coverage          = avg( min(len(evidence)/4, 1.0) ) 跨章节
       - citation_density  = avg_cosine_per_chapter (取 evidence 阶段记录的真 cosine)
       - slop_score        = LLM 评估全文空话比例 (1 JSON call, 0=好/1=差)
-      - similarity        = 跨版本 cosine (current_version 1 时直接 0)
+      - similarity        = 与同项目历史 asset outline 的最大 cosine
+                            (无历史时 0; high = 可能重复劳动)
 
     fallback:
       - LLM 评 slop 失败 → 启发式 (短句比例 + 模板词频)
       - embedding 失败 (evidence stage 没记录 cosine) → 用 trust_score 均值代替
+      - similarity embedding 失败 → 0.0 + method="embedding_unavailable"
     """
     asset = _assets[asset_id]
     chapters = _chapters.get(asset_id, [])
@@ -1058,8 +1060,17 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
         asset, chapters, req
     )
 
-    # ── 4. similarity: 跨版本相似度 (MVP 第 1 版 = 0) ──────────
-    similarity = 0.0
+    # ── 4. similarity: 与项目内历史资产的最大余弦相似度 ──────────
+    #
+    # 语义: "本文档是否和过去某份发过的报告高度重合 (=可能是重复劳动 / 自我抄袭)".
+    # 公式: similarity = max( cos(outline_emb(current), outline_emb(prior_i)) )
+    #       outline_emb = "title\n章节标题1\n章节首段...\n章节标题N\n章节首段..."
+    # 边界:
+    #   - 项目内没有其它 asset → 0.0
+    #   - embedding 失败 → 0.0 + method="unavailable"
+    similarity, sim_method, sim_most_similar_id = await _compute_similarity_to_history(
+        asset, chapters,
+    )
 
     metrics = AssetMetrics(
         coverage=coverage,
@@ -1080,6 +1091,8 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
         slop_score=slop_score,
         slop_method=slop_method,
         similarity=similarity,
+        sim_method=sim_method,
+        most_similar_to=sim_most_similar_id,
         chapters=len(chapters),
     )
     result = metrics.model_dump()
@@ -1090,10 +1103,85 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
             progress.stages[_stage_index(progress, "evidence")].metadata or {}
         ) else "trust_score_fallback",
         "slop_score": slop_method,
-        "similarity": "single_version",
+        "similarity": sim_method,
     }
     result["_slop_reasoning"] = slop_reasoning
+    if sim_most_similar_id:
+        result["_most_similar_asset_id"] = sim_most_similar_id
     return result
+
+
+def _build_outline_text(title: str, chapters: list["Chapter"]) -> str:
+    """把 asset outline 拼成 embedding 输入. 拍上限 1500 字符避免长尾."""
+    parts: list[str] = [title or ""]
+    for ch in chapters:
+        parts.append(ch.title or "")
+        # 章节首段 (前 200 字符) — 比纯标题信号丰富, 又不会被超长正文淹没
+        head = (ch.content or "").strip().split("\n", 1)[0][:200]
+        if head:
+            parts.append(head)
+    text = "\n".join(p for p in parts if p)
+    return text[:1500]
+
+
+async def _compute_similarity_to_history(
+    asset: Asset,
+    chapters: list["Chapter"],
+) -> tuple[float, str, str | None]:
+    """与同项目内其它 asset 的最大余弦相似度.
+
+    返回 (similarity, method, most_similar_asset_id).
+      method ∈ "max_cosine_to_history" / "no_history" / "embedding_unavailable"
+    """
+    # 同项目其它 asset (排除自身)
+    prior_assets = [
+        a for a in _assets.values()
+        if a.project_id == asset.project_id and a.id != asset.id
+    ]
+    if not prior_assets:
+        return 0.0, "no_history", None
+
+    current_text = _build_outline_text(asset.title, chapters)
+    if not current_text:
+        return 0.0, "no_history", None
+
+    # 拼 prior outlines (取每个 asset 的 chapters)
+    prior_texts: list[tuple[str, str]] = []   # (asset_id, text)
+    for a in prior_assets:
+        a_chs = _chapters.get(a.id, [])
+        if not a_chs:
+            continue
+        txt = _build_outline_text(a.title, a_chs)
+        if txt:
+            prior_texts.append((a.id, txt))
+    if not prior_texts:
+        return 0.0, "no_history", None
+
+    # 一次性 embedding (current + N prior)
+    try:
+        from app.llm_gateway.embedding import embed_batch, cosine
+        texts = [current_text] + [t for _, t in prior_texts]
+        vectors = await embed_batch(texts)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("similarity_embedding_failed", error=str(e))
+        return 0.0, "embedding_unavailable", None
+
+    if not vectors or len(vectors) < 2:
+        return 0.0, "embedding_unavailable", None
+
+    current_vec = vectors[0]
+    best_cos = 0.0
+    best_id: str | None = None
+    for (aid, _), vec in zip(prior_texts, vectors[1:], strict=True):
+        try:
+            c = cosine(current_vec, vec)
+        except Exception:  # noqa: BLE001
+            continue
+        if c > best_cos:
+            best_cos = c
+            best_id = aid
+
+    return round(best_cos, 3), "max_cosine_to_history", best_id
 
 
 async def _assess_slop_via_llm(
