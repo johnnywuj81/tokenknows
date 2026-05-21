@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -630,61 +630,161 @@ _MOCK_EVENT_TEMPLATES: list[dict] = [
 
 
 async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
-    """阶段 4 · 证据链回填.
+    """阶段 4 · 证据链回填 (★ 用真 events).
 
-    MVP: 为每章 mock 3 条 Evidence (rotation from _MOCK_EVENT_TEMPLATES).
-    span_start/end 用章节字符长度模拟随机区间.
-    生产: 解析阶段 3 LLM 返回的结构化 spans→event_ids; 失败回退 TF-IDF + pgvector.
+    选择策略 (MVP):
+        - 拉 project 最近 30 天 events (limit 300)
+        - 跨 source_type 多样性: 优先每章混入 claude_code / github / cursor 各一
+        - 同 chapter 按 occurred_at desc 取 3-4 条
+        - 同 event_id 不重复 (一章里)
+
+    生产可换: chapter title embedding × event content embedding cosine
     """
     import random
-    await asyncio.sleep(0.8)
+
+    asset = _assets[asset_id]
+    db = get_db()
+    week_ago_30 = (
+        _now() - timedelta(days=30)
+    ).isoformat()
+
+    # 一次拉够, in-memory 切片
+    all_events, _ = db.list_events(
+        project_id=asset.project_id,
+        from_iso=week_ago_30,
+        limit=300,
+    )
+    if not all_events:
+        # fallback: 没真 events → 跳过 (老 demo asset 仍可看)
+        logger.warning(
+            "evidence_stage_no_events", asset_id=asset_id, project_id=asset.project_id
+        )
+        return {
+            "evidence_total": 0,
+            "evidence_stale": 0,
+            "fallback_used": True,
+            "chapters_with_evidence": 0,
+            "reason": "no events in project, run plugins first",
+        }
+
+    # 按 source_type 分桶, 用于跨源采样
+    by_source: dict[str, list[dict]] = {}
+    for e in all_events:
+        by_source.setdefault(e.get("source_type", "other"), []).append(e)
 
     chapters = _chapters.get(asset_id, [])
     total_evidence = 0
     for ch in chapters:
-        # 每章选 3-4 条
+        # 每章 3-4 条, 跨源轮询
         num = random.randint(3, 4)
+        chosen: list[dict] = _pick_diverse_events(by_source, num)
         ev_list: list[Evidence] = []
-        chosen = random.sample(_MOCK_EVENT_TEMPLATES, k=min(num, len(_MOCK_EVENT_TEMPLATES)))
         content_len = max(50, len(ch.content))
-        for idx, tpl in enumerate(chosen):
-            # 随机 span (字符偏移)
+        for idx, ev_raw in enumerate(chosen):
             span_start = random.randint(0, max(1, content_len - 50))
             span_end = min(content_len, span_start + random.randint(20, 50))
-            ev = Evidence(
-                id=f"ev-{ch.id}-{idx + 1}",
-                chapter_id=ch.id,
-                event_id=tpl["event_id"],
-                event_version=1,
-                span_start=span_start,
-                span_end=span_end,
-                citation_text=tpl["citation_text"],
-                manually_added=False,
-                stale=False,
-                trust_score=tpl["trust_score"],
-                citation_strength=round(tpl["trust_score"] * (0.85 + random.random() * 0.15), 3),
-                event_preview=EvidencePreview(
-                    event_id=tpl["event_id"],
-                    title=tpl["title"],
-                    source_type=tpl["source_type"],
-                    source_ref=tpl["source_ref"],
-                    author_name=tpl["author_name"],
-                    author_email=tpl["author_email"],
-                    occurred_at="2026-05-21T08:00:00Z",
-                    content_excerpt=tpl["content_excerpt"],
-                    external_url=tpl["external_url"],
-                ),
-            )
-            ev_list.append(ev)
+            ev_list.append(_build_evidence_from_event(ev_raw, ch.id, idx, span_start, span_end))
         _evidence_by_chapter[ch.id] = ev_list
         total_evidence += len(ev_list)
 
+    logger.info(
+        "evidence_linked_real",
+        asset_id=asset_id,
+        events_in_window=len(all_events),
+        sources=list(by_source.keys()),
+        total_evidence=total_evidence,
+    )
     return {
         "evidence_total": total_evidence,
         "evidence_stale": 0,
         "fallback_used": False,
         "chapters_with_evidence": len(chapters),
+        "real_event_pool_size": len(all_events),
     }
+
+
+def _pick_diverse_events(by_source: dict[str, list[dict]], num: int) -> list[dict]:
+    """跨 source 轮询, 同源内按 occurred_at desc."""
+    import random
+    sources = list(by_source.keys())
+    random.shuffle(sources)
+    out: list[dict] = []
+    seen_ids: set[str] = set()
+    while len(out) < num and sources:
+        for s in sources[:]:
+            bucket = by_source[s]
+            # 取最新的一条且未用过的
+            picked = None
+            for e in bucket:
+                if e["id"] not in seen_ids:
+                    picked = e
+                    break
+            if picked is not None:
+                out.append(picked)
+                seen_ids.add(picked["id"])
+                bucket.remove(picked)
+            else:
+                sources.remove(s)
+            if len(out) >= num:
+                break
+    return out
+
+
+def _build_evidence_from_event(
+    event: dict,
+    chapter_id: str,
+    idx: int,
+    span_start: int,
+    span_end: int,
+) -> Evidence:
+    """从真 events 表的 row dict 构 Evidence."""
+    import random
+    eid = event["id"]
+    author = event.get("author") or {}
+    content = event.get("content") or ""
+    # 在 payload 里找外链
+    payload = event.get("payload") or {}
+    external_url = (
+        payload.get("html_url")
+        or payload.get("external_url")
+        or payload.get("url")
+    )
+    # 优先 event 自己的 trust_score, 没有给个合理范围
+    trust_score = event.get("trust_score")
+    if trust_score is None:
+        # 基于 source_type 给个默认: github 0.85 / claude_code 0.75 / cursor 0.7 / 其它 0.6
+        st = event.get("source_type", "")
+        trust_score = {"github": 0.85, "claude_code": 0.75, "cursor": 0.70}.get(st, 0.60)
+    citation_strength = round(trust_score * (0.85 + random.random() * 0.15), 3)
+
+    # citation_text: e.g. "PR #127 由 @alice 合并于 2026-05-21"
+    src_type = event.get("source_type", "?")
+    citation_text = f"{src_type} · {author.get('name','?')} · {(event.get('occurred_at') or '')[:10]}"
+
+    return Evidence(
+        id=f"ev-{chapter_id}-{idx + 1}",
+        chapter_id=chapter_id,
+        event_id=eid,
+        event_version=event.get("version", 1),
+        span_start=span_start,
+        span_end=span_end,
+        citation_text=citation_text,
+        manually_added=False,
+        stale=False,
+        trust_score=trust_score,
+        citation_strength=citation_strength,
+        event_preview=EvidencePreview(
+            event_id=eid,
+            title=event.get("title") or (content[:60] if content else "(无标题)"),
+            source_type=src_type,
+            source_ref=event.get("source_ref") or "",
+            author_name=author.get("name"),
+            author_email=author.get("email"),
+            occurred_at=event.get("occurred_at") or "",
+            content_excerpt=(content[:240] + "…") if len(content) > 240 else content,
+            external_url=external_url,
+        ),
+    )
 
 
 async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
