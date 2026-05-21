@@ -10,7 +10,7 @@ import type { Chapter } from '@/types/api'
 interface ChapterFooterProps {
   chapter: Chapter
   onRegenerate?: (chapterId: string) => void
-  onViewEvidence?: (chapterId: string) => void
+  onViewEvidence?: (chapterId: string, evidenceId?: string) => void
 }
 
 export function ChapterFooter({ chapter, onRegenerate, onViewEvidence }: ChapterFooterProps) {

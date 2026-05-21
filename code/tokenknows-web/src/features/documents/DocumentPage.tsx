@@ -3,21 +3,24 @@
  *
  * 三栏: 左 240 大纲 / 中自适应正文 / 右 320 侧栏
  *
- * Phase 1 (本提交): 三栏布局 + markdown-it 静态渲染 + 大纲滚动联动 + 自评卡
- * Phase 2 (后续): TipTap + 自动保存
- * Phase 3 (后续): InlineEvidence 角标 + T07/T08 抽屉/对话框接入
+ * Phase 1: 三栏布局 + markdown-it 静态渲染 + 大纲滚动联动 + 自评卡
+ * Phase 2: TipTap + 自动保存 (debounce 2s)
+ * Phase 3 (本提交): InlineEvidence 角标 + T07/T08 stub Drawer/Dialog 接入
  */
 
-import { useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
+import { useDocumentUiStore } from '@/stores/documentUiStore'
 import { useAsset } from './hooks/useAsset'
 import { useChapters } from './hooks/useChapters'
 import { DocHeader } from './page/components/DocHeader'
 import { DocOutline } from './page/components/DocOutline'
 import { ChapterBlock } from './page/components/ChapterBlock'
 import { DocSidebar } from './page/components/DocSidebar'
+import { EvidenceDrawer } from './page/components/EvidenceDrawer'
+import { RegenerateDialog } from './page/components/RegenerateDialog'
 
 export default function DocumentPage() {
   const { id: projectId, docId } = useParams<{ id: string; docId: string }>()
@@ -25,6 +28,34 @@ export default function DocumentPage() {
   const assetQuery = useAsset(docId)
   const chaptersQuery = useChapters(docId)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const openEvidence = useDocumentUiStore((s) => s.openEvidence)
+  const openRegenerate = useDocumentUiStore((s) => s.openRegenerate)
+  const regenerateChapterId = useDocumentUiStore((s) => s.regenerateChapterId)
+  const regenerateOpen = useDocumentUiStore((s) => s.regenerateOpen)
+
+  const handleViewEvidence = useCallback(
+    (chapterId: string, evidenceId?: string) => {
+      // 没指定 evidenceId 时 (来自 footer "查看证据" 按钮),
+      // 默认打开该章节第 1 条证据.
+      openEvidence(evidenceId ?? `ev-${chapterId}-1`)
+    },
+    [openEvidence],
+  )
+
+  const handleRegenerate = useCallback(
+    (chapterId: string) => {
+      openRegenerate(chapterId)
+    },
+    [openRegenerate],
+  )
+
+  const handleSubmitForReview = useCallback(() => {
+    // T09 审批入口 - submit 后端 endpoint 待 T09 阶段补
+    if (projectId && docId) {
+      navigate(`/projects/${projectId}/documents/${docId}/review`)
+    }
+  }, [projectId, docId, navigate])
 
   const isLoading = assetQuery.isLoading || chaptersQuery.isLoading
   const error = assetQuery.error ?? chaptersQuery.error
@@ -61,7 +92,7 @@ export default function DocumentPage() {
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <DocHeader asset={asset} />
+      <DocHeader asset={asset} onSubmit={handleSubmitForReview} />
 
       <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         {/* 左 · 大纲 */}
@@ -83,7 +114,13 @@ export default function DocumentPage() {
           ) : (
             <div className="mx-auto max-w-3xl space-y-6">
               {chapters.map((ch) => (
-                <ChapterBlock key={ch.id} chapter={ch} />
+                <ChapterBlock
+                  key={ch.id}
+                  chapter={ch}
+                  regenerating={regenerateOpen && regenerateChapterId === ch.id}
+                  onViewEvidence={handleViewEvidence}
+                  onRegenerate={handleRegenerate}
+                />
               ))}
             </div>
           )}
@@ -92,6 +129,12 @@ export default function DocumentPage() {
         {/* 右 · 侧栏 */}
         <DocSidebar asset={asset} />
       </div>
+
+      {/* T07 stub - 证据抽屉 */}
+      <EvidenceDrawer />
+
+      {/* T08 stub - 重生成对话框 */}
+      <RegenerateDialog />
     </div>
   )
 }

@@ -26,13 +26,23 @@ function toEditorHTML(content: string): string {
   if (trimmed.startsWith('<')) return content
   return md.render(content)
 }
+// 把 [N] 形式标注转成可点击 evidence-badge.
+// contenteditable=false 让 TipTap 不把它当编辑内容; click 委托捕获.
+function annotateEvidence(html: string, chapterId: string): string {
+  return html.replace(
+    /\[(\d+)\]/g,
+    (_match, idx) =>
+      `<span class="evidence-badge" data-evidence-id="ev-${chapterId}-${idx}" contenteditable="false">${idx}</span>`,
+  )
+}
+
 
 interface ChapterBlockProps {
   chapter: Chapter
   /** 重生成中? 重生成与编辑互斥 (任务包 T06 关键决策). */
   regenerating?: boolean
   onRegenerate?: (chapterId: string) => void
-  onViewEvidence?: (chapterId: string) => void
+  onViewEvidence?: (chapterId: string, evidenceId?: string) => void
 }
 
 export function ChapterBlock({
@@ -42,7 +52,10 @@ export function ChapterBlock({
   onViewEvidence,
 }: ChapterBlockProps) {
   const { state, savedContent, handleEdit, error } = useChapterAutosave(chapter)
-  const initialHTML = useMemo(() => toEditorHTML(savedContent), [savedContent])
+  const initialHTML = useMemo(
+    () => annotateEvidence(toEditorHTML(savedContent), chapter.id),
+    [savedContent, chapter.id],
+  )
 
   const editor = useEditor(
     {
@@ -66,11 +79,11 @@ export function ChapterBlock({
   // 章节外部刷新 (e.g. 重生成完成) → setContent 同步, 不触发 onUpdate
   useEffect(() => {
     if (!editor) return
-    const next = toEditorHTML(savedContent)
+    const next = annotateEvidence(toEditorHTML(savedContent), chapter.id)
     if (editor.getHTML() !== next) {
       editor.commands.setContent(next, { emitUpdate: false })
     }
-  }, [savedContent, editor])
+  }, [savedContent, editor, chapter.id])
 
   // editable 跟随 regenerating
   useEffect(() => {
@@ -115,6 +128,15 @@ export function ChapterBlock({
       <EditorContent
         editor={editor}
         className="tiptap-prose font-content text-body-lg text-text-secondary leading-relaxed focus-visible:outline-none"
+        onClickCapture={(e) => {
+          const target = (e.target as HTMLElement).closest('[data-evidence-id]')
+          if (target) {
+            e.preventDefault()
+            e.stopPropagation()
+            const evId = target.getAttribute('data-evidence-id')
+            if (evId) onViewEvidence?.(chapter.id, evId)
+          }
+        }}
       />
 
       <ChapterFooter

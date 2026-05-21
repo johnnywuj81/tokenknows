@@ -34,10 +34,9 @@ export function useChapterAutosave(chapter: Chapter): UseChapterAutosaveResult {
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const queryClient = useQueryClient()
 
-  // 章节 prop 外部变化 (e.g. 列表 invalidate 后) → 同步 savedContent
-  useEffect(() => {
-    setSavedContent(chapter.content)
-  }, [chapter.content])
+  // 不做 prop → state 同步.
+  // 调用方对 ChapterBlock 用 key={chapter.id} 让外部变化时整体 remount
+  // (避开 React 19 react-hooks/set-state-in-effect 严禁规则).
 
   // 清理 timers
   useEffect(
