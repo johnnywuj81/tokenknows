@@ -6,6 +6,10 @@
   ],
   "compilerOptions": {
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"] },
+    // TS 7.0 移除 baseUrl, 当前 5.6 / 5.7 视为 deprecation warning;
+    // tsc --noEmit 在 CI 把它视为 error → 暂用 ignoreDeprecations 抑制,
+    // 真升 TS 7 时把 import 改为相对路径或用 paths 单独配
+    "ignoreDeprecations": "6.0"
   }
 }
