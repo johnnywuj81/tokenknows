@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tokenknows.cursor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON_BIN__</string>
+        <string>__REPO_ROOT__/plugins/cursor/sync.py</string>
+        <string>--backend</string>
+        <string>__BACKEND_URL__</string>
+        <string>--project</string>
+        <string>__PROJECT_ID__</string>
+        <string>--watch</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_ROOT__</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>120</integer>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/cursor.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/cursor.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>TK_LOG</key>
+        <string>INFO</string>
+    </dict>
+</dict>
+</plist>
