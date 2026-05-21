@@ -352,6 +352,7 @@ export interface RedactionTerm {
 
 export interface RedactionScanJob {
   job_id: string
+  asset_id?: string    // 后端 T10 返回
   status: 'pending' | 'running' | 'done' | 'failed'
   progress: number     // 0-1
   items: RedactionItem[]
@@ -369,6 +370,7 @@ export interface RedactionItem {
   status: 'pending' | 'confirmed' | 'overridden' | 'exempted'
   context_before?: string
   context_after?: string
+  reason?: string | null   // T10 豁免理由
 }
 
 // ────────────────────────────────────────────────────────────────────

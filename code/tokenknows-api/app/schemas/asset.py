@@ -108,3 +108,33 @@ class Evidence(BaseModel):
     trust_score: float | None = None  # 0-1
     citation_strength: float | None = None  # 派生自 trust_score + corroboration
     event_preview: EvidencePreview
+
+
+# ─── T10 · 脱敏 ─────────────────────────────────────────────────
+
+
+class RedactionItem(BaseModel):
+    """T10 单条命中: 章节内某字符 span 的敏感内容."""
+
+    id: str
+    chapter_id: str
+    span_start: int
+    span_end: int
+    type: str                # 'EMAIL' / 'API_KEY' / 'IP' / 'INTERNAL'
+    matched_text: str        # 真匹配文本 (前端可能脱敏显示)
+    rule_source: str = "rule"  # 'rule' / 'llm' / 'custom'
+    suggested_replacement: str  # 默认替换占位符
+    status: str = "pending"  # 'pending' / 'confirmed' / 'exempted'
+    context_before: str | None = None
+    context_after: str | None = None
+    reason: str | None = None  # 豁免理由
+
+
+class RedactionScanJob(BaseModel):
+    """T10 扫描 job (MVP 同步返回 status=done)."""
+
+    job_id: str
+    asset_id: str
+    status: str  # 'pending' / 'running' / 'done' / 'failed'
+    progress: float = 1.0  # 0-1
+    items: list[RedactionItem]

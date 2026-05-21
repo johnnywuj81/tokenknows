@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -36,6 +37,8 @@ from app.schemas.asset import (
     ChapterGeneratedBy,
     Evidence,
     EvidencePreview,
+    RedactionItem,
+    RedactionScanJob,
 )
 from app.schemas.generation import (
     GenerateAssetRequest,
@@ -53,6 +56,8 @@ _progress: dict[str, GenerationProgress] = {}
 _sse_queues: dict[str, list[asyncio.Queue]] = {}
 # T07: chapter_id → List[Evidence]
 _evidence_by_chapter: dict[str, list[Evidence]] = {}
+# T10: asset_id → RedactionScanJob
+_redaction_jobs: dict[str, RedactionScanJob] = {}
 _state_lock = asyncio.Lock()
 
 
@@ -943,6 +948,128 @@ def submit_asset_for_review(asset_id: str) -> Asset | None:
 def _find_chapter(asset_id: str, chapter_id: str) -> Chapter | None:
     chapters = _chapters.get(asset_id, [])
     return next((c for c in chapters if c.id == chapter_id), None)
+
+
+# ─── T10 · 脱敏扫描 (同步, 正则) ─────────────────────────────
+
+
+# 内置正则规则 (MVP demo; 生产由 T13 项目设置 + LLM 兜底)
+_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+    (
+        "EMAIL",
+        re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}"),
+        "[EMAIL]",
+    ),
+    (
+        "API_KEY",
+        # OpenAI sk-proj-/sk-, Anthropic sk-ant-, GitHub ghp_, Stripe sk_live_
+        re.compile(r"(?:sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,})"),
+        "[API_KEY]",
+    ),
+    (
+        "IP",
+        re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+        "[IP]",
+    ),
+    (
+        "INTERNAL",
+        # 内部代号示例: 项目缩写_环境 / inc-XXX / 客户名 (MVP 硬编码, 生产由 T13 自定义)
+        re.compile(r"\b(?:Project[_-][A-Z][A-Za-z0-9_-]*|inc-\d{2,}|customer-[A-Z][A-Za-z0-9_-]*)\b"),
+        "[INTERNAL]",
+    ),
+]
+
+
+def scan_redaction(asset_id: str) -> RedactionScanJob | None:
+    """T10 · 同步扫所有章节内容找敏感内容. 生产: 异步 + Celery + LLM 兜底."""
+    chapters = _chapters.get(asset_id, [])
+    if not chapters:
+        return None
+
+    items: list[RedactionItem] = []
+    seen: set[tuple[str, str]] = set()  # (type, matched_text) 去重
+    for ch in chapters:
+        for type_name, pattern, replacement in _REDACTION_PATTERNS:
+            for m in pattern.finditer(ch.content):
+                text = m.group(0)
+                key = (type_name, text)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ctx_before = ch.content[max(0, m.start() - 30): m.start()]
+                ctx_after = ch.content[m.end(): m.end() + 30]
+                items.append(
+                    RedactionItem(
+                        id=f"red-{uuid4().hex[:8]}",
+                        chapter_id=ch.id,
+                        span_start=m.start(),
+                        span_end=m.end(),
+                        type=type_name,
+                        matched_text=text,
+                        rule_source="rule",
+                        suggested_replacement=replacement,
+                        status="pending",
+                        context_before=ctx_before,
+                        context_after=ctx_after,
+                    )
+                )
+
+    job = RedactionScanJob(
+        job_id=f"redjob-{uuid4().hex[:8]}",
+        asset_id=asset_id,
+        status="done",
+        progress=1.0,
+        items=items,
+    )
+    _redaction_jobs[asset_id] = job
+
+    # 同时把 asset.redaction_state 变更为 'any_unresolved' (有命中) / 'all_confirmed' (无命中)
+    asset = _assets.get(asset_id)
+    if asset is not None:
+        asset.redaction_state = "all_confirmed" if not items else "any_unresolved"
+        asset.updated_at = _now()
+    return job
+
+
+def get_redaction_job(asset_id: str) -> RedactionScanJob | None:
+    return _redaction_jobs.get(asset_id)
+
+
+def confirm_redaction(asset_id: str, item_ids: list[str]) -> RedactionScanJob | None:
+    job = _redaction_jobs.get(asset_id)
+    if job is None:
+        return None
+    id_set = set(item_ids)
+    for item in job.items:
+        if item.id in id_set and item.status == "pending":
+            item.status = "confirmed"
+    _refresh_redaction_state(asset_id, job)
+    return job
+
+
+def exempt_redaction(asset_id: str, item_id: str, reason: str) -> RedactionScanJob | None:
+    job = _redaction_jobs.get(asset_id)
+    if job is None:
+        return None
+    for item in job.items:
+        if item.id == item_id and item.status == "pending":
+            item.status = "exempted"
+            item.reason = reason.strip()
+            break
+    _refresh_redaction_state(asset_id, job)
+    return job
+
+
+def _refresh_redaction_state(asset_id: str, job: RedactionScanJob) -> None:
+    """所有 item 都 not pending → asset.redaction_state='all_confirmed'."""
+    asset = _assets.get(asset_id)
+    if asset is None:
+        return
+    if all(it.status != "pending" for it in job.items):
+        asset.redaction_state = "all_confirmed"
+    else:
+        asset.redaction_state = "any_unresolved"
+    asset.updated_at = _now()
 
 
 def _refresh_asset_approval(asset_id: str) -> None:

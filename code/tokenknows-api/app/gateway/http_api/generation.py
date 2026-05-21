@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel
 
-from app.schemas.asset import Asset, Chapter, Evidence
+from app.schemas.asset import Asset, Chapter, Evidence, RedactionScanJob
 from app.schemas.generation import (
     GenerateAssetRequest,
     GenerationProgress,
@@ -171,6 +171,80 @@ async def reject_chapter(
     if chapter is None:
         raise HTTPException(404, detail="Chapter not found")
     return chapter
+
+
+# ─── T10 · 脱敏 endpoints ────────────────────────────────────────
+
+
+class ConfirmRedactionRequest(BaseModel):
+    item_ids: list[str]
+
+
+class ExemptRedactionRequest(BaseModel):
+    item_id: str
+    reason: str
+
+
+@router.post(
+    "/assets/{asset_id}/redaction/scan",
+    response_model=RedactionScanJob,
+)
+async def scan_redaction(asset_id: str) -> RedactionScanJob:
+    """T10 · 同步扫描章节内容找敏感内容 (MVP 正则; 生产异步 + LLM 兜底)."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    job = svc.scan_redaction(asset_id)
+    if job is None:
+        raise HTTPException(404, detail="No chapters to scan")
+    return job
+
+
+@router.get(
+    "/assets/{asset_id}/redaction/scan",
+    response_model=RedactionScanJob,
+)
+async def get_redaction_scan(asset_id: str) -> RedactionScanJob:
+    """获取最近一次扫描结果 (404 表示尚未扫描)."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    job = svc.get_redaction_job(asset_id)
+    if job is None:
+        raise HTTPException(404, detail="尚未扫描, 请先调用 POST /redaction/scan")
+    return job
+
+
+@router.post(
+    "/assets/{asset_id}/redaction/confirm",
+    response_model=RedactionScanJob,
+)
+async def confirm_redaction(
+    asset_id: str, body: ConfirmRedactionRequest
+) -> RedactionScanJob:
+    """T10 · 批量确认 (status=confirmed)."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    job = svc.confirm_redaction(asset_id, body.item_ids)
+    if job is None:
+        raise HTTPException(404, detail="尚未扫描")
+    return job
+
+
+@router.post(
+    "/assets/{asset_id}/redaction/exempt",
+    response_model=RedactionScanJob,
+)
+async def exempt_redaction(
+    asset_id: str, body: ExemptRedactionRequest
+) -> RedactionScanJob:
+    """T10 · 单项豁免 (必填 reason)."""
+    if svc.get_asset(asset_id) is None:
+        raise HTTPException(404, detail="Asset not found")
+    if not body.reason.strip():
+        raise HTTPException(422, detail="豁免理由不能为空")
+    job = svc.exempt_redaction(asset_id, body.item_id, body.reason.strip())
+    if job is None:
+        raise HTTPException(404, detail="尚未扫描")
+    return job
 
 
 @router.post(
