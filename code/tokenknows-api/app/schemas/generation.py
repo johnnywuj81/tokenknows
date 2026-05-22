@@ -89,6 +89,9 @@ class SseEvent(BaseModel):
         "stage_started",
         "stage_completed",
         "chapter_completed",
+        # v0.2 · book 长文档专属
+        "volume_outline_completed",     # 卷大纲生成完
+        "chapter_outline_completed",    # 单卷内的章大纲生成完
         "done",
         "failed",
     ]

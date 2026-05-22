@@ -363,7 +363,12 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
     走 llm_gateway → router.generate (三层出域门禁 + CircuitBreaker + egress_log).
     JSON mode 严格输出 {chapters: [titles...]}.
     失败回退到 _OUTLINE_TEMPLATES 保证 demo 不挂.
+
+    v0.2 · type=book 走两步路径: 先生成 3-5 卷, 再并行生成每卷的章.
     """
+    if req.type == "book":
+        return await _stage_outline_book(asset_id, req)
+
     asset = _assets[asset_id]
     type_label = {
         "weekly_report": "项目周报",
@@ -431,6 +436,167 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
         }
 
 
+async def _stage_outline_book(asset_id: str, req: GenerateAssetRequest) -> dict:
+    """v0.2 · book 两步大纲:
+        Step 1: 1 次 LLM → 3-5 卷 (含 title + description)
+        Step 2: N 次 LLM 并行 → 每卷 5-10 章
+
+    返回:
+        chapter_specs: [{title, depth, parent_volume_index|None}, ...]
+        flat_titles: 兼容字段 (旧前端读 titles, 看到的是 "卷一 · 概述" + "  第一章 · ..."
+                              带 2 空格缩进)
+        volumes: [{title, description}, ...]
+        chapters_total: len(chapter_specs)
+    """
+    asset = _assets[asset_id]
+    router = await get_router()
+
+    fallback_specs = _book_fallback_specs()
+
+    # ── Step 1: 卷大纲 ────────────────────────────────────────────
+    vol_tpl = PromptTemplate.load("outline/book_volume")
+    vol_rendered = vol_tpl.render({
+        "title": asset.title,
+        "time_window": req.time_window,
+    })
+    try:
+        vol_resp = await router.generate(
+            task="book",
+            messages=[
+                LLMMessage(role="system", content=vol_rendered.system),
+                LLMMessage(role="user", content=vol_rendered.user),
+            ],
+            options=LLMOptions(**vol_rendered.options),
+            project_id=asset.project_id,
+        )
+        vol_parsed = json.loads(vol_resp.text)
+        volumes = vol_parsed.get("volumes") or []
+        if not isinstance(volumes, list) or len(volumes) < 2:
+            raise ValueError(f"LLM 卷大纲不合理: {volumes!r}")
+    except Exception as exc:
+        logger.warning("book_outline_volume_failed_fallback",
+                       asset_id=asset_id, error=str(exc))
+        return {
+            "chapters_total": len(fallback_specs),
+            "titles": [s["title"] for s in fallback_specs],
+            "chapter_specs": fallback_specs,
+            "volumes": [{"title": s["title"], "description": ""}
+                        for s in fallback_specs if s["depth"] == 0],
+            "llm_fallback_to_template": True,
+            "llm_error": str(exc),
+        }
+
+    await _publish_event(asset_id, SseEvent(
+        event="volume_outline_completed",
+        asset_id=asset_id,
+        stage="outline",
+        payload={"volumes_total": len(volumes)},
+        ts=_now(),
+    ))
+
+    # ── Step 2: 每卷章大纲 (并行) ────────────────────────────────
+    ch_tpl = PromptTemplate.load("outline/book_chapters")
+
+    async def gen_volume_chapters(vol_idx: int, vol: dict) -> tuple[int, dict, list[str]]:
+        ch_rendered = ch_tpl.render({
+            "book_title": asset.title,
+            "volume_title": vol.get("title", f"卷{vol_idx + 1}"),
+            "volume_description": vol.get("description", ""),
+        })
+        try:
+            ch_resp = await router.generate(
+                task="book",
+                messages=[
+                    LLMMessage(role="system", content=ch_rendered.system),
+                    LLMMessage(role="user", content=ch_rendered.user),
+                ],
+                options=LLMOptions(**ch_rendered.options),
+                project_id=asset.project_id,
+            )
+            ch_parsed = json.loads(ch_resp.text)
+            chapters = ch_parsed.get("chapters") or []
+            if not isinstance(chapters, list) or len(chapters) < 3:
+                raise ValueError(f"卷 {vol_idx+1} 章大纲不合理: {chapters!r}")
+        except Exception as exc:
+            logger.warning("book_outline_chapters_failed_fallback",
+                           asset_id=asset_id, vol=vol_idx, error=str(exc))
+            chapters = [f"第{i+1}章 · 待补充内容" for i in range(5)]
+
+        await _publish_event(asset_id, SseEvent(
+            event="chapter_outline_completed",
+            asset_id=asset_id,
+            stage="outline",
+            payload={
+                "volume_index": vol_idx,
+                "volume_title": vol.get("title"),
+                "chapter_count": len(chapters),
+            },
+            ts=_now(),
+        ))
+        return vol_idx, vol, chapters
+
+    vol_results = await asyncio.gather(
+        *(gen_volume_chapters(i, v) for i, v in enumerate(volumes))
+    )
+    vol_results.sort(key=lambda x: x[0])
+
+    # 拼装 chapter_specs: 卷 (depth=0) 在前, 紧跟其下章 (depth=1, parent_volume_index=vol_idx)
+    chapter_specs: list[dict] = []
+    volume_summary: list[dict] = []
+    for vol_idx, vol, chapter_titles in vol_results:
+        chapter_specs.append({
+            "title": vol.get("title", f"卷{vol_idx + 1}"),
+            "depth": 0,
+            "parent_volume_index": None,
+        })
+        volume_summary.append({
+            "title": vol.get("title"),
+            "description": vol.get("description", ""),
+        })
+        for c in chapter_titles:
+            chapter_specs.append({
+                "title": c,
+                "depth": 1,
+                "parent_volume_index": vol_idx,
+            })
+
+    flat_titles = [
+        s["title"] if s["depth"] == 0 else f"  {s['title']}"
+        for s in chapter_specs
+    ]
+
+    logger.info(
+        "book_outline_done",
+        asset_id=asset_id,
+        volumes=len(volumes),
+        chapters_total=len(chapter_specs),
+    )
+    return {
+        "chapters_total": len(chapter_specs),
+        "titles": flat_titles,
+        "chapter_specs": chapter_specs,
+        "volumes": volume_summary,
+        "provider_used": vol_resp.provider,
+        "model_used": vol_resp.model_used,
+        "fallback_used": False,
+    }
+
+
+def _book_fallback_specs() -> list[dict]:
+    """卷大纲 LLM 全挂时的兜底骨架."""
+    return [
+        {"title": "卷一 · 概述", "depth": 0, "parent_volume_index": None},
+        {"title": "第一章 · 背景", "depth": 1, "parent_volume_index": 0},
+        {"title": "第二章 · 关键概念", "depth": 1, "parent_volume_index": 0},
+        {"title": "卷二 · 实现", "depth": 0, "parent_volume_index": None},
+        {"title": "第一章 · 架构", "depth": 1, "parent_volume_index": 1},
+        {"title": "第二章 · 关键模块", "depth": 1, "parent_volume_index": 1},
+        {"title": "卷三 · 实践", "depth": 0, "parent_volume_index": None},
+        {"title": "第一章 · 典型场景", "depth": 1, "parent_volume_index": 2},
+        {"title": "第二章 · 经验教训", "depth": 1, "parent_volume_index": 2},
+    ]
+
+
 async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     """阶段 3 · 章节正文生成 (per-chapter LLM call · ★ 真 LLM).
 
@@ -438,12 +604,16 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     - 每章生成前先 select_skills_for_chapter(top-3 active skill) 注入 system_prompt
     - chapter.applied_skills 追踪本次注入的 skill_id + version
     - record_skill_application 累加 skill.usage_count
+    - type=book 走 sequential + rolling summary 路径 (_stage_content_book)
 
     每章一次 router.generate(task=req.type, ...) 并行执行 (asyncio.gather).
     失败的章节回退到 _placeholder_content 保证 demo 不挂.
 
     titles 优先从 outline 阶段产出读 (LLM 真生成的标题), 没有则 fallback 模板.
     """
+    if req.type == "book":
+        return await _stage_content_book(asset_id, req)
+
     from app.services import skill_service  # avoid circular import at module load
 
     settings = get_settings()
@@ -618,6 +788,263 @@ async def _call_chapter_llm(
             "fallback_used": True,
             "latency_ms": 0,
         }
+
+
+# ─── v0.2 · Book sequential content + rolling summary ────────────
+
+
+_BOOK_SUMMARY_MAX_CHARS = 1500
+"""running_summary 拼接进 prompt 的最大字符数 (滚动截断, 保留最新部分)."""
+
+
+async def _stage_content_book(asset_id: str, req: GenerateAssetRequest) -> dict:
+    """v0.2 · book 顺序生成 + rolling summary.
+
+    设计:
+    - 卷 (depth=0): 空内容, 仅作 chapter parent 占位 (不调 LLM)
+    - 章 (depth=1): 串行调 LLM (前后依赖, 不能并行), prompt 拼前文 summary
+    - 每章写完后, 调 1 次轻量 LLM 摘要, 追加到 running_summary
+
+    chapter_specs 从 outline 阶段读. 失败时回退到 _book_fallback_specs.
+    """
+    from app.services import skill_service
+
+    settings = get_settings()
+    progress = _progress[asset_id]
+    outline_stage = next(
+        (s for s in progress.stages if s.name == "outline"), None
+    )
+    chapter_specs = (
+        outline_stage.metadata.get("chapter_specs") if outline_stage else None
+    ) or _book_fallback_specs()
+    asset = _assets[asset_id]
+    provider = req.provider_override or settings.task_provider("book")
+    model = req.model_override or settings.task_model("book")
+
+    book_title = asset.title
+    chapters: list[Chapter] = []
+    volume_id_by_index: dict[int, str] = {}
+    running_summary_parts: list[str] = []
+    successful_chapters = 0
+    fallback_count = 0
+    total_skill_applications = 0
+
+    for order_idx, spec in enumerate(chapter_specs):
+        chapter_id = f"chapter-{uuid4().hex[:8]}"
+        depth = spec.get("depth", 0)
+        parent_vol_idx = spec.get("parent_volume_index")
+        title = spec.get("title", f"章节 {order_idx + 1}")
+
+        if depth == 0:
+            # 卷: 空内容占位
+            volume_id_by_index[order_idx_to_vol_idx(chapter_specs, order_idx)] = chapter_id
+            chapters.append(Chapter(
+                id=chapter_id,
+                asset_id=asset_id,
+                asset_version=1,
+                order_index=order_idx,
+                parent_id=None,
+                depth=0,
+                title=title,
+                content="",
+            ))
+            continue
+
+        # 章: 拼 rolling summary + 选 skill
+        running_summary = _truncate_summary(running_summary_parts)
+        volume_title = ""
+        if parent_vol_idx is not None and 0 <= parent_vol_idx < len(chapter_specs):
+            # 找到该卷的 spec (与 volume_id_by_index 索引对齐)
+            vol_specs = [s for s in chapter_specs if s.get("depth") == 0]
+            if parent_vol_idx < len(vol_specs):
+                volume_title = vol_specs[parent_vol_idx].get("title", "")
+
+        try:
+            picked = await skill_service.select_skills_for_chapter(
+                project_id=asset.project_id,
+                query_text=f"{title}\n{volume_title}",
+            )
+        except Exception as e:
+            logger.warning("book_skill_select_failed", title=title, error=str(e))
+            picked = []
+        skill_suffix = skill_service.render_skills_for_prompt(picked)
+
+        result = await _call_book_chapter_llm(
+            book_title=book_title,
+            volume_title=volume_title,
+            chapter_title=title,
+            running_summary=running_summary,
+            project_id=asset.project_id,
+            provider=provider,
+            model=model,
+            skill_suffix=skill_suffix,
+        )
+        if result["fallback_used"]:
+            fallback_count += 1
+        else:
+            successful_chapters += 1
+
+        applied_records: list = []
+        if picked and not result["fallback_used"]:
+            recs = skill_service.record_skill_application(
+                chapter_id=chapter_id, project_id=asset.project_id, picked=picked,
+            )
+            applied_records = [r.model_dump(mode="json") for r in recs]
+            total_skill_applications += len(applied_records)
+
+        parent_id = (
+            volume_id_by_index.get(parent_vol_idx)
+            if parent_vol_idx is not None else None
+        )
+        chapters.append(Chapter(
+            id=chapter_id,
+            asset_id=asset_id,
+            asset_version=1,
+            order_index=order_idx,
+            parent_id=parent_id,
+            depth=1,
+            title=title,
+            content=result["content"],
+            applied_skills=applied_records,
+            generated_by=ChapterGeneratedBy(
+                model=model,
+                provider=provider,
+                latency_ms=result["latency_ms"],
+                prompt_tokens=result["usage"].get("prompt_tokens", 0),
+                completion_tokens=result["usage"].get("completion_tokens", 0),
+            ),
+        ))
+
+        await _publish_event(asset_id, SseEvent(
+            event="chapter_completed",
+            asset_id=asset_id,
+            stage="content",
+            payload={"order_index": order_idx, "title": title, "total": len(chapter_specs)},
+            ts=_now(),
+        ))
+
+        # rolling summary: 写完后总结, 追加 (失败用截断兜底)
+        try:
+            summary = await _summarize_book_chapter(
+                chapter_title=title,
+                chapter_content=result["content"],
+                project_id=asset.project_id,
+            )
+        except Exception as e:
+            logger.warning("book_summary_failed", title=title, error=str(e))
+            summary = result["content"][:160]
+        if summary:
+            running_summary_parts.append(f"[{title}] {summary}")
+
+    _chapters[asset_id] = chapters
+    return {
+        "chapters_completed": successful_chapters,
+        "fallback_used_count": fallback_count,
+        "provider_used": provider,
+        "model_used": model,
+        "skill_applications_count": total_skill_applications,
+        "volumes_count": sum(1 for s in chapter_specs if s.get("depth") == 0),
+    }
+
+
+def order_idx_to_vol_idx(chapter_specs: list[dict], order_idx: int) -> int:
+    """根据 order_index 找到这是第几个卷 (从 0 起)."""
+    vol_count = 0
+    for i, spec in enumerate(chapter_specs):
+        if spec.get("depth") == 0:
+            if i == order_idx:
+                return vol_count
+            vol_count += 1
+    return vol_count - 1 if vol_count > 0 else 0
+
+
+def _truncate_summary(parts: list[str]) -> str:
+    """从末尾往前累加 parts, 不超过 _BOOK_SUMMARY_MAX_CHARS."""
+    if not parts:
+        return "(本章为开篇, 无前文)"
+    out: list[str] = []
+    total = 0
+    for p in reversed(parts):
+        if total + len(p) > _BOOK_SUMMARY_MAX_CHARS and out:
+            break
+        out.append(p)
+        total += len(p)
+    return "\n".join(reversed(out))
+
+
+async def _call_book_chapter_llm(
+    book_title: str,
+    volume_title: str,
+    chapter_title: str,
+    running_summary: str,
+    project_id: str,
+    provider: str,
+    model: str,
+    skill_suffix: str = "",
+) -> dict[str, Any]:
+    tpl = PromptTemplate.load("content/book")
+    rendered = tpl.render({
+        "book_title": book_title,
+        "volume_title": volume_title,
+        "chapter_title": chapter_title,
+        "running_summary": running_summary,
+    })
+    system_prompt = rendered.system
+    if skill_suffix:
+        system_prompt = f"{system_prompt}\n\n{skill_suffix}"
+    router = await get_router()
+    try:
+        response = await router.generate(
+            task="book",
+            messages=[
+                LLMMessage(role="system", content=system_prompt),
+                LLMMessage(role="user", content=rendered.user),
+            ],
+            options=LLMOptions(**rendered.options),
+            project_id=project_id,
+            provider_override=provider,
+            model_override=model,
+        )
+        content = response.text.strip()
+        if len(content) < 80:
+            raise ValueError(f"book 章节返回过短: {content!r}")
+        return {
+            "content": content,
+            "usage": response.usage,
+            "fallback_used": response.fallback_used,
+            "latency_ms": response.latency_ms,
+        }
+    except Exception as exc:
+        logger.warning("book_chapter_llm_failed", title=chapter_title, error=str(exc))
+        return {
+            "content": _placeholder_content(chapter_title, "book"),
+            "usage": {},
+            "fallback_used": True,
+            "latency_ms": 0,
+        }
+
+
+async def _summarize_book_chapter(
+    chapter_title: str,
+    chapter_content: str,
+    project_id: str,
+) -> str:
+    tpl = PromptTemplate.load("content/book_summarize")
+    rendered = tpl.render({
+        "chapter_title": chapter_title,
+        "chapter_content": chapter_content[:4000],  # 截断防爆
+    })
+    router = await get_router()
+    response = await router.generate(
+        task="book",
+        messages=[
+            LLMMessage(role="system", content=rendered.system),
+            LLMMessage(role="user", content=rendered.user),
+        ],
+        options=LLMOptions(**rendered.options),
+        project_id=project_id,
+    )
+    return response.text.strip()[:250]
 
 
 # T07 Mock Event 模板: 真后端会查 fixture events / DB 真 events.
