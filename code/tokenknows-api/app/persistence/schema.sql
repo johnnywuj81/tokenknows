@@ -97,3 +97,60 @@ CREATE INDEX IF NOT EXISTS skills_trust_idx
     ON skills(project_id, status, trust_score DESC);
 -- 同名 skill 不同 version 共存; (project_id, name, version) 不强制唯一
 -- 避免 evolve_skill_v2 race (rare 但可能); 业务层去重
+
+-- v0.3 · IM 集成 (T16 起步: 仅 schema, 不接 provider)
+-- Lark/飞书 + 钉钉 + 企微 + 邮件 (不接个人微信 - 协议封禁风险)
+CREATE TABLE IF NOT EXISTS im_connections (
+    id                  TEXT PRIMARY KEY,
+    project_id          TEXT NOT NULL,
+    platform            TEXT NOT NULL,                     -- feishu/dingtalk/wework/email
+    status              TEXT NOT NULL DEFAULT 'pending',   -- pending/active/revoked
+    tenant_name         TEXT,
+    auth_token_enc      TEXT,                              -- Fernet ciphertext (hex)
+    refresh_token_enc   TEXT,
+    token_expires_at    TEXT,
+    consent_signed_by   TEXT,                              -- admin user_id
+    consent_user_id     TEXT,                              -- employee user_id
+    consent_signed_at   TEXT,
+    revoked_at          TEXT,
+    last_synced_at      TEXT,
+    updated_at          TEXT NOT NULL,
+    json                TEXT NOT NULL                      -- 完整 IMConnection dump
+);
+CREATE INDEX IF NOT EXISTS im_connections_project_status_idx
+    ON im_connections(project_id, status);
+
+CREATE TABLE IF NOT EXISTS im_messages (
+    id                  TEXT PRIMARY KEY,
+    connection_id       TEXT NOT NULL,
+    platform_chat_id    TEXT NOT NULL,                     -- group/DM/email-thread id
+    platform_msg_id     TEXT NOT NULL,                     -- 原始 message_id (幂等)
+    received_at         TEXT NOT NULL,
+    retention_until     TEXT,                              -- 默认 received_at + 90d
+    is_signal           INTEGER NOT NULL DEFAULT 0,        -- T20 SignalGate
+    redacted            INTEGER NOT NULL DEFAULT 0,
+    json                TEXT NOT NULL,                     -- 完整 IMMessage dump
+    FOREIGN KEY (connection_id) REFERENCES im_connections(id) ON DELETE CASCADE,
+    UNIQUE (connection_id, platform_msg_id)
+);
+CREATE INDEX IF NOT EXISTS im_messages_chat_time_idx
+    ON im_messages(connection_id, platform_chat_id, received_at DESC);
+CREATE INDEX IF NOT EXISTS im_messages_signal_idx
+    ON im_messages(connection_id, is_signal, received_at DESC);
+-- retention 扫描: WHERE retention_until <= now AND redacted = 0
+CREATE INDEX IF NOT EXISTS im_messages_retention_idx
+    ON im_messages(retention_until, redacted);
+
+-- ValueSegment · 脱敏后可出域的价值片段 (跨 events / IM 共享抽象)
+CREATE TABLE IF NOT EXISTS value_segments (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL,
+    source_type     TEXT NOT NULL,                         -- event / im_chat / im_thread
+    trust_score     REAL NOT NULL DEFAULT 0.5,
+    extracted_at    TEXT NOT NULL,
+    json            TEXT NOT NULL                          -- 完整 ValueSegment dump
+);
+CREATE INDEX IF NOT EXISTS value_segments_project_trust_idx
+    ON value_segments(project_id, trust_score DESC, extracted_at DESC);
+CREATE INDEX IF NOT EXISTS value_segments_source_idx
+    ON value_segments(source_type, project_id);

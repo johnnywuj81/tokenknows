@@ -495,6 +495,231 @@ class SqliteStore:
         rows = self._query("SELECT json FROM skills ORDER BY updated_at DESC")
         return [json.loads(r["json"]) for r in rows]
 
+    # ─── IM Connections (v0.3 · T16) ────────────────────
+
+    def upsert_im_connection(
+        self,
+        connection_id: str,
+        project_id: str,
+        platform: str,
+        status: str,
+        updated_at: str,
+        json_str: str,
+    ) -> None:
+        """新建 / 更新 IM connection. token / consent 字段从 JSON 反序列读取."""
+        self._exec(
+            """
+            INSERT INTO im_connections
+                (id, project_id, platform, status, updated_at, json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                platform   = excluded.platform,
+                status     = excluded.status,
+                updated_at = excluded.updated_at,
+                json       = excluded.json
+            """,
+            (connection_id, project_id, platform, status, updated_at, json_str),
+        )
+
+    def get_im_connection(self, connection_id: str) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM im_connections WHERE id = ?", (connection_id,)
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_im_connections(
+        self,
+        project_id: str,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if status:
+            rows = self._query(
+                """
+                SELECT json FROM im_connections
+                WHERE project_id = ? AND status = ?
+                ORDER BY updated_at DESC
+                """,
+                (project_id, status),
+            )
+        else:
+            rows = self._query(
+                """
+                SELECT json FROM im_connections
+                WHERE project_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (project_id,),
+            )
+        return [json.loads(r["json"]) for r in rows]
+
+    def delete_im_connection(self, connection_id: str) -> bool:
+        """级联删除 (im_messages.FK CASCADE)."""
+        with self._write_lock:
+            cur = self._conn.execute(
+                "DELETE FROM im_connections WHERE id = ?", (connection_id,)
+            )
+            return cur.rowcount > 0
+
+    def load_all_im_connections(self) -> list[dict[str, Any]]:
+        rows = self._query(
+            "SELECT json FROM im_connections ORDER BY updated_at DESC"
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    # ─── IM Messages (v0.3 · T16) ────────────────────────
+
+    def insert_im_message(
+        self,
+        message_id: str,
+        connection_id: str,
+        platform_chat_id: str,
+        platform_msg_id: str,
+        received_at: str,
+        retention_until: str | None,
+        is_signal: bool,
+        redacted: bool,
+        json_str: str,
+    ) -> bool:
+        """INSERT OR IGNORE 幂等. 返回 True=新增 / False=已存在."""
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                INSERT OR IGNORE INTO im_messages
+                    (id, connection_id, platform_chat_id, platform_msg_id,
+                     received_at, retention_until, is_signal, redacted, json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    message_id, connection_id, platform_chat_id, platform_msg_id,
+                    received_at, retention_until,
+                    1 if is_signal else 0, 1 if redacted else 0, json_str,
+                ),
+            )
+            return cur.rowcount > 0
+
+    def list_im_messages(
+        self,
+        connection_id: str,
+        chat_id: str | None = None,
+        since_iso: str | None = None,
+        until_iso: str | None = None,
+        signal_only: bool = False,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        where = ["connection_id = ?"]
+        params: list[Any] = [connection_id]
+        if chat_id:
+            where.append("platform_chat_id = ?")
+            params.append(chat_id)
+        if since_iso:
+            where.append("received_at >= ?")
+            params.append(since_iso)
+        if until_iso:
+            where.append("received_at <= ?")
+            params.append(until_iso)
+        if signal_only:
+            where.append("is_signal = 1")
+        where_sql = " AND ".join(where)
+        rows = self._query(
+            f"""
+            SELECT json FROM im_messages
+            WHERE {where_sql}
+            ORDER BY received_at DESC
+            LIMIT ?
+            """,
+            tuple(params + [limit]),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    def expire_im_messages(self, cutoff_iso: str) -> list[str]:
+        """T22 保留期扫描: 找 retention_until <= cutoff 且未脱敏的消息 id.
+
+        返回需要 T22 处理的消息 id 列表; 调用方负责实际脱敏后调
+        mark_im_message_redacted() 标 redacted=1.
+        """
+        rows = self._query(
+            """
+            SELECT id FROM im_messages
+            WHERE retention_until IS NOT NULL
+              AND retention_until <= ?
+              AND redacted = 0
+            ORDER BY retention_until ASC
+            LIMIT 500
+            """,
+            (cutoff_iso,),
+        )
+        return [r["id"] for r in rows]
+
+    def mark_im_message_redacted(self, message_id: str, json_str: str) -> bool:
+        """T22 脱敏后更新原文 + 标 redacted=1."""
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                UPDATE im_messages SET redacted = 1, json = ?
+                WHERE id = ?
+                """,
+                (json_str, message_id),
+            )
+            return cur.rowcount > 0
+
+    # ─── ValueSegments (v0.3 · T16) ──────────────────────
+
+    def upsert_value_segment(
+        self,
+        segment_id: str,
+        project_id: str,
+        source_type: str,
+        trust_score: float,
+        extracted_at: str,
+        json_str: str,
+    ) -> None:
+        self._exec(
+            """
+            INSERT INTO value_segments
+                (id, project_id, source_type, trust_score, extracted_at, json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                source_type  = excluded.source_type,
+                trust_score  = excluded.trust_score,
+                extracted_at = excluded.extracted_at,
+                json         = excluded.json
+            """,
+            (segment_id, project_id, source_type, trust_score, extracted_at, json_str),
+        )
+
+    def list_value_segments(
+        self,
+        project_id: str,
+        source_type: str | None = None,
+        min_trust: float = 0.0,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        where = ["project_id = ?", "trust_score >= ?"]
+        params: list[Any] = [project_id, min_trust]
+        if source_type:
+            where.append("source_type = ?")
+            params.append(source_type)
+        where_sql = " AND ".join(where)
+        rows = self._query(
+            f"""
+            SELECT json FROM value_segments
+            WHERE {where_sql}
+            ORDER BY trust_score DESC, extracted_at DESC
+            LIMIT ?
+            """,
+            tuple(params + [limit]),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    def delete_value_segment(self, segment_id: str) -> bool:
+        with self._write_lock:
+            cur = self._conn.execute(
+                "DELETE FROM value_segments WHERE id = ?", (segment_id,)
+            )
+            return cur.rowcount > 0
+
     # ─── 调试 ────────────────────────────────────────
 
     def stats(self) -> dict[str, int]:
@@ -505,4 +730,7 @@ class SqliteStore:
             "publish_records": self._query("SELECT COUNT(*) AS n FROM publish_records")[0]["n"],
             "events": self._query("SELECT COUNT(*) AS n FROM events")[0]["n"],
             "skills": self._query("SELECT COUNT(*) AS n FROM skills")[0]["n"],
+            "im_connections": self._query("SELECT COUNT(*) AS n FROM im_connections")[0]["n"],
+            "im_messages": self._query("SELECT COUNT(*) AS n FROM im_messages")[0]["n"],
+            "value_segments": self._query("SELECT COUNT(*) AS n FROM value_segments")[0]["n"],
         }

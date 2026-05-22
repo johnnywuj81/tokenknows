@@ -22,6 +22,8 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.49b0",
     # 实用
     "orjson>=3.10.0",
+    # v0.3 IM 集成 · OAuth token Fernet 加密 (T16+)
+    "cryptography>=44.0.0",
 ]
 
 [project.optional-dependencies]

@@ -113,6 +113,14 @@ class Settings(BaseSettings):
         default="abab6.5s-chat", alias="TASK_REDACTION_LLM_MODEL"
     )
 
+    # ─── v0.3 · IM 集成 (T16) ────────────────────────────────────
+    # Fernet 主密钥 (base64-encoded 32 bytes). 用于加密 IM OAuth tokens.
+    # MVP 单实例; 生产换 KMS (AWS/GCP/Azure KMS) 透明接管.
+    # 生成方法: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    im_encryption_key: str | None = Field(
+        default=None, alias="IM_ENCRYPTION_KEY"
+    )
+
     # ─── 服务运行 ────────────────────────────────────────────────
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
