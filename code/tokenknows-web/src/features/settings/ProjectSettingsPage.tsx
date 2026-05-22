@@ -12,21 +12,23 @@
 
 import { useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { Info, Users, Database, Shield, Loader2, AlertCircle } from 'lucide-react'
+import { Info, Users, Database, Shield, Zap, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { useProject } from '../workbench/hooks/useProject'
 import { LlmEgressPanel } from './tabs/LlmEgressPanel'
+import { AutoTriggersPanel } from './tabs/AutoTriggersPanel'
 import { cn } from '@/lib/utils'
 
-type Tab = 'info' | 'members' | 'datasources' | 'llm'
+type Tab = 'info' | 'members' | 'datasources' | 'llm' | 'auto-triggers'
 
 const TABS: { value: Tab; label: string; icon: typeof Info }[] = [
   { value: 'info', label: '基本信息', icon: Info },
   { value: 'members', label: '成员', icon: Users },
   { value: 'datasources', label: '数据源', icon: Database },
   { value: 'llm', label: 'LLM 与出域', icon: Shield },
+  { value: 'auto-triggers', label: '自动触发', icon: Zap }, // v0.4 T33
 ]
 
 export default function ProjectSettingsPage() {
@@ -97,6 +99,7 @@ export default function ProjectSettingsPage() {
           {tab === 'members' ? <MembersTab /> : null}
           {tab === 'datasources' ? <DataSourcesTab /> : null}
           {tab === 'llm' ? <LlmEgressPanel projectId={projectId} /> : null}
+          {tab === 'auto-triggers' ? <AutoTriggersPanel projectId={projectId} /> : null}
         </div>
       </main>
     </div>

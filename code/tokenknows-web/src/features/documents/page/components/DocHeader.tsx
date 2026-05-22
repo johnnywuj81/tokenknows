@@ -9,8 +9,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Send, Loader2, Upload, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Asset, AssetStatus, AssetType } from '@/types/api'
+import type { Asset, AssetStatus, AssetType, AssetTriggerMeta } from '@/types/api'
 import { SelfAssessCard } from './SelfAssessCard'
+import { AutoTriggerBadge } from './AutoTriggerBadge'
 
 interface DocHeaderProps {
   asset: Asset
@@ -86,6 +87,9 @@ export function DocHeader({
           <span className="font-mono text-caption text-text-subtle">
             v{asset.current_version}
           </span>
+          {asset.trigger_meta ? (
+            <AutoTriggerBadge meta={asset.trigger_meta as AssetTriggerMeta} />
+          ) : null}
           {saving ? (
             <span className="flex items-center gap-1 font-ui text-caption text-text-muted">
               <Loader2 className="size-3 animate-spin" />

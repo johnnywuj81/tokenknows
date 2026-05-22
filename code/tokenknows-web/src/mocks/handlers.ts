@@ -16,12 +16,15 @@
 import { authHandlers } from './handlers/auth'
 import { projectHandlers } from './handlers/projects'
 import { eventHandlers } from './handlers/events'
+import { autoTriggerHandlers } from './handlers/auto-triggers'
 
 export const handlers = [
   ...authHandlers,
   ...projectHandlers,
   ...eventHandlers,
   // ...assetHandlers, ← 切到真后端 (W2D7 联调)
+  // v0.4 · auto-trigger REST API (后端 T32 未上线; MSW 兜底)
+  ...autoTriggerHandlers,
   // ...其它 handler 在对应 sprint 加:
   // ...redactionHandlers,
   // ...publishHandlers,

@@ -266,6 +266,8 @@ export interface Asset {
   approval_state: 'pending' | 'approved' | 'rejected'
   redaction_state: 'any_unresolved' | 'all_confirmed'
   metrics: AssetMetrics | null
+  /** v0.4 · 自动触发标记 (null = 手动生成; 非空 = 由规则自动生成) */
+  trigger_meta?: AssetTriggerMeta | null
   created_at: string
   updated_at: string
 }
@@ -622,4 +624,111 @@ export interface DistillIMRequest {
 export interface DistillIMResponse {
   segments_persisted: number
   segment_ids: string[]
+}
+
+// ────────────────────────────────────────────────────────────────────
+// v0.4 · Auto-Trigger (T26-T35)
+// 对齐 backend app/schemas/auto_trigger.py
+// ────────────────────────────────────────────────────────────────────
+
+export type TriggerMode = 'cron' | 'event' | 'threshold' | 'mention'
+
+export type ExecutionStatus =
+  | 'scheduled'
+  | 'fired'
+  | 'canceled'
+  | 'skipped'
+  | 'failed'
+  | 'expired'
+
+export type SkipReason =
+  | 'cooldown'
+  | 'daily_cap_reached'
+  | 'extra_condition_failed'
+  | 'rule_disabled'
+  | 'lower_priority'
+  | 'low_confidence'
+  | 'quota_exceeded'
+  | 'canceled_by_user'
+
+export interface EventMatch {
+  event_type: string
+  label_any?: string[]
+  file_glob?: string[]
+  title_contains?: string[]
+}
+
+export interface ThresholdSpec {
+  metric: string
+  comparator: '>=' | '<=' | '==' | '!=' | '>' | '<'
+  value: number
+  and_not_exists_asset_of_type?: string | null
+}
+
+export interface ExtraCondition {
+  metric: string
+  comparator: '>=' | '<=' | '==' | '!=' | '>' | '<'
+  value: number
+}
+
+export interface TriggerSignal {
+  type: string
+  event_id?: string | null
+  summary: string
+  payload?: Record<string, unknown>
+}
+
+export interface TriggerEvaluation {
+  matched: boolean
+  confidence: number
+  dropped_rules?: string[]
+  extra_condition_result?: boolean | null
+  notes?: string | null
+}
+
+export interface TriggerRule {
+  id: string
+  project_id: string | null
+  name: string
+  description: string
+  priority: number
+  mode: TriggerMode
+  asset_type: AssetType
+  enabled: boolean
+  cooldown_seconds: number
+  daily_cap: number
+  cron_expr?: string | null
+  event_match?: EventMatch | null
+  threshold_spec?: ThresholdSpec | null
+  extra_condition?: ExtraCondition | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TriggerExecution {
+  id: string
+  rule_id: string
+  project_id: string
+  status: ExecutionStatus
+  fire_at: string
+  fired_at?: string | null
+  signal: TriggerSignal
+  evaluation?: TriggerEvaluation | null
+  asset_id?: string | null
+  skip_reason?: SkipReason | null
+  error_message?: string | null
+  user_canceled: boolean
+  user_flagged_false_positive: boolean
+  created_at: string
+}
+
+export interface AssetTriggerMeta {
+  trigger_mode: TriggerMode
+  rule_id: string
+  rule_name: string
+  signal: TriggerSignal
+  confidence: number
+  fired_at: string
+  trigger_execution_id?: string | null
 }

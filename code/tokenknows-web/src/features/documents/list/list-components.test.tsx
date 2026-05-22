@@ -41,13 +41,14 @@ describe('DocumentFilters', () => {
     expect(screen.getByText('复盘')).toBeInTheDocument()
   })
 
-  it('5 type tabs all rendered', () => {
+  it('6 type tabs all rendered (含 v0.2 书籍)', () => {
     render(<DocumentFilters
       type="weekly_report" status="all"
       onTypeChange={() => {}} onStatusChange={() => {}}
     />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.length).toBe(5)
+    expect(tabs.length).toBe(6)
+    expect(screen.getByText('书籍')).toBeInTheDocument()
   })
 })
 
