@@ -138,6 +138,30 @@ def test_list_assets_by_project() -> None:
     assert gen.list_assets("p-nonexistent") == []
 
 
+def test_list_assets_sorted_by_created_at_desc() -> None:
+    """Regression 2026-05-22: 新 generate 的 asset 应排在列表最前 (created_at desc).
+
+    Bug 复现: 之前用 _assets.values() 返回 dict 插入顺序, 老 asset 排在前,
+    用户看不到刚点 '开始生成' 创建的新文档, 误以为按钮没工作.
+    """
+    from datetime import datetime, timedelta, timezone
+    base = datetime.now(timezone.utc)
+    # 故意按非时间顺序 register (middle → old → new)
+    a_mid = _make_asset("a-mid", project_id="p-X")
+    a_old = _make_asset("a-old", project_id="p-X")
+    a_new = _make_asset("a-new", project_id="p-X")
+    # 显式设置 created_at 制造时间倒置
+    object.__setattr__(a_mid, "created_at", base - timedelta(hours=1))
+    object.__setattr__(a_old, "created_at", base - timedelta(hours=24))
+    object.__setattr__(a_new, "created_at", base)
+    _register(a_mid, [])
+    _register(a_old, [])
+    _register(a_new, [])
+    result = gen.list_assets("p-X")
+    # 最新的必须在 index 0
+    assert [a.id for a in result] == ["a-new", "a-mid", "a-old"]
+
+
 # ─── _find_chapter ─────────────────────────────────────────────────
 
 

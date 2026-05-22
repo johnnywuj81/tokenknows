@@ -1523,7 +1523,13 @@ def get_progress(asset_id: str) -> GenerationProgress | None:
 
 
 def list_assets(project_id: str) -> list[Asset]:
-    return [a for a in _assets.values() if a.project_id == project_id]
+    """返回 project 下所有 assets, 按 created_at desc 排序 (最新在前).
+
+    Bug fix 2026-05-22: 之前返回 dict 插入顺序, 新生成的 asset 排在末尾,
+    用户在前 N 个卡片里看不到, 误以为"生成没工作". 现按 created_at 倒序.
+    """
+    items = [a for a in _assets.values() if a.project_id == project_id]
+    return sorted(items, key=lambda a: a.created_at, reverse=True)
 
 
 def delete_asset(asset_id: str) -> bool:
