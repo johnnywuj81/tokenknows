@@ -30,6 +30,7 @@ from app.config.logging import logger
 from app.config.settings import get_settings
 from app.llm_gateway import LLMMessage, LLMOptions, get_router
 from app.persistence import get_db
+from app.prompts import PromptTemplate
 from app.schemas.asset import (
     Asset,
     AssetMetrics,
@@ -359,31 +360,24 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
     }[req.type]
     fallback = _OUTLINE_TEMPLATES[req.type]
 
-    system_prompt = (
-        "你是 AI 研发知识资产平台的文档大纲生成器。严格按 JSON schema 输出, 不要任何额外文字。\n"
-        'JSON schema: {"chapters": ["章节1", "章节2", ...]}\n'
-        "约束: 章节标题简洁(≤8 字符), 数量 5-7 个, 顺序符合该文档类型的标准结构。"
-    )
-    user_prompt = (
-        f"为「{type_label}」文档生成章节大纲。\n"
-        f"时间范围: {req.time_window}\n"
-        f"参考标准结构 (你可微调以贴合本次主题): {' / '.join(fallback)}"
-    )
+    # A1.2: 抽 prompt 到 app/prompts/outline/_default.md (4 类共享模板).
+    # 字节级回归测试见 tests/test_prompts_byte_parity.py
+    tpl = PromptTemplate.load("outline/_default")
+    rendered = tpl.render({
+        "type_label": type_label,
+        "time_window": req.time_window,
+        "fallback_joined": " / ".join(fallback),
+    })
 
     router = await get_router()
     try:
         response = await router.generate(
             task=req.type,
             messages=[
-                LLMMessage(role="system", content=system_prompt),
-                LLMMessage(role="user", content=user_prompt),
+                LLMMessage(role="system", content=rendered.system),
+                LLMMessage(role="user", content=rendered.user),
             ],
-            options=LLMOptions(
-                temperature=0.3,
-                max_tokens=400,
-                json_mode=True,
-                timeout_seconds=60,
-            ),
+            options=LLMOptions(**rendered.options),
             project_id=asset.project_id,
         )
         parsed = json.loads(response.text)
@@ -511,31 +505,23 @@ async def _call_chapter_llm(
         "incident": "问题复盘报告",
     }[asset_type]
 
-    system_prompt = (
-        "你是 AI 研发知识资产平台的章节生成器。根据章节标题生成 200-400 字的"
-        "markdown 草稿, 风格客观、要点清晰。允许包含 `[1] [2] [3]` 形式的"
-        "证据角标占位 (后续阶段会回填真证据)。直接输出 markdown, 不要前置说明。"
-    )
-    user_prompt = (
-        f"文档类型: {type_label}\n"
-        f"时间范围: {time_window}\n"
-        f"当前章节标题: {title}\n\n"
-        "请生成本章节的 markdown 草稿 (200-400 字, 含 2-3 个 [N] 引用占位)."
-    )
+    # A1.2: 抽 prompt 到 app/prompts/content/_default.md.
+    tpl = PromptTemplate.load("content/_default")
+    rendered = tpl.render({
+        "type_label": type_label,
+        "time_window": time_window,
+        "title": title,
+    })
 
     router = await get_router()
     try:
         response = await router.generate(
             task=asset_type,
             messages=[
-                LLMMessage(role="system", content=system_prompt),
-                LLMMessage(role="user", content=user_prompt),
+                LLMMessage(role="system", content=rendered.system),
+                LLMMessage(role="user", content=rendered.user),
             ],
-            options=LLMOptions(
-                temperature=0.5,
-                max_tokens=800,
-                timeout_seconds=90,
-            ),
+            options=LLMOptions(**rendered.options),
             project_id=project_id,
             provider_override=provider,
             model_override=model,
@@ -1204,24 +1190,15 @@ async def _assess_slop_via_llm(
         digest_parts.append(f"## {ch.title}\n{snippet}")
     digest = "\n\n".join(digest_parts)
 
-    system_prompt = (
-        "你是一位严格的技术文档审稿人, 评估文档的'空话密度'(slop_score).\n"
-        "空话 = 笼统形容 / 套话 / 无依据断言 / 模板化措辞 (e.g. '本周高效推进各项工作').\n"
-        "返回严格 JSON, 不要任何其它文字, 不要 markdown 代码块:\n"
-        '{"slop_score": 0.0-1.0, "reasoning": "≤30字理由"}\n'
-        "评分尺度:\n"
-        "  0.00-0.15  几乎全是具体事实/数据/引用 (优)\n"
-        "  0.15-0.30  少量套话, 主体扎实 (良)\n"
-        "  0.30-0.50  套话与事实并存 (中)\n"
-        "  0.50-0.80  套话居多, 缺少具体内容 (差)\n"
-        "  0.80-1.00  几乎全是空话 (劣)"
-    )
-    user_prompt = (
-        f"文档类型: {asset.type}\n"
-        f"标题: {asset.title}\n\n"
-        f"全文摘要 (前 8 章, 各 200 字):\n{digest}\n\n"
-        "请输出 JSON."
-    )
+    # A1.2: 抽 prompt 到 app/prompts/assess/_default.md.
+    tpl = PromptTemplate.load("assess/_default")
+    rendered = tpl.render({
+        "asset_type": asset.type,
+        "title": asset.title,
+        "digest": digest,
+    })
+    system_prompt = rendered.system
+    user_prompt = rendered.user
 
     router = await get_router()
     try:
@@ -1233,11 +1210,7 @@ async def _assess_slop_via_llm(
                 LLMMessage(role="system", content=system_prompt),
                 LLMMessage(role="user", content=user_prompt),
             ],
-            options=LLMOptions(
-                temperature=0.2,        # 评分要稳, 温度低
-                max_tokens=600,         # reasoning 模型需要足够 tokens 输出 reasoning + JSON
-                timeout_seconds=60,
-            ),
+            options=LLMOptions(**rendered.options),
             project_id=asset.project_id,
         )
         text = response.text.strip()

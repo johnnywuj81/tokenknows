@@ -1,6 +1,6 @@
 ---
 temperature: 0.2
-max_tokens: 250
+max_tokens: 600
 timeout_seconds: 60
 ---
 @system

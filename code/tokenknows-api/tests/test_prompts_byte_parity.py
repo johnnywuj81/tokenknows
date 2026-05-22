@@ -199,6 +199,12 @@ def test_assess_default_byte_parity() -> None:
     expected_sys, expected_user = _reproduce_old_assess_prompts("weekly_report", "周报 · 2026-W21", digest_sample)
     assert rendered.system == expected_sys
     assert rendered.user == expected_user
+    # max_tokens 必须匹配原代码 (reasoning 模型需要 600 才够输出 reasoning+JSON)
+    assert rendered.options == {
+        "temperature": 0.2,
+        "max_tokens": 600,
+        "timeout_seconds": 60,
+    }
 
 
 def test_strict_undefined_raises_on_missing_var() -> None:
