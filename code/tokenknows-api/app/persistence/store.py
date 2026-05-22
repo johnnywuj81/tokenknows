@@ -720,6 +720,309 @@ class SqliteStore:
             )
             return cur.rowcount > 0
 
+    # ─── Auto-Trigger Rules (v0.4 · T26) ────────────────
+
+    def upsert_trigger_rule(
+        self,
+        rule_id: str,
+        project_id: str | None,
+        name: str,
+        mode: str,
+        asset_type: str,
+        enabled: bool,
+        priority: int,
+        updated_at: str,
+        json_str: str,
+    ) -> None:
+        """新建 / 更新触发规则.
+
+        project_id=None → 实例级默认规则 (T28 seeder 用此模式插入 4 条预置).
+        """
+        self._exec(
+            """
+            INSERT INTO trigger_rules
+                (id, project_id, name, mode, asset_type, enabled, priority, updated_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name       = excluded.name,
+                mode       = excluded.mode,
+                asset_type = excluded.asset_type,
+                enabled    = excluded.enabled,
+                priority   = excluded.priority,
+                updated_at = excluded.updated_at,
+                json       = excluded.json
+            """,
+            (
+                rule_id, project_id, name, mode, asset_type,
+                1 if enabled else 0, priority, updated_at, json_str,
+            ),
+        )
+
+    def get_trigger_rule(self, rule_id: str) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM trigger_rules WHERE id = ?", (rule_id,)
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_trigger_rules(
+        self,
+        project_id: str | None = None,
+        enabled: bool | None = None,
+        mode: str | None = None,
+        include_instance_defaults: bool = True,
+    ) -> list[dict[str, Any]]:
+        """按 project + filter 列规则.
+
+        project_id=None + include_instance_defaults=True (默认): 拉所有实例级 rule.
+        project_id='proj-xxx' + include_instance_defaults=True: 拉该项目 rule + 实例级 rule.
+        project_id='proj-xxx' + include_instance_defaults=False: 仅项目级 rule.
+        """
+        where: list[str] = []
+        params: list[Any] = []
+
+        if project_id is None:
+            where.append("project_id IS NULL")
+        else:
+            if include_instance_defaults:
+                where.append("(project_id = ? OR project_id IS NULL)")
+                params.append(project_id)
+            else:
+                where.append("project_id = ?")
+                params.append(project_id)
+
+        if enabled is not None:
+            where.append("enabled = ?")
+            params.append(1 if enabled else 0)
+        if mode is not None:
+            where.append("mode = ?")
+            params.append(mode)
+
+        where_sql = " AND ".join(where)
+        rows = self._query(
+            f"""
+            SELECT json FROM trigger_rules
+            WHERE {where_sql}
+            ORDER BY priority DESC, updated_at DESC
+            """,
+            tuple(params),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    def delete_trigger_rule(self, rule_id: str) -> bool:
+        """级联删除 (trigger_executions.FK CASCADE)."""
+        with self._write_lock:
+            cur = self._conn.execute(
+                "DELETE FROM trigger_rules WHERE id = ?", (rule_id,)
+            )
+            return cur.rowcount > 0
+
+    def load_all_trigger_rules(self) -> list[dict[str, Any]]:
+        rows = self._query(
+            "SELECT json FROM trigger_rules ORDER BY priority DESC, updated_at DESC"
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    # ─── Auto-Trigger Executions (v0.4 · T26) ───────────
+
+    def insert_trigger_execution(
+        self,
+        execution_id: str,
+        rule_id: str,
+        project_id: str,
+        status: str,
+        fire_at: str,
+        fired_at: str | None,
+        asset_id: str | None,
+        created_at: str,
+        json_str: str,
+    ) -> None:
+        """插入新 execution (status 一般是 'scheduled' 或 'skipped').
+
+        UNIQUE 仅 id 主键; 同规则可有多次执行历史.
+        """
+        self._exec(
+            """
+            INSERT INTO trigger_executions
+                (id, rule_id, project_id, status, fire_at, fired_at, asset_id, created_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                execution_id, rule_id, project_id, status,
+                fire_at, fired_at, asset_id, created_at, json_str,
+            ),
+        )
+
+    def update_trigger_execution(
+        self,
+        execution_id: str,
+        status: str,
+        fired_at: str | None,
+        asset_id: str | None,
+        json_str: str,
+    ) -> bool:
+        """状态机转换 (scheduled → fired / canceled / failed / expired).
+
+        合法性校验在 service 层 (can_transition); store 仅做原子 UPDATE.
+        返回 True 表示有 row 被更新.
+        """
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                UPDATE trigger_executions
+                SET status = ?, fired_at = ?, asset_id = ?, json = ?
+                WHERE id = ?
+                """,
+                (status, fired_at, asset_id, json_str, execution_id),
+            )
+            return cur.rowcount > 0
+
+    def get_trigger_execution(self, execution_id: str) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM trigger_executions WHERE id = ?", (execution_id,)
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_trigger_executions(
+        self,
+        project_id: str | None = None,
+        rule_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if project_id:
+            where.append("project_id = ?")
+            params.append(project_id)
+        if rule_id:
+            where.append("rule_id = ?")
+            params.append(rule_id)
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        where_sql = " AND ".join(where) if where else "1 = 1"
+        rows = self._query(
+            f"""
+            SELECT json FROM trigger_executions
+            WHERE {where_sql}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            tuple(params + [limit]),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    def list_scheduled_executions_ready(
+        self, now_iso: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """T31 withdraw_window_resolver 主扫描:
+        拉 status='scheduled' 且 fire_at <= now 的待 fire 执行.
+
+        v0.5 多实例时这里要加 SELECT FOR UPDATE SKIP LOCKED, 当前单实例 OK.
+        """
+        rows = self._query(
+            """
+            SELECT json FROM trigger_executions
+            WHERE status = 'scheduled' AND fire_at <= ?
+            ORDER BY fire_at ASC
+            LIMIT ?
+            """,
+            (now_iso, limit),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    def count_fired_in_window(
+        self,
+        rule_id: str,
+        since_iso: str,
+    ) -> int:
+        """统计 rule 在 [since_iso, now] 时间窗内 fired 次数.
+
+        用于 RuleEvaluator 的 cooldown / daily_cap 校验 (T29 / T28).
+        """
+        rows = self._query(
+            """
+            SELECT COUNT(*) AS n FROM trigger_executions
+            WHERE rule_id = ? AND status = 'fired' AND fired_at >= ?
+            """,
+            (rule_id, since_iso),
+        )
+        return rows[0]["n"]
+
+    def delete_old_trigger_executions(self, cutoff_iso: str) -> int:
+        """T31 cleanup_audit_log 用: 删除 created_at < cutoff 的 execution.
+
+        保留 audit_log (合规); 仅清 trigger_executions 自身表.
+        """
+        with self._write_lock:
+            cur = self._conn.execute(
+                "DELETE FROM trigger_executions WHERE created_at < ?",
+                (cutoff_iso,),
+            )
+            return cur.rowcount
+
+    def load_all_trigger_executions(self, limit: int = 1000) -> list[dict[str, Any]]:
+        """启动时回填 (主要是 status='scheduled' 的, 让 withdraw_resolver 接管)."""
+        rows = self._query(
+            "SELECT json FROM trigger_executions ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    # ─── Generation Quotas (v0.4 · T26 占位 / v0.4.4 激活) ──
+
+    def upsert_quota(
+        self,
+        quota_id: str,
+        project_id: str,
+        year_month: str,
+        monthly_token_limit: int,
+        daily_auto_gen_limit: int,
+        tokens_used: int,
+        auto_gen_count: int,
+        is_throttled: bool,
+        updated_at: str,
+        json_str: str,
+    ) -> None:
+        self._exec(
+            """
+            INSERT INTO generation_quotas
+                (id, project_id, year_month, monthly_token_limit, daily_auto_gen_limit,
+                 tokens_used, auto_gen_count, is_throttled, updated_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(project_id, year_month) DO UPDATE SET
+                monthly_token_limit  = excluded.monthly_token_limit,
+                daily_auto_gen_limit = excluded.daily_auto_gen_limit,
+                tokens_used          = excluded.tokens_used,
+                auto_gen_count       = excluded.auto_gen_count,
+                is_throttled         = excluded.is_throttled,
+                updated_at           = excluded.updated_at,
+                json                 = excluded.json
+            """,
+            (
+                quota_id, project_id, year_month,
+                monthly_token_limit, daily_auto_gen_limit,
+                tokens_used, auto_gen_count,
+                1 if is_throttled else 0,
+                updated_at, json_str,
+            ),
+        )
+
+    def get_quota(
+        self, project_id: str, year_month: str
+    ) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM generation_quotas WHERE project_id = ? AND year_month = ?",
+            (project_id, year_month),
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
     # ─── 调试 ────────────────────────────────────────
 
     def stats(self) -> dict[str, int]:
@@ -733,4 +1036,7 @@ class SqliteStore:
             "im_connections": self._query("SELECT COUNT(*) AS n FROM im_connections")[0]["n"],
             "im_messages": self._query("SELECT COUNT(*) AS n FROM im_messages")[0]["n"],
             "value_segments": self._query("SELECT COUNT(*) AS n FROM value_segments")[0]["n"],
+            "trigger_rules": self._query("SELECT COUNT(*) AS n FROM trigger_rules")[0]["n"],
+            "trigger_executions": self._query("SELECT COUNT(*) AS n FROM trigger_executions")[0]["n"],
+            "generation_quotas": self._query("SELECT COUNT(*) AS n FROM generation_quotas")[0]["n"],
         }

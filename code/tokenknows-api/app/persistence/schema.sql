@@ -154,3 +154,72 @@ CREATE INDEX IF NOT EXISTS value_segments_project_trust_idx
     ON value_segments(project_id, trust_score DESC, extracted_at DESC);
 CREATE INDEX IF NOT EXISTS value_segments_source_idx
     ON value_segments(source_type, project_id);
+
+-- ───────────────────────────────────────────────────────────────
+-- v0.4 · Auto-Trigger (T26)
+-- 来源: Proposal_Automatic_Generation_Trigger_v0.4.md §8
+-- 偏差说明见 app/schemas/auto_trigger.py 顶部注释
+-- ───────────────────────────────────────────────────────────────
+
+-- 触发规则定义 (实例级 project_id=NULL + 项目级 project_id=具体值 并存)
+CREATE TABLE IF NOT EXISTS trigger_rules (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT,                                  -- NULL = 实例级默认规则
+    name            TEXT NOT NULL,
+    mode            TEXT NOT NULL,                         -- cron/event/threshold/mention
+    asset_type      TEXT NOT NULL,                         -- weekly_report/adr/incident/book/agent_skill
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    priority        INTEGER NOT NULL DEFAULT 50,
+    updated_at      TEXT NOT NULL,
+    json            TEXT NOT NULL                          -- 完整 TriggerRule dump
+);
+-- 主查询路径: enabled rules of given mode
+CREATE INDEX IF NOT EXISTS trigger_rules_enabled_mode_idx
+    ON trigger_rules(enabled, mode) WHERE enabled = 1;
+CREATE INDEX IF NOT EXISTS trigger_rules_project_idx
+    ON trigger_rules(project_id, enabled);
+-- 实例级规则 (project_id=NULL) 单独 unique (规避 SQLite NULL!=NULL 在 UNIQUE 上的行为)
+CREATE UNIQUE INDEX IF NOT EXISTS trigger_rules_instance_name_unique
+    ON trigger_rules(name) WHERE project_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS trigger_rules_project_name_unique
+    ON trigger_rules(project_id, name) WHERE project_id IS NOT NULL;
+
+-- 执行历史
+CREATE TABLE IF NOT EXISTS trigger_executions (
+    id              TEXT PRIMARY KEY,
+    rule_id         TEXT NOT NULL,
+    project_id      TEXT NOT NULL,                         -- 即使规则是实例级, 执行总落在具体项目
+    status          TEXT NOT NULL,                         -- scheduled/fired/canceled/skipped/failed/expired
+    fire_at         TEXT NOT NULL,                         -- 计划触发 (含 5min 撤回窗口)
+    fired_at        TEXT,                                  -- 实际触发完成
+    asset_id        TEXT,                                  -- status=fired 时关联
+    created_at      TEXT NOT NULL,
+    json            TEXT NOT NULL,                         -- 完整 TriggerExecution dump
+    FOREIGN KEY (rule_id) REFERENCES trigger_rules(id) ON DELETE CASCADE
+);
+-- T31 withdraw_resolver 主扫描路径: WHERE status='scheduled' AND fire_at <= now
+CREATE INDEX IF NOT EXISTS trigger_executions_scheduled_idx
+    ON trigger_executions(status, fire_at) WHERE status = 'scheduled';
+-- 项目级历史时间轴 (Proposal §7.5 / 体验要素 #31)
+CREATE INDEX IF NOT EXISTS trigger_executions_project_created_idx
+    ON trigger_executions(project_id, created_at DESC);
+-- 单规则历史
+CREATE INDEX IF NOT EXISTS trigger_executions_rule_created_idx
+    ON trigger_executions(rule_id, created_at DESC);
+
+-- 月配额 (v0.4.0 仅建表; v0.4.4 真正激活)
+CREATE TABLE IF NOT EXISTS generation_quotas (
+    id                      TEXT PRIMARY KEY,
+    project_id              TEXT NOT NULL,
+    year_month              TEXT NOT NULL,                 -- 'YYYY-MM'
+    monthly_token_limit     INTEGER NOT NULL DEFAULT 5000000,
+    daily_auto_gen_limit    INTEGER NOT NULL DEFAULT 20,
+    tokens_used             INTEGER NOT NULL DEFAULT 0,
+    auto_gen_count          INTEGER NOT NULL DEFAULT 0,
+    is_throttled            INTEGER NOT NULL DEFAULT 0,
+    updated_at              TEXT NOT NULL,
+    json                    TEXT NOT NULL,                 -- 完整 GenerationQuota dump
+    UNIQUE (project_id, year_month)
+);
+CREATE INDEX IF NOT EXISTS generation_quotas_project_idx
+    ON generation_quotas(project_id, year_month DESC);

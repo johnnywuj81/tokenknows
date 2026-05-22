@@ -87,6 +87,9 @@ class Asset(BaseModel):
     approval_state: Literal["pending", "approved", "rejected"] = "pending"
     redaction_state: Literal["any_unresolved", "all_confirmed"] = "any_unresolved"
     metrics: AssetMetrics | None = None
+    # v0.4 · 自动触发标记 (None = 手动生成; 非空 = 由 trigger_rule 自动生成)
+    # 详见 app/schemas/auto_trigger.py::AssetTriggerMeta + Proposal v0.4 §7.2
+    trigger_meta: dict | None = None
     created_at: datetime
     updated_at: datetime
 
