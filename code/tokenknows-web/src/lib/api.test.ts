@@ -70,3 +70,125 @@ describe('api instance', () => {
     expect(api.defaults.timeout).toBe(30_000)
   })
 })
+
+
+// ─── interceptor error normalize (整合测试通过真发请求 → 拦截器) ────
+
+
+import { useAuthStore } from '@/stores/authStore'
+import { vi, beforeEach, afterEach } from 'vitest'
+import MockAdapter from 'axios-mock-adapter'
+
+describe('api interceptor · error normalization', () => {
+  let mock: MockAdapter
+
+  beforeEach(() => {
+    mock = new MockAdapter(api)
+    useAuthStore.setState({ accessToken: null, user: null })
+  })
+
+  afterEach(() => {
+    mock.restore()
+  })
+
+  it('NETWORK_ERROR when no response (status 0)', async () => {
+    mock.onGet('/test').networkError()
+    try {
+      await api.get('/test')
+    } catch (err) {
+      expect(err).toMatchObject({
+        code: 'NETWORK_ERROR',
+        status: 0,
+        message: '网络异常,请检查连接',
+      })
+    }
+  })
+
+  it('400 → BAD_REQUEST default message', async () => {
+    mock.onGet('/test').reply(400, {})
+    try {
+      await api.get('/test')
+    } catch (err) {
+      expect(err).toMatchObject({
+        code: 'BAD_REQUEST',
+        status: 400,
+        message: '请求参数有误',
+      })
+    }
+  })
+
+  it('404 → NOT_FOUND default message', async () => {
+    mock.onGet('/test').reply(404, {})
+    try {
+      await api.get('/test')
+    } catch (err) {
+      expect(err).toMatchObject({ code: 'NOT_FOUND', message: '资源不存在' })
+    }
+  })
+
+  it('403 → FORBIDDEN', async () => {
+    mock.onGet('/test').reply(403, {})
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'FORBIDDEN', message: '无权访问该资源' })
+    }
+  })
+
+  it('409 → CONFLICT', async () => {
+    mock.onGet('/test').reply(409, {})
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'CONFLICT' })
+    }
+  })
+
+  it('422 → VALIDATION_ERROR', async () => {
+    mock.onGet('/test').reply(422, {})
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'VALIDATION_ERROR' })
+    }
+  })
+
+  it('429 → RATE_LIMITED', async () => {
+    mock.onGet('/test').reply(429, {})
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'RATE_LIMITED' })
+    }
+  })
+
+  it('500 → SERVER_ERROR', async () => {
+    mock.onGet('/test').reply(500, {})
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'SERVER_ERROR' })
+    }
+  })
+
+  it('uses backend code/detail when present', async () => {
+    mock.onGet('/test').reply(409, { code: 'EGRESS_DENIED', detail: '出域禁用' })
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'EGRESS_DENIED', message: '出域禁用' })
+    }
+  })
+
+  it('unknown status (e.g. 418) → SERVER_ERROR fallback', async () => {
+    mock.onGet('/test').reply(418, {})
+    try { await api.get('/test') } catch (err) {
+      expect(err).toMatchObject({ code: 'SERVER_ERROR' })
+    }
+  })
+
+  it('injects Authorization header when accessToken set', async () => {
+    useAuthStore.setState({ accessToken: 'tk-abc' })
+    mock.onGet('/test').reply((config) => {
+      expect(config.headers?.Authorization).toBe('Bearer tk-abc')
+      return [200, {}]
+    })
+    await api.get('/test')
+  })
+
+  it('no Authorization when no token', async () => {
+    mock.onGet('/test').reply((config) => {
+      expect(config.headers?.Authorization).toBeUndefined()
+      return [200, {}]
+    })
+    await api.get('/test')
+  })
+})
