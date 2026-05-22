@@ -33,6 +33,8 @@ export default mergeConfig(
           '**/*.test.{ts,tsx}',
           '**/*.d.ts',
           'src/types/**',
+          // shadcn/ui primitives: 第三方组件原文, 通过业务组件使用
+          'src/components/ui/**',
         ],
       },
     },
