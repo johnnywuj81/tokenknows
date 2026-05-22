@@ -6,6 +6,7 @@ from app.gateway.http_api import (
     events,
     generation,
     health,
+    im,
     im_webhooks,
     llm_preview,
     skills,
@@ -20,4 +21,5 @@ api_router.include_router(generation.router, tags=["generation"])
 api_router.include_router(events.router, tags=["events"])
 api_router.include_router(webhooks.router, tags=["webhooks"])
 api_router.include_router(skills.router, tags=["skills"])   # v0.2
-api_router.include_router(im_webhooks.router, tags=["im"])  # v0.3
+api_router.include_router(im.router, tags=["im"])           # v0.3 REST API
+api_router.include_router(im_webhooks.router, tags=["im"])  # v0.3 webhook
