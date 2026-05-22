@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Playwright artifacts (keep baselines under tests-e2e/*-snapshots/ but ignore runs)
+test-results/
+playwright-report/
+.last-run.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
