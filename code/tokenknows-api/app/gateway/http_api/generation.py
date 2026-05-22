@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import AsyncIterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from pydantic import BaseModel
@@ -60,15 +60,39 @@ async def generate_asset(project_id: str, req: GenerateAssetRequest) -> Asset:
     "/projects/{project_id}/assets",
     response_model=PaginatedAssets,
 )
-async def list_project_assets(project_id: str) -> PaginatedAssets:
+async def list_project_assets(
+    project_id: str,
+    type: str | None = Query(None, description="Asset 类型过滤: weekly_report|tech_design|adr|incident|book|agent_skill"),
+    status: str | None = Query(None, description="状态过滤: generating|draft|in_review|approved|published|archived"),
+    cursor: str | None = Query(None, description="游标分页 = 上一页最后一项的 asset id"),
+    limit: int = Query(20, ge=1, le=100),
+) -> PaginatedAssets:
     """前端 useAssets 是 useInfiniteQuery, 期待 { data, meta: { cursor, has_more } }.
 
-    MVP 内存版无真正分页, 一次返回所有.
+    Bug fix 2026-05-22: 之前忽略 type/status query, 永远返回全量,
+    导致前端 Tab 切换看起来无效. 现在: 内存 filter + 游标分页, 与 MSW handler 对齐.
     """
     items = svc.list_assets(project_id)
+
+    if type:
+        items = [a for a in items if a.type == type]
+    if status:
+        items = [a for a in items if a.status == status]
+
+    start_idx = 0
+    if cursor:
+        for i, a in enumerate(items):
+            if a.id == cursor:
+                start_idx = i + 1
+                break
+
+    page = items[start_idx : start_idx + limit]
+    has_more = (start_idx + limit) < len(items)
+    next_cursor = page[-1].id if page and has_more else None
+
     return PaginatedAssets(
-        data=items,
-        meta={"total": len(items), "cursor": None, "has_more": False},
+        data=page,
+        meta={"total": len(items), "cursor": next_cursor, "has_more": has_more},
     )
 
 
