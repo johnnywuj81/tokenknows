@@ -125,6 +125,26 @@ describe('DocumentListPage delete + clone flows', () => {
     await waitFor(() => expect(screen.queryByText('删除文档')).toBeNull())
   })
 
+  it('delete pending: shows 删除中... spinner', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        data: [mkAsset({ id: 'a-x', title: 't' })],
+        meta: { total: 1, cursor: null, has_more: false },
+      },
+    })
+    let resolveDelete: ((v: unknown) => void) | null = null
+    vi.spyOn(api, 'delete').mockReturnValueOnce(
+      new Promise((res) => { resolveDelete = res }),
+    )
+    render(withList(<DocumentListPage />))
+    await waitFor(() => expect(screen.getByTestId('delete-a-x')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('delete-a-x'))
+    await waitFor(() => expect(screen.getByText('确认删除')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('确认删除'))
+    await waitFor(() => expect(screen.getByText(/删除中/)).toBeInTheDocument())
+    resolveDelete?.({ data: {} })
+  })
+
   it('cancel delete: closes dialog without DELETE', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({
       data: {
