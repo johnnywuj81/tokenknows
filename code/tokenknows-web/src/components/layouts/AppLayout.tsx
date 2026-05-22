@@ -9,7 +9,7 @@
  */
 
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, Settings, Shield } from 'lucide-react'
+import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -24,6 +24,8 @@ export function AppLayout() {
     ? [
         { to: `/projects/${currentProjectId}`, icon: LayoutDashboard, label: '工作台' },
         { to: `/projects/${currentProjectId}/documents`, icon: FileText, label: '文档' },
+        { to: `/projects/${currentProjectId}/skills`, icon: Sparkles, label: 'Skills' },
+        { to: `/projects/${currentProjectId}/datasources`, icon: Plug, label: 'IM 接入' },
         { to: `/projects/${currentProjectId}/settings`, icon: Settings, label: '项目设置' },
       ]
     : []
@@ -76,7 +78,8 @@ export function AppLayout() {
               const isWorkbench = item.label === '工作台'
               const isActive =
                 location.pathname === item.to ||
-                (isWorkbench && location.pathname === '/')
+                (isWorkbench && location.pathname === '/') ||
+                (!isWorkbench && location.pathname.startsWith(item.to + '/'))
               return (
                 <li key={item.to}>
                   <Link

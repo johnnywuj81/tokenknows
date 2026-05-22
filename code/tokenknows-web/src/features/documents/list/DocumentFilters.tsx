@@ -27,6 +27,7 @@ const TYPE_OPTIONS: { value: AssetType | 'all'; label: string }[] = [
   { value: 'tech_design', label: '技术方案' },
   { value: 'adr', label: 'ADR' },
   { value: 'incident', label: '复盘' },
+  { value: 'book', label: '书籍' }, // v0.2: 长文档 (10万字+ 嵌套大纲)
 ]
 
 const STATUS_OPTIONS: { value: AssetStatus | 'all'; label: string }[] = [

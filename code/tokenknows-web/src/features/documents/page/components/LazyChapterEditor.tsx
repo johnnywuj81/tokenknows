@@ -94,7 +94,9 @@ function MountedEditor({
   const editor = useEditor(
     {
       extensions: [
-        StarterKit,
+        // StarterKit 新版自带 Link → 关掉, 让下面的自定义 Link.configure 接管
+        // (否则触发 "Duplicate extension names: ['link']" → schema 错乱 → getHTML null crash)
+        StarterKit.configure({ link: false }),
         Placeholder.configure({
           placeholder: '开始编辑章节内容…',
         }),

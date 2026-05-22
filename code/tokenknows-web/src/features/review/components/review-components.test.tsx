@@ -82,7 +82,7 @@ describe('BottomActionBar', () => {
     expect(onAll).toHaveBeenCalled()
   })
 
-  it('has rejected: 退回作者 enabled + navigates', () => {
+  it('has rejected: 退回修改 enabled + navigates', () => {
     const chs = [
       mkChapter({ id: 'c1', approval_state: 'rejected' }),
       mkChapter({ id: 'c2', approval_state: 'pending' }),
@@ -90,18 +90,18 @@ describe('BottomActionBar', () => {
     render(<MemoryRouter>
       <BottomActionBar asset={mkAsset()} chapters={chs} projectId="p1" onAllApproved={() => {}} />
     </MemoryRouter>)
-    const btn = screen.getByText('退回作者').closest('button')
+    const btn = screen.getByText('退回修改').closest('button')
     expect(btn).not.toBeDisabled()
     fireEvent.click(btn!)
     // navigation should not throw
   })
 
-  it('no rejected: 退回作者 disabled', () => {
+  it('no rejected: 退回修改 disabled', () => {
     const chs = [mkChapter({ approval_state: 'pending' })]
     render(<MemoryRouter>
       <BottomActionBar asset={mkAsset()} chapters={chs} projectId="p1" onAllApproved={() => {}} />
     </MemoryRouter>)
-    expect(screen.getByText('退回作者').closest('button')).toBeDisabled()
+    expect(screen.getByText('退回修改').closest('button')).toBeDisabled()
   })
 
   it('empty chapters: 全部通过 disabled', () => {

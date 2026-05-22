@@ -6,7 +6,7 @@
  *   [中] 只读 ChapterBlock 列表 (复用 T06 + readOnly)
  *   [右] ApprovalSidebar - 章节级审批进度 + 通过/退回操作
  *
- * 底部固定: BottomActionBar (全部通过 → 跳 T11 / 退回作者 → 回 T06 / 保存进度)
+ * 底部固定: BottomActionBar (全部通过 → 跳 T11 / 退回修改 → 回 T06 / 保存进度)
  *
  * 设计依据: 任务包 T09 §4-§8
  */

@@ -5,8 +5,8 @@
  * 设计依据 任务包 T06 §8: "顶部: 标题 · 类型徽标 · 版本 · 状态 · 自评卡"
  */
 
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Loader2, Upload } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Send, Loader2, Upload, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Asset, AssetStatus, AssetType } from '@/types/api'
@@ -25,6 +25,8 @@ const TYPE_LABEL: Record<AssetType, string> = {
   tech_design: '技术方案',
   adr: 'ADR',
   incident: '问题复盘',
+  book: '书籍', // v0.2
+  agent_skill: 'Agent Skill', // v0.2 (实际有独立 /skills 页, 此处兜底)
 }
 
 const STATUS_META: Record<
@@ -51,8 +53,10 @@ export function DocHeader({
   onPublish,
 }: DocHeaderProps) {
   const navigate = useNavigate()
+  const { id: projectId } = useParams<{ id: string }>()
   const statusMeta = STATUS_META[asset.status]
   const canSubmit = asset.status === 'draft'
+  const canReview = asset.status === 'in_review' // v0.1 fix: 审批中状态需要"前往审批"入口
   const canPublish = asset.status === 'approved' || asset.status === 'published'
 
   return (
@@ -113,6 +117,15 @@ export function DocHeader({
                 提交审批
               </>
             )}
+          </Button>
+        ) : null}
+        {canReview && projectId ? (
+          <Button
+            onClick={() => navigate(`/projects/${projectId}/documents/${asset.id}/review`)}
+            className="font-ui"
+          >
+            <ClipboardCheck className="size-3.5" />
+            前往审批
           </Button>
         ) : null}
         {canPublish && onPublish ? (

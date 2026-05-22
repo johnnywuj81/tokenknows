@@ -3,7 +3,8 @@
  *
  * 三个操作:
  *   1. "全部通过 + 进入发布" - 仅当所有章节 approved 时可点; 占位 T11 发布入口
- *   2. "退回作者" - asset 整体退回 (任一章节已退回时高亮)
+ *   2. "退回修改" - asset 整体退回给 Editor 继续修改 (任一章节已退回时高亮)
+ *      (LLM 不背责任; 真正"重写"的人是 Editor, 或 Editor 触发的 regenerate_chapter)
  *   3. "保存进度" - 不做服务端写, 仅作 UX 提示 (当前 mutation 都是即时落库)
  */
 
@@ -67,7 +68,7 @@ export function BottomActionBar({
           className="font-ui text-caption"
         >
           <RotateCcw className="size-3.5" />
-          退回作者
+          退回修改
         </Button>
         <Button
           type="button"

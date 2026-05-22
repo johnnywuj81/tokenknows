@@ -65,7 +65,7 @@ export function ApprovalSidebar({
       <header>
         <h2 className="font-content text-h3 text-text-primary">章节审批</h2>
         <p className="font-ui text-caption text-text-muted">
-          逐章通过 / 退回. 任一退回, 文档整体退回作者.
+          逐章通过 / 退回. 任一退回, 文档整体退回 Editor 修改.
         </p>
       </header>
 
@@ -170,7 +170,7 @@ export function ApprovalSidebar({
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               disabled={reject.isPending}
-              placeholder="说明本章节需要作者怎样调整 (≥3 字符)"
+              placeholder="说明本章节需要怎样调整 (Editor 据此手改或 regenerate; ≥3 字符)"
               rows={4}
               className="w-full resize-none rounded-md border border-border-subtle bg-bg-card px-3 py-2 font-ui text-body-sm text-text-primary placeholder:text-text-subtle focus:border-accent-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
