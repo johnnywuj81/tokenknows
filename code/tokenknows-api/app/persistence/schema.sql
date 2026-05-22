@@ -20,10 +20,13 @@ CREATE TABLE IF NOT EXISTS chapters (
     id          TEXT PRIMARY KEY,
     asset_id    TEXT NOT NULL,
     order_index INTEGER NOT NULL,
-    json        TEXT NOT NULL,         -- 完整 Chapter dump
+    parent_id   TEXT,                  -- v0.2: book 嵌套大纲 (NULL = 顶层章)
+    depth       INTEGER DEFAULT 0,     -- v0.2: 0=卷, 1=章, 2=节 (4 类现有都是 0)
+    json        TEXT NOT NULL,         -- 完整 Chapter dump (含 applied_skills 等 v0.2 字段)
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS chapters_asset_idx ON chapters(asset_id, order_index);
+-- chapters_parent_idx 在 store.py:_apply_migrations() 里创建 (避免老 DB 缺 parent_id 列时报错)
 
 CREATE TABLE IF NOT EXISTS progress (
     asset_id    TEXT PRIMARY KEY,

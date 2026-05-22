@@ -43,17 +43,26 @@ class ChapterGeneratedBy(BaseModel):
 
 
 class Chapter(BaseModel):
-    """单章节."""
+    """单章节.
+
+    v0.2 升级: 加 parent_id / depth 支持 book 类嵌套大纲;
+              加 applied_skills 追踪 skill 应用历史 (Milestone C).
+
+    向后兼容: 4 类现有文档全部 parent_id=None / depth=0 / applied_skills=[].
+    """
 
     id: str
     asset_id: str
     asset_version: int = 1
     order_index: int
+    parent_id: str | None = None         # v0.2: book 嵌套 (NULL=顶层)
+    depth: int = 0                       # v0.2: 0=卷, 1=章, 2=节 (book 才用 >0)
     title: str
     content: str  # markdown
     layout: dict = Field(default_factory=dict)
     generated_by: ChapterGeneratedBy | None = None
     regeneration_history: list[dict] = Field(default_factory=list)
+    applied_skills: list[dict] = Field(default_factory=list)  # v0.2: [{skill_id, version, applied_at}]
     approval_state: Literal["pending", "approved", "rejected"] = "pending"
     redacted_spans: list[dict] = Field(default_factory=list)
 

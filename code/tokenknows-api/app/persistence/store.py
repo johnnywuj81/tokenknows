@@ -81,6 +81,25 @@ class SqliteStore:
         schema_sql = schema_file.read_text(encoding="utf-8")
         with self._write_lock:
             self._conn.executescript(schema_sql)
+            self._apply_migrations()
+
+    def _apply_migrations(self) -> None:
+        """Idempotent column-level migrations.
+
+        SQLite 不支持 IF NOT EXISTS for ALTER ADD COLUMN, 改用 PRAGMA table_info
+        探测列是否存在, 不存在再加.
+        """
+        # v0.2 · chapters 加 parent_id + depth + applied_skills_json
+        chapter_cols = {row["name"] for row in self._query("PRAGMA table_info(chapters)")}
+        if "parent_id" not in chapter_cols:
+            self._exec("ALTER TABLE chapters ADD COLUMN parent_id TEXT")
+        if "depth" not in chapter_cols:
+            self._exec("ALTER TABLE chapters ADD COLUMN depth INTEGER DEFAULT 0")
+        # 索引: book 嵌套大纲查询用 (asset_id, parent_id)
+        self._exec(
+            "CREATE INDEX IF NOT EXISTS chapters_parent_idx "
+            "ON chapters(asset_id, parent_id)"
+        )
 
     # ─── 通用 ──────────────────────────────────────────
 
