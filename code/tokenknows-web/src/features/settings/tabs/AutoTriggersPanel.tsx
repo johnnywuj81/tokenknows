@@ -20,8 +20,10 @@ import {
   History,
   ListChecks,
   Sparkles,
+  Trash2,
   XCircle,
   Loader2,
+  Plus,
   Zap,
 } from 'lucide-react'
 
@@ -37,8 +39,13 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
+import { RuleEditorDialog } from './RuleEditorDialog'
 import { cn } from '@/lib/utils'
 import type {
   TriggerExecution,
@@ -72,6 +79,8 @@ const ASSET_TYPE_LABEL: Record<string, string> = {
 export function AutoTriggersPanel({ projectId }: AutoTriggersPanelProps) {
   const [openRuleId, setOpenRuleId] = useState<string | null>(null)
   const [onboardingSelected, setOnboardingSelected] = useState<Set<string>>(new Set())
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<TriggerRule | null>(null)
 
   const rulesQuery = useQuery({
     queryKey: ['auto-trigger', projectId, 'rules'],
@@ -103,15 +112,24 @@ export function AutoTriggersPanel({ projectId }: AutoTriggersPanelProps) {
 
   return (
     <div className="space-y-5">
-      <header className="space-y-1">
-        <p className="font-ui text-eyebrow uppercase tracking-wider text-text-muted">
-          T13 · 项目设置 → 自动触发 (v0.4)
-        </p>
-        <h2 className="font-content text-h2 text-text-primary">自动触发规则</h2>
-        <p className="text-body-sm text-text-muted">
-          基于研发过程信号自动生成文档 / Skill。命中后有 <strong>5 分钟撤回窗口</strong>，
-          用户可在窗口内取消。所有自动生成的 asset 仍走完整 Reviewer 审批流。
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="font-ui text-eyebrow uppercase tracking-wider text-text-muted">
+            T13 · 项目设置 → 自动触发 (v0.4)
+          </p>
+          <h2 className="font-content text-h2 text-text-primary">自动触发规则</h2>
+          <p className="text-body-sm text-text-muted">
+            基于研发过程信号自动生成文档 / Skill。命中后有 <strong>5 分钟撤回窗口</strong>，
+            用户可在窗口内取消。所有自动生成的 asset 仍走完整 Reviewer 审批流。
+          </p>
+        </div>
+        <Button
+          onClick={() => setEditorOpen(true)}
+          className="font-ui shrink-0"
+        >
+          <Plus className="size-3.5" />
+          新建规则
+        </Button>
       </header>
 
       {/* 引导卡: 全部 disabled 时显示 (T35 体验要素 #35) */}
@@ -149,6 +167,7 @@ export function AutoTriggersPanel({ projectId }: AutoTriggersPanelProps) {
             rule={rule}
             projectId={projectId}
             onOpen={() => setOpenRuleId(rule.id)}
+            onDeleteClick={() => setDeleteTarget(rule)}
           />
         ))}
       </ul>
@@ -159,7 +178,95 @@ export function AutoTriggersPanel({ projectId }: AutoTriggersPanelProps) {
           {openRule && <RuleDetail rule={openRule} projectId={projectId} />}
         </SheetContent>
       </Sheet>
+
+      {/* v0.4.3 · 新建规则 Dialog (builder) */}
+      <RuleEditorDialog
+        projectId={projectId}
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+      />
+
+      {/* v0.4.3 · 删除二次确认 */}
+      <DeleteConfirmDialog
+        rule={deleteTarget}
+        projectId={projectId}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
+  )
+}
+
+
+// ─── 删除二次确认 ─────────────────────────────────────────
+
+
+function DeleteConfirmDialog({
+  rule, projectId, onClose,
+}: {
+  rule: TriggerRule | null
+  projectId: string | undefined
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const del = useMutation({
+    mutationFn: async () => {
+      if (!rule) return
+      await api.delete(
+        `/projects/${projectId}/auto-triggers/rules/${rule.id}`,
+      )
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ['auto-trigger', projectId, 'rules'],
+      })
+      onClose()
+    },
+  })
+
+  const isInstanceLevel = rule?.project_id === null
+
+  return (
+    <Dialog open={rule !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-content">
+            <Trash2 className="inline size-4 mr-1 text-danger" />
+            删除规则？
+          </DialogTitle>
+          <DialogDescription>
+            将永久删除规则 <strong>{rule?.name}</strong>。
+            该规则的历史执行记录也会被级联清理。
+            {isInstanceLevel && (
+              <p className="mt-2 text-danger">
+                ⚠ 这是实例级默认规则，不能通过 UI 删除。请改用启停 Switch 关闭。
+              </p>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        {del.isError && (
+          <p className="text-caption text-danger">
+            删除失败: {(del.error as Error).message}
+          </p>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={isInstanceLevel || del.isPending}
+            onClick={() => del.mutate()}
+          >
+            {del.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            永久删除
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -172,9 +279,10 @@ interface RuleListItemProps {
   rule: TriggerRule
   projectId: string | undefined
   onOpen: () => void
+  onDeleteClick: () => void
 }
 
-function RuleListItem({ rule, projectId, onOpen }: RuleListItemProps) {
+function RuleListItem({ rule, projectId, onOpen, onDeleteClick }: RuleListItemProps) {
   const qc = useQueryClient()
   const ModeIcon = MODE_META[rule.mode].icon
 
@@ -231,13 +339,25 @@ function RuleListItem({ rule, projectId, onOpen }: RuleListItemProps) {
           </div>
           <p className="line-clamp-1 text-caption text-text-muted">{rule.description}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           <Switch
             checked={rule.enabled}
             disabled={toggleMutation.isPending}
             onClick={(e) => e.stopPropagation()}
             onCheckedChange={(next) => toggleMutation.mutate(next)}
           />
+          {rule.project_id !== null && (
+            // 项目级规则可删; 实例级 (project_id=null) 隐藏按钮
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDeleteClick(); }}
+              className="rounded-md p-1.5 text-text-muted hover:bg-danger-bg hover:text-danger transition"
+              aria-label="删除规则"
+              title="删除规则"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
         </div>
       </button>
     </li>

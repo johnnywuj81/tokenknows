@@ -27,7 +27,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.config.logging import logger
 from app.schemas.auto_trigger import (
@@ -93,7 +93,97 @@ class RulePatchRequest(BaseModel):
     extra_condition: ExtraCondition | None = None
 
 
+class RuleCreateRequest(BaseModel):
+    """T43 v0.4.3 · UI builder 新建规则 (项目级).
+
+    强制字段: name / mode / asset_type; 各 mode 对应 spec 必填.
+    """
+    name: str
+    mode: Literal["cron", "event", "threshold", "mention"]
+    asset_type: str
+    description: str = ""
+    priority: int = 50
+    enabled: bool = True
+    cooldown_seconds: int = 3600
+    daily_cap: int = 5
+    cron_expr: str | None = None
+    event_match: EventMatch | None = None
+    threshold_spec: ThresholdSpec | None = None
+    extra_condition: ExtraCondition | None = None
+
+
 # ─── Rules CRUD ───────────────────────────────────────────
+
+
+@router.post(
+    "/projects/{project_id}/auto-triggers/rules",
+    response_model=TriggerRule,
+    status_code=201,
+)
+async def create_auto_trigger_rule(
+    project_id: str,
+    body: RuleCreateRequest,
+) -> TriggerRule:
+    """v0.4.3 UI builder · 创建项目级规则.
+
+    规则归属当前 project_id (不允许通过此 API 创建实例级规则;
+    实例级由 seeder 在启动时自动 seed).
+    返回 201 + 新建的规则.
+    """
+    try:
+        return svc.create_rule(
+            project_id=project_id,
+            name=body.name,
+            mode=body.mode,
+            asset_type=body.asset_type,
+            created_by="ui_user",  # v0.4.3 简化: 不接入鉴权; v0.5 RBAC 时填真 user_id
+            description=body.description,
+            priority=body.priority,
+            enabled=body.enabled,
+            cooldown_seconds=body.cooldown_seconds,
+            daily_cap=body.daily_cap,
+            cron_expr=body.cron_expr,
+            event_match=body.event_match,
+            threshold_spec=body.threshold_spec,
+            extra_condition=body.extra_condition,
+        )
+    except svc.RuleSpecMismatch as e:
+        # e.g. mode=cron 但 cron_expr 缺
+        raise HTTPException(400, detail=str(e)) from e
+    except ValidationError as e:
+        # Pydantic 字段约束 (e.g. cooldown_seconds < 60, priority 越界) 触达 TriggerRule model
+        raise HTTPException(400, detail=f"字段校验失败: {e.errors()[0]['msg']}") from e
+
+
+@router.delete(
+    "/projects/{project_id}/auto-triggers/rules/{rule_id}",
+    status_code=204,
+)
+async def delete_auto_trigger_rule(
+    project_id: str,
+    rule_id: str,
+) -> None:
+    """删除规则; FK CASCADE 同步清理 trigger_executions.
+
+    限制:
+    - 实例级规则 (project_id=NULL) 不允许通过此 API 删 (避免误删全实例默认规则);
+      Owner 想去掉只能 PATCH enabled=false
+    - 跨项目访问返 404
+    """
+    rule = svc.get_rule(rule_id)
+    if rule is None:
+        raise HTTPException(404, detail="rule not found")
+    if rule.project_id is None:
+        raise HTTPException(
+            403,
+            detail="实例级默认规则不可删除; 请改用 PATCH 设 enabled=false",
+        )
+    if rule.project_id != project_id:
+        raise HTTPException(404, detail="rule not found")
+    ok = svc.delete_rule(rule_id)
+    if not ok:
+        # 罕见: 并发删除
+        raise HTTPException(404, detail="rule not found")
 
 
 @router.get(

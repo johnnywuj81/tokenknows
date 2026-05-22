@@ -161,6 +161,179 @@ def test_patch_rule_404(client):
     assert res.status_code == 404
 
 
+# ─── POST / DELETE Rules (v0.4.3 T43) ────────────────────
+
+
+def test_create_rule_cron_happy(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "Custom 周三周报",
+            "mode": "cron",
+            "asset_type": "weekly_report",
+            "cron_expr": "0 9 * * 3",
+            "priority": 60,
+            "description": "团队周三同步",
+        },
+    )
+    assert res.status_code == 201
+    body = res.json()
+    assert body["name"] == "Custom 周三周报"
+    assert body["cron_expr"] == "0 9 * * 3"
+    assert body["project_id"] == "proj-1"
+    assert body["created_by"] == "ui_user"
+
+
+def test_create_rule_event_with_match(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "PR docs/ADR-* → tech_design",
+            "mode": "event",
+            "asset_type": "tech_design",
+            "event_match": {
+                "event_type": "github_pr_merged",
+                "label_any": ["adr-needed"],
+            },
+            "priority": 80,
+        },
+    )
+    assert res.status_code == 201
+    assert res.json()["event_match"]["event_type"] == "github_pr_merged"
+
+
+def test_create_rule_threshold_with_spec(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "100 章 → 第二册",
+            "mode": "threshold",
+            "asset_type": "book",
+            "threshold_spec": {
+                "metric": "approved_chapters_total",
+                "comparator": ">=",
+                "value": 100,
+            },
+            "enabled": False,
+            "cooldown_seconds": 604800,
+        },
+    )
+    assert res.status_code == 201
+    assert res.json()["threshold_spec"]["value"] == 100
+
+
+def test_create_rule_cron_missing_expr_400(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "Bad",
+            "mode": "cron",
+            "asset_type": "weekly_report",
+            # 缺 cron_expr
+        },
+    )
+    assert res.status_code == 400
+    assert "cron_expr" in res.json()["detail"]
+
+
+def test_create_rule_event_missing_match_400(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={"name": "x", "mode": "event", "asset_type": "adr"},
+    )
+    assert res.status_code == 400
+
+
+def test_create_rule_cooldown_too_short_400(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "Fast",
+            "mode": "cron",
+            "asset_type": "weekly_report",
+            "cron_expr": "* * * * *",
+            "cooldown_seconds": 10,  # < 60
+        },
+    )
+    # Pydantic 字段约束 ge=60 在 RuleCreateRequest 间接拒
+    # 实际 svc.create_rule 里 TriggerRule 模型校验, 返 422 或 400
+    assert res.status_code in (400, 422)
+
+
+def test_delete_rule_happy(client):
+    # 先创建一条
+    created = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "to-delete", "mode": "cron",
+            "asset_type": "weekly_report", "cron_expr": "0 9 * * 1",
+        },
+    ).json()
+    rule_id = created["id"]
+
+    res = client.delete(
+        f"/api/v1/projects/proj-1/auto-triggers/rules/{rule_id}"
+    )
+    assert res.status_code == 204
+
+    # 二次查 → 404
+    res = client.get(
+        f"/api/v1/projects/proj-1/auto-triggers/rules/{rule_id}"
+    )
+    assert res.status_code == 404
+
+
+def test_delete_rule_404_cross_project(client):
+    created = client.post(
+        "/api/v1/projects/proj-A/auto-triggers/rules",
+        json={
+            "name": "A's", "mode": "cron",
+            "asset_type": "weekly_report", "cron_expr": "0 9 * * 1",
+        },
+    ).json()
+    rule_id = created["id"]
+    # proj-B 视角下应拒绝
+    res = client.delete(
+        f"/api/v1/projects/proj-B/auto-triggers/rules/{rule_id}"
+    )
+    assert res.status_code == 404
+
+
+def test_delete_instance_rule_forbidden(client):
+    """实例级规则不允许通过 API 删除."""
+    inst = _create_weekly_rule(project_id=None)
+    res = client.delete(
+        f"/api/v1/projects/proj-X/auto-triggers/rules/{inst.id}"
+    )
+    assert res.status_code == 403
+    assert "实例级" in res.json()["detail"]
+
+
+def test_delete_cascades_executions(client):
+    """删 rule → trigger_executions FK CASCADE 同步清."""
+    created = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules",
+        json={
+            "name": "cascade-test", "mode": "cron",
+            "asset_type": "weekly_report", "cron_expr": "0 9 * * 1",
+        },
+    ).json()
+    rule_id = created["id"]
+    # 创建一条 execution
+    rule = svc.get_rule(rule_id)
+    svc.schedule_execution(
+        rule, "proj-1", TriggerSignal(type="cron", summary="x")
+    )
+    assert len(svc.list_executions(project_id="proj-1")) == 1
+
+    # 删 rule → execution 也被级联删
+    res = client.delete(
+        f"/api/v1/projects/proj-1/auto-triggers/rules/{rule_id}"
+    )
+    assert res.status_code == 204
+    assert len(svc.list_executions(project_id="proj-1")) == 0
+
+
 # ─── Executions ───────────────────────────────────────────
 
 
