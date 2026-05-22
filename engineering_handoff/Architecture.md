@@ -483,6 +483,125 @@ async def generate(
 
 CI workflow 跑 `ruff check app/`，违反直接挂。
 
+### 5.7 PromptTemplate 子系统 (v0.2 升级)
+
+> 配套 PRD §C5/C6 + TDD §7.5/§7.6。把硬编码在 `generation_service.py` 各 stage 内的 prompt 抽到独立模板, 支持 Jinja2 占位符 + skill 注入。
+
+```
+app/prompts/
+├── base.py                      # PromptTemplate 类: load(path) → render(ctx) → str
+├── outline/
+│   ├── weekly_report.md         # 现有 4 类 prompt 字节级搬运 (零行为变化)
+│   ├── tech_design.md
+│   ├── adr.md
+│   ├── incident.md
+│   ├── book.md                  # v0.2 新 - 卷大纲 + 章大纲 2 步
+│   └── agent_skill.md           # v0.2 新 - 引导 LLM 抽取通用规则
+├── content/                     # 同上 6 个
+├── assess/                      # 同上 6 个
+└── distill/                     # v0.2 新 stage (仅 skill)
+    └── skill_distill.md
+```
+
+**核心契约**:
+- 每个模板第一行是 YAML frontmatter (model_hint / max_tokens / temperature)
+- 正文用 Jinja2 (`{{ asset.type }}` / `{% for ev in events %}`)
+- `PromptTemplate.render(ctx)` 返回 `{system: str, user: str, options: dict}`
+- 模板内不能调 LLM (无副作用), 仅纯字符串渲染
+
+**回归保证**: A1 阶段提交时必须包含 "现有 4 类生成 LLM 输入字节级对齐" 测试, 防止 prompt 搬运过程偏移。
+
+### 5.8 Skill 自进化子系统 (v0.2 升级)
+
+> 与 §5.7 配套, 是 v0.2 产品差异化的核心。
+
+**架构图**:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                              │
+│  Chapter (approved)                                          │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌─ Distill (skill_service.py) ──────────────────────────┐  │
+│  │  1. 拉 chapter + regeneration_history                  │  │
+│  │  2. LLM (用 prompts/distill/skill_distill.md)          │  │
+│  │  3. 输出 SKILL.md (YAML + 正文)                        │  │
+│  │  4. embed_batch → skills.embedding                     │  │
+│  │  5. store.upsert_skill (status=draft)                  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│       │                                                      │
+│       ▼                                                      │
+│  Skill (draft / active)                                      │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌─ Apply (_stage_content 改造) ─────────────────────────┐  │
+│  │  select_skills_for_chapter(top-3, diversity+ε-greedy)  │  │
+│  │  → system_prompt += skill_md                           │  │
+│  │  → chapter.applied_skills += {id, version, at}         │  │
+│  │  → skill.usage_count += 1                              │  │
+│  └────────────────────────────────────────────────────────┘  │
+│       │                                                      │
+│       ▼                                                      │
+│  Chapter (approved/rejected/regenerated)                     │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌─ Feedback Hook (on_chapter_state_changed) ────────────┐  │
+│  │  acceptance_count++ / rejection_count++                │  │
+│  │  trust_score = recompute(...)                          │  │
+│  │  if usage>=20 and acc_rate<0.5: trigger evolve_v2      │  │
+│  └────────────────────────────────────────────────────────┘  │
+│       │                                                      │
+│       └──── 回到 Distill (v2/v3/...)                         │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**模块清单**:
+
+| 模块 | 文件 | 职责 |
+|---|---|---|
+| Skill schema | `app/schemas/skill.py` | Pydantic 模型 |
+| Skill service | `app/services/skill_service.py` | distill / select / on_chapter_state_changed / evolve_v2 |
+| Skill HTTP | `app/gateway/http_api/skills.py` | TDD §6.1 列出的 8 个端点 |
+| Skill persistence | `app/persistence/store.py` (扩) | upsert_skill / list_skills / load_all_skills |
+| Distill prompt | `app/prompts/distill/skill_distill.md` | LLM 指令 |
+
+**对外契约 (供其它子系统使用)**:
+- `select_skills_for_chapter(project_id, chapter_outline, recent_events) → list[Skill]`
+- `on_chapter_state_changed(chapter_id, old_state, new_state)` (订阅 approve/reject/regenerate 事件)
+
+**与现有子系统的边界**:
+- LLM 调用 100% 走 LLMRouter (task=skill_distill 走 minimax-m2 默认, 可改 .env)
+- Embedding 100% 走 `embed_batch` (nomic-embed-text, 768 dim)
+- 持久化 100% 走 `store.py`, 无直连 SQLite
+- 不允许 skill_service 直接调 `_stage_*`, 反向也禁止 (依赖单向, generation_service 调 skill_service)
+
+### 5.9 Book 长文档生成路径 (v0.2 升级)
+
+> 复用现有 5 阶段流水线, 通过 PromptTemplate + Chapter 嵌套 + 滚动 summary 三件套支撑。
+
+**5 阶段在 book 模式下的改造**:
+
+| Stage | 现有 (4 类) | book 模式 |
+|---|---|---|
+| collect | events filter | 同, 加 `book_outline_style` 参数 |
+| outline | 1 次 LLM → 5-7 章 | **2 步**: 卷大纲 (1 次, 3-5 卷) → 章大纲 (N 次并行, 每卷 10-15 章) |
+| content | 每章 1 次 LLM, max_tokens=800 | 每章 1 次, max_tokens=2500 + **rolling summary** (前 N 章 ~200 字摘要拼到 system_prompt) |
+| evidence | cosine × trust × recency | 同 |
+| assess | 4 指标 | 同 + `consistency_score` (跨章用词/事实一致性, 用 embedding cluster 计算) |
+
+**SSE 事件 (book 专属)**:
+- `volume_outline_completed` (1 次, 携带 volumes 列表)
+- `chapter_outline_completed` (N 次, 携带 volume_id + chapters[]) 
+- `chapter_content_completed` (N 次, 携带 chapter_id + summary_for_next)
+
+前端进度卡复用现有 `useGenerationSSE`, 加新 event listener 即可。
+
+**性能预算**:
+- 50 章 × 30s/章 = 25 分钟 (Ollama minimax-m2:cloud)
+- 50 章 × 8s/章 = 7 分钟 (Claude Sonnet) — 但单本 cost ~$0.4
+- 内存: 单 book 占 50MB 内存 (50 章 × 5KB content × 2 倍 overhead), 单实例 10 个 book 并发 ≤ 500MB
+
 ---
 
 ## 6. 价值识别与证据链（详细）

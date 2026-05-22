@@ -268,16 +268,20 @@ CREATE TABLE chapters (
   asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
   asset_version INT NOT NULL,
   order_index INT NOT NULL,
+  parent_id UUID REFERENCES chapters(id) ON DELETE CASCADE,  -- v0.2: book 嵌套 (NULL=顶层)
+  depth INT DEFAULT 0,                    -- v0.2: 0=卷, 1=章, 2=节; 现有 4 类全是 0
   title TEXT,
   content TEXT,
   content_blob_ref TEXT,                  -- > 64KB 时存对象存储
   layout JSONB,
   generated_by JSONB,                     -- {model, provider, latency_ms, tokens}
   regeneration_history JSONB DEFAULT '[]',
+  applied_skills JSONB DEFAULT '[]',      -- v0.2: [{skill_id, version, applied_at}]
   approval_state TEXT DEFAULT 'pending',
   redacted_spans JSONB DEFAULT '[]',
   UNIQUE (asset_id, asset_version, order_index)
 );
+CREATE INDEX chapters_parent_idx ON chapters(asset_id, parent_id);  -- v0.2
 
 CREATE TABLE evidences (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -303,6 +307,34 @@ CREATE TABLE publish_records (
   published_at TIMESTAMPTZ DEFAULT NOW(),
   published_by UUID REFERENCES users(id)
 );
+
+-- v0.2 · Agent Skill (项目级私有, 自进化)
+CREATE TABLE skills (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  version INT NOT NULL DEFAULT 1,
+  skill_md TEXT NOT NULL,                  -- Anthropic SKILL.md 全文 (YAML+正文)
+  embedding VECTOR(768),                   -- nomic-embed-text 维度; SQLite 用 BLOB
+  -- 自进化指标
+  usage_count INT DEFAULT 0,
+  acceptance_count INT DEFAULT 0,
+  rejection_count INT DEFAULT 0,
+  avg_acceptance_rate REAL DEFAULT 0.0,
+  trust_score REAL DEFAULT 0.5,
+  -- 来源追溯
+  distilled_from JSONB DEFAULT '[]',       -- [chapter_id, ...]
+  distilled_at TIMESTAMPTZ DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  -- 状态
+  locked BOOLEAN DEFAULT FALSE,
+  status TEXT DEFAULT 'draft',             -- draft / active / deprecated / archived
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (project_id, name, version)
+);
+CREATE INDEX skills_project_status_idx ON skills(project_id, status, trust_score DESC);
+CREATE INDEX skills_last_used_idx ON skills(last_used_at DESC);
 ```
 
 ### 5.4 审计与出域日志
@@ -427,6 +459,28 @@ POST   /api/v1/publish-records/{id}/revoke
 # Audit
 GET    /api/v1/audit-log?project_id=&user_id=&action=
 GET    /api/v1/egress-log?project_id=
+
+# Skills (v0.2 升级 · 见 PRD §5.8 / §C6)
+GET    /api/v1/projects/{project_id}/skills?status=active|draft|deprecated
+GET    /api/v1/skills/{skill_id}
+POST   /api/v1/projects/{project_id}/skills/distill
+       body: { source_chapter_ids: [str], name?: str }
+       response: 202 + { skill_id, status: "distilling" }
+       SSE: GET /api/v1/skills/{skill_id}/distill/stream  (推送 distill_completed 事件)
+PATCH  /api/v1/skills/{skill_id}
+       body: { skill_md?, status?, locked?, name? }
+       自动: version += 1, usage_count = 0 (若 skill_md 改动)
+POST   /api/v1/skills/{skill_id}/lock
+       body: { locked: true|false }
+POST   /api/v1/skills/{skill_id}/evolve   # 手动触发 v2 蒸馏
+DELETE /api/v1/skills/{skill_id}          # 软删除 (status=archived)
+GET    /api/v1/skills/{skill_id}/usage    # 应用历史 (chapter_id 列表 + accept/reject 状态)
+
+# Book 类长文档 (复用 /assets/generate, 仅 body 增 book 专属字段)
+POST   /api/v1/projects/{project_id}/assets/generate
+       body: { type: "book", book_outline_style: "technical_manual"|"training_material"|"sop_anthology",
+               estimated_word_count: int, target_volumes: int, ... }
+GET    /api/v1/assets/{asset_id}/chapters?depth=0|1|2  # 按 depth 筛 (0=卷, 1=章, 2=节)
 ```
 
 ### 6.2 SSE / WebSocket
@@ -577,6 +631,97 @@ async def generate(self, task, messages, options, project_id, user_id=None):
     
     return result
 ```
+
+### 7.5 Skill 注入策略 (v0.2)
+
+> 与 PRD §5.8 + §C6 配套。把蒸馏出来的项目级 skill 注入到下次 `_stage_content` 的 system_prompt 里。
+
+```python
+# app/services/skill_service.py
+async def select_skills_for_chapter(
+    project_id: str,
+    chapter_outline: str,
+    recent_events_summary: str,
+    k: int = 3,
+) -> list[Skill]:
+    """语义检索 top-k skill, 按 cosine × trust_score × recency_decay 综合排序."""
+    query = f"{chapter_outline}\n\n{recent_events_summary}"
+    query_vec = await embed_batch([query])
+
+    candidates = list_skills(project_id, status="active")
+    scored = []
+    for s in candidates:
+        if s.locked or s.trust_score < 0.5:
+            # locked 也参与, trust < 0.5 跳过 (避免污染)
+            if not s.locked:
+                continue
+        cosine = cosine_sim(query_vec[0], s.embedding)
+        recency = exp(-days_since(s.last_used_at or s.created_at) / 30)
+        score = 0.5 * cosine + 0.3 * s.trust_score + 0.2 * recency
+        scored.append((score, s))
+
+    # Diversity bonus: top1 选最高分, top2/3 必须与 top1 cosine ≤ 0.7
+    scored.sort(reverse=True)
+    selected = [scored[0][1]] if scored else []
+    for _, s in scored[1:]:
+        if all(cosine_sim(s.embedding, sel.embedding) <= 0.7 for sel in selected):
+            selected.append(s)
+        if len(selected) >= k:
+            break
+
+    # Exploration: 5% 概率注入 1 个随机 draft (避免局部最优)
+    if random.random() < 0.05 and len(selected) < k:
+        drafts = list_skills(project_id, status="draft")
+        if drafts:
+            selected.append(random.choice(drafts))
+
+    return selected
+
+
+# app/services/generation_service.py · _stage_content 改造
+async def _stage_content(asset_id, chapter, ...):
+    skills = await select_skills_for_chapter(project_id, chapter.title, events_summary)
+    skill_block = "\n\n".join(s.skill_md for s in skills)
+
+    system_prompt = render_template("content/" + asset.type + ".md", {...})
+    if skill_block:
+        system_prompt += f"\n\n## 可参考的项目专家技能\n\n{skill_block}"
+
+    response = await router.generate(messages=[...], task=asset.type, ...)
+
+    # 记录应用
+    chapter.applied_skills = [
+        {"skill_id": s.id, "version": s.version, "applied_at": now()}
+        for s in skills
+    ]
+    for s in skills:
+        s.usage_count += 1
+        s.last_used_at = now()
+        store.upsert_skill(s)
+
+    return chapter, response.usage
+```
+
+### 7.6 反馈循环 hook
+
+```python
+# app/services/skill_service.py
+def on_chapter_state_changed(chapter_id: str, old_state: str, new_state: str):
+    chapter = _chapters_index[chapter_id]
+    for applied in chapter.applied_skills:
+        skill = _skills[applied["skill_id"]]
+        if new_state == "approved":
+            skill.acceptance_count += 1
+        elif new_state == "rejected":
+            skill.rejection_count += 1
+        _recompute_trust(skill)
+        store.upsert_skill(skill)
+        # 检查是否触发进化
+        if skill.usage_count >= 20 and skill.acceptance_rate < 0.5 and not skill.locked:
+            asyncio.create_task(evolve_skill_v2(skill.id))
+```
+
+挂在 `approve_chapter` / `reject_chapter` / `regenerate_chapter` 末尾, 不阻塞主链路。
 
 ---
 

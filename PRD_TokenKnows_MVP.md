@@ -597,6 +597,66 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **关联决策**：C.1 内置模板、C.4 标红警告
 
+#### C5 书籍类长文档 (v0.2 升级)
+
+**用户故事**：作为 Editor / 知识管理员，我希望把多个 PR、ADR、对话讨论沉淀为一本 10 万字+ 的内部技术手册 / 培训教材 / SOP 汇编，自动按"卷 → 章 → 节"组织。
+
+**验收标准**
+
+- Given 项目内有 ≥ 30 天累积的研发事件 + ≥ 5 份已审批文档
+  When 用户在"文档"页选 "+ 生成新文档" → 类型 = "书籍" → 选模板 (技术手册 / 培训教材 / SOP 汇编) + 估算字数
+  Then 系统先生成"卷大纲" (3-5 卷) 给用户预览, 用户确认后再生成每卷的章大纲 (总计 30-50 章), 最后并行生成每章正文
+
+- Given 一本 50 章的 book 正在生成
+  When 用户打开生成结果页
+  Then 进度卡显示 "卷 2/3 · 章 18/47", 预计剩余时间; 已完成章节可立即查看, 未完成显示骨架; 大纲左侧支持卷折叠 / 展开
+
+- Given 用户在已生成的 book 内编辑超 20KB 的章节
+  When 打开章节
+  Then 默认显示只读 markdown 预览; 点击 "编辑" 进入 TipTap 富文本 (避免大文本渲染卡顿)
+
+**优先级**：P1 (v0.2 升级)
+
+**异常分支**
+
+- 单章生成超时 (> 60s) → 标记该章为 "失败", 用户可点 "重生成" 单独重试, 不影响其它章
+- LLM context window 超限 → 自动启用 "滚动 summary" (每章完成后生成 ~200 字摘要喂下一章), 不阻断
+- 用户中途要求改卷大纲 → 标记后续章节为 "已过期", 用户可 "重新生成受影响章节"
+
+**关联决策**：C.1 内置模板 (扩展到嵌套结构)、C.4 标红警告 (跨章一致性指标)
+
+#### C6 Agent 专家技能 (v0.2 升级)
+
+**用户故事**：作为 Editor / Tech Lead，我希望从已通过审批的高质量章节里自动提炼出"专家技能" (类似 Anthropic Skills / Cursor Rules), 系统在下次生成文档时自动应用这些技能, 让 AI 越用越懂团队风格。
+
+**验收标准**
+
+- Given 项目内某 chapter 已通过审批 (approval_state=approved) 且 trust_score ≥ 0.7
+  When 用户在该 chapter footer 点 "提炼为 Skill" 按钮
+  Then 系统在 30-60s 内生成 SKILL.md (Anthropic 风格 YAML frontmatter + 正文), 保存到 /projects/{id}/skills 页面 (默认 status=draft), 引用本 chapter 作为来源
+
+- Given 用户审阅 /projects/{id}/skills 页的 draft skill
+  When 编辑 / 接受 / 拒绝
+  Then 接受后 status 转 active, 自动注入下次相关文档生成的 system_prompt; 拒绝后归档
+
+- Given 一个 active skill 被注入了 N 次生成 (usage_count ≥ 20)
+  When 系统计算 acceptance_rate = approved / (approved + rejected)
+  Then 若 < 0.5 → 触发 skill 自进化 (基于反馈 reject 的章节蒸馏 v2); 若 ≥ 0.8 → UI 标星 "高质量"
+
+- Given 用户希望固化某 skill 不再自动迭代
+  When 在 skill 详情页点 "锁定"
+  Then skill.locked = true, 不再被自进化逻辑修改
+
+**优先级**：P1 (v0.2 升级，产品差异化核心)
+
+**异常分支**
+
+- 蒸馏出的 SKILL.md 与现有 active skill 重复 → 提示用户合并或新建版本
+- skill_md 中混入 PII / token → 复用 D5 脱敏流水线, 用户确认才能发布
+- 自进化反复 v2/v3/v4 都低于阈值 → 标记为 "deprecated", UI 显示告警
+
+**关联决策**：C.2 自动 + 用户可覆盖、C.3 用户手选模型 (skill 蒸馏也走 LLM Gateway)
+
 ### 5.4 模块 D · 证据链与来源追溯
 
 #### D1 片段 ↔ 原始事件绑定
@@ -854,6 +914,66 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 - 已发布文档再次发布到同一目的地 → 弹窗"覆盖原文档 / 新建版本"由用户选择
 
 **关联决策**：要素 #15 目的地选择、#16 发布回执 + 版本追溯
+
+### 5.8 模块 H · Skill 自进化机制 (v0.2)
+
+> 仅与 C6 配套。本节描述 skill 怎么"越用越懂团队"。
+
+#### H1 蒸馏触发
+
+**3 个入口** (按 PRD 优先级递减):
+
+1. **用户主动** (P0): 已通过审批的 chapter footer 显示"提炼为 Skill"按钮, 单次蒸馏 1 个 chapter (~30s)
+2. **批量主动** (P1): /projects/:id/skills 页 → "批量蒸馏", 用户勾选 ≥ 3 个已审批 chapter, 一次蒸馏 1 个 skill
+3. **后台自动** (P2): 每天凌晨 03:00 (项目时区), 扫描该项目过去 24h 内 trust_score ≥ 0.8 且 approval_state=approved 的 chapter, 自动蒸馏到 draft. 用户次日审阅决定接受/拒绝
+
+**默认行为**: 仅 P0 + P1, P2 在项目设置中开关 (默认关闭, 避免噪音)。
+
+#### H2 反馈来源 (4 路信号 → trust_score 更新)
+
+| 信号 | 类型 | 权重 | 说明 |
+|---|---|---|---|
+| chapter approved | 显式正 | +1.0 | chapter 用了 skill 且被审批通过 |
+| chapter rejected | 显式负 | -1.0 | chapter 用了 skill 但被退回 |
+| chapter regenerated (大 diff) | 隐式负 | -0.3 | 用户重生成且 content diff > 30% |
+| chapter regenerated (小 diff) | 隐式正 | +0.1 | 重生成但 diff < 10% (说明初版基本对) |
+
+**Trust 更新公式** (每次反馈触发):
+```
+new_acceptance_rate = (acceptance_count * 1.0 + small_diff * 0.1) /
+                     (acceptance_count + rejection_count + big_diff * 0.3)
+new_trust = 0.5 * acceptance_rate + 0.3 * recency_decay + 0.2 * cosine_with_query
+recency_decay = exp(-days_since_last_use / 30)
+```
+
+#### H3 进化触发条件
+
+| 条件 | 动作 |
+|---|---|
+| usage_count ≥ 20 且 acceptance_rate < 0.5 | 蒸馏 v2: 拉最近 reject 的 chapter, 让 LLM 修正 skill_md |
+| usage_count ≥ 50 且 acceptance_rate ≥ 0.8 | UI 标星 "高质量", 自动 status=active (无需人工审批) |
+| 连续 v3 仍 < 0.5 | status = deprecated, UI 显示告警 + 建议人工接管 |
+| 距离 last_used > 90 天 | status = archived (不删除), 重新使用时复活 |
+
+#### H4 防止反馈循环陷入局部最优
+
+- **Diversity bonus**: 每次注入 top-3 skill 时, 第 2 / 3 个 skill 必须 cosine ≤ 0.7 (与第 1 个), 强制多样
+- **Exploration rate** (ε-greedy): 5% 概率随机注入 1 个新 draft skill, 用于发现潜在好 skill
+- **强制再蒸馏**: 每月触发一次"重蒸馏热门 skill" (基于最新 chapter), 避免 skill 落后于项目演进
+
+#### H5 用户控制
+
+| 操作 | 影响 |
+|---|---|
+| 编辑 skill_md | 自动版本 +1, 重置 usage_count, 进入 draft |
+| 锁定 (locked=true) | 跳过所有自进化逻辑, 永远使用当前版本 |
+| 停用 (status=deprecated) | 不再注入 prompt, 历史 chapter 不变 |
+| 复制 / 导出 | 生成新 skill (id 新, version=1) 或下载 .skill.md 文件 |
+| 删除 | 软删除 (status=archived), 30 天后真删 |
+
+**优先级**：P1 (v0.2 升级)
+
+**关联决策**：与 C6 共同构成"自进化"产品差异点。
 
 ---
 
