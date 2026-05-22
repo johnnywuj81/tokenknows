@@ -23,6 +23,7 @@ from app.persistence import bootstrap as bootstrap_db
 from app.services.generation_service import _bootstrap_from_db
 from app.services.im import retention as im_retention
 from app.services.im import token_refresher as im_token_refresher
+from app.services.auto_trigger import scheduler as auto_trigger_scheduler
 from app.services.auto_trigger_service import bootstrap as bootstrap_auto_trigger
 from app.services.im_service import bootstrap as bootstrap_im
 from app.services.skill_service import bootstrap as bootstrap_skills
@@ -79,7 +80,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             interval_seconds=_TOKEN_REFRESH_INTERVAL_SECONDS,
         )
 
+        # v0.4 · 启动 APScheduler (T27: 6 个固定 job, 大多是 stub; T29/T31 替换为真)
+        auto_trigger_scheduler.start_scheduler()
+
     yield
+
+    # v0.4 · 优雅关停 APScheduler (在 IM bg task 之前停, 防止 job 触发后没人处理)
+    if not _is_test_mode():
+        auto_trigger_scheduler.shutdown_scheduler(wait=False)
 
     # 优雅关停后台 task
     for task in bg_tasks:

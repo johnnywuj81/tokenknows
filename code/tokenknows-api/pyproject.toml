@@ -24,6 +24,9 @@ dependencies = [
     "orjson>=3.10.0",
     # v0.3 IM 集成 · OAuth token Fernet 加密 (T16+)
     "cryptography>=44.0.0",
+    # v0.4 自动触发 · APScheduler 3.x (T27+); in-process AsyncIO, 无 Celery/Redis 重依赖
+    # 决策偏差: Proposal 原写 4.x, 但 v4 仍 alpha (4.0.0a6), 改用稳定 3.10+
+    "apscheduler>=3.10.0,<4.0",
 ]
 
 [project.optional-dependencies]
