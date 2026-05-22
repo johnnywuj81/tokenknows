@@ -40,19 +40,26 @@ async def cron_evaluator_job() -> None:
 
 
 async def threshold_scanner_job() -> None:
-    """每 15 分钟扫 enabled+mode=threshold 的规则; v0.4.2 真实现.
+    """每 15 分钟扫 enabled+mode=threshold 的规则 (v0.4.2 T41 真实现).
 
-    Stub 行为: 仅记录候选规则数量.
+    实际评估委托给 evaluator.evaluate_threshold_rules:
+    - 拉 enabled+mode=threshold 规则
+    - 实例级 fan-out 到所有 active 项目 (events 表)
+    - 检查 ThresholdSpec (metric 比较 + and_not_exists 去重)
+    - 三层防护: cooldown / daily_cap / unsupported_metric
+    - 命中 → svc.schedule_execution (5min 撤回窗口)
     """
     try:
-        rules = svc.list_rules(enabled=True, mode="threshold", include_instance_defaults=True)
-        logger.debug(
-            "auto_trigger_threshold_scanner_tick",
-            stub=True,
-            candidate_rules=len(rules),
+        from app.services.auto_trigger.evaluator.threshold_evaluator import (
+            evaluate_threshold_rules,
         )
+        evaluate_threshold_rules()
+        # 详细 stats log 由 evaluate_threshold_rules 内部写
     except Exception as e:
-        logger.error("auto_trigger_threshold_scanner_failed", error=str(e))
+        logger.error(
+            "auto_trigger_threshold_scanner_failed",
+            error=str(e), exc_info=True,
+        )
 
 
 async def withdraw_window_resolver_job() -> None:
