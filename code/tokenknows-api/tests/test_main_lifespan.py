@@ -76,12 +76,43 @@ async def test_lifespan_starts_and_cancels_retention(
             cancel_seen.set()
             raise
 
-    with patch.object(main.im_retention, "retention_sweep_loop", new=fake_loop):
+    async def fake_token_loop(interval: int) -> None:
+        await asyncio.sleep(3600)  # 不需要单独检测, 但要存在
+
+    with patch.object(main.im_retention, "retention_sweep_loop", new=fake_loop), \
+         patch.object(main.im_token_refresher, "token_refresher_loop", new=fake_token_loop):
         async with main.lifespan(main.app):
             await asyncio.wait_for(started.wait(), timeout=1.0)
-            # 这时 task 正在跑
-        # 退出 with 后 task 应被 cancel
         await asyncio.wait_for(cancel_seen.wait(), timeout=1.0)
+
+
+@pytest.mark.asyncio
+async def test_lifespan_starts_token_refresher_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v0.3.1 I: 非测试模式应启 token_refresher_loop."""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("DISABLE_IM_RETENTION", raising=False)
+
+    token_started = asyncio.Event()
+    token_cancel_seen = asyncio.Event()
+
+    async def fake_token_loop(interval: int) -> None:
+        token_started.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            token_cancel_seen.set()
+            raise
+
+    async def fake_retention(interval: int) -> None:
+        await asyncio.sleep(3600)
+
+    with patch.object(main.im_retention, "retention_sweep_loop", new=fake_retention), \
+         patch.object(main.im_token_refresher, "token_refresher_loop", new=fake_token_loop):
+        async with main.lifespan(main.app):
+            await asyncio.wait_for(token_started.wait(), timeout=1.0)
+        await asyncio.wait_for(token_cancel_seen.wait(), timeout=1.0)
 
 
 @pytest.mark.asyncio

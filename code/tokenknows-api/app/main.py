@@ -22,12 +22,15 @@ from app.gateway.http_api import api_router
 from app.persistence import bootstrap as bootstrap_db
 from app.services.generation_service import _bootstrap_from_db
 from app.services.im import retention as im_retention
+from app.services.im import token_refresher as im_token_refresher
 from app.services.im_service import bootstrap as bootstrap_im
 from app.services.skill_service import bootstrap as bootstrap_skills
 
 # v0.3 · IM 保留期清理扫描间隔 (秒). 默认 1 小时.
 # 测试模式下 (PYTEST_CURRENT_TEST 环境变量存在) 不启动后台 task.
 _RETENTION_SWEEP_INTERVAL_SECONDS = 3600
+# v0.3.1 I · token 刷新间隔 (秒). 默认 10 分钟.
+_TOKEN_REFRESH_INTERVAL_SECONDS = 600
 
 
 @asynccontextmanager
@@ -52,29 +55,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # v0.3 · IM connections 内存 cache
     bootstrap_im()
 
-    # v0.3.1 P1 · 启动 IM retention 后台扫描 (90 天到期自动脱敏)
+    # v0.3.1 P1 + I · 启动 IM 后台 task (retention 清理 + token 刷新)
     # 测试模式下不启 (避免污染 TestClient 测试 + 干扰 fixture)
-    retention_task: asyncio.Task | None = None
+    bg_tasks: list[asyncio.Task] = []
     if not _is_test_mode():
-        retention_task = asyncio.create_task(
+        bg_tasks.append(asyncio.create_task(
             im_retention.retention_sweep_loop(_RETENTION_SWEEP_INTERVAL_SECONDS),
             name="im-retention-sweep",
-        )
+        ))
         logger.info(
             "im_retention_sweep_started",
             interval_seconds=_RETENTION_SWEEP_INTERVAL_SECONDS,
+        )
+        bg_tasks.append(asyncio.create_task(
+            im_token_refresher.token_refresher_loop(_TOKEN_REFRESH_INTERVAL_SECONDS),
+            name="im-token-refresher",
+        ))
+        logger.info(
+            "im_token_refresher_started",
+            interval_seconds=_TOKEN_REFRESH_INTERVAL_SECONDS,
         )
 
     yield
 
     # 优雅关停后台 task
-    if retention_task is not None:
-        retention_task.cancel()
+    for task in bg_tasks:
+        task.cancel()
+    for task in bg_tasks:
         try:
-            await retention_task
+            await task
         except asyncio.CancelledError:
             pass
-        logger.info("im_retention_sweep_stopped")
+    if bg_tasks:
+        logger.info("im_background_tasks_stopped", count=len(bg_tasks))
     logger.info("tokenknows_api_stopping")
 
 
