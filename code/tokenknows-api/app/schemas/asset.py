@@ -25,12 +25,17 @@ AssetStatus = Literal[
 
 
 class AssetMetrics(BaseModel):
-    """自评卡 4 指标 (Stage 5 产出)."""
+    """自评卡指标 (Stage 5 产出).
+
+    v0.2 升级: 加 consistency_score (仅 book 类型, 跨章节连贯度).
+    """
 
     coverage: float = Field(ge=0.0, le=1.0)
     citation_density: float = Field(ge=0.0, le=1.0)
     slop_score: float = Field(ge=0.0, le=1.0)
     similarity: float = Field(ge=0.0, le=1.0)
+    consistency_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    """v0.2 · book 跨章节连贯度 (相邻章节 cosine 均值); 其它类型为 None."""
 
 
 class ChapterGeneratedBy(BaseModel):

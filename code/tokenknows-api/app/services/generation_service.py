@@ -1556,11 +1556,22 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
         asset, chapters,
     )
 
+    # ── 5. consistency_score (v0.2 · 仅 book): 跨章节连贯度 ─────
+    #
+    # 语义: book 长文档相邻章节的语义衔接度. 高=承上启下顺畅, 低=主题跳跃.
+    # 公式: avg( cosine(emb(ch_i), emb(ch_{i+1})) ) 跨同卷内相邻 depth=1 章节
+    # 仅在 type=book 时计算; 其它类型 None.
+    consistency_score: float | None = None
+    consistency_method = "skipped"
+    if req.type == "book" and chapters:
+        consistency_score, consistency_method = await _compute_book_consistency(chapters)
+
     metrics = AssetMetrics(
         coverage=coverage,
         citation_density=citation_density,
         slop_score=slop_score,
         similarity=similarity,
+        consistency_score=consistency_score,
     )
     asset.metrics = metrics
     asset.status = "draft"
@@ -1592,7 +1603,68 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
     result["_slop_reasoning"] = slop_reasoning
     if sim_most_similar_id:
         result["_most_similar_asset_id"] = sim_most_similar_id
+    if consistency_score is not None:
+        result["_method"]["consistency_score"] = consistency_method
     return result
+
+
+async def _compute_book_consistency(
+    chapters: list["Chapter"],
+) -> tuple[float | None, str]:
+    """v0.2 · book 跨章一致性: 同卷内相邻 depth=1 章节的 cosine 均值.
+
+    实现:
+      1. 按 parent_id 分组 (同卷的章在一起)
+      2. 对每组内相邻章 (i, i+1) 抽 content 首 800 字符做 embedding
+      3. 计算所有相邻对的 cosine 均值
+
+    边界:
+      - 组内只有 1 个章节 → 不算
+      - embedding 失败 → 返回 None + method="embedding_unavailable"
+      - 无任何相邻对 → 返回 None + method="no_pairs"
+    """
+    from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
+
+    # 按卷 (parent_id) 分组, 只看 depth=1 子章节
+    groups: dict[str, list["Chapter"]] = {}
+    for ch in chapters:
+        if (ch.depth or 0) != 1 or not ch.parent_id:
+            continue
+        groups.setdefault(ch.parent_id, []).append(ch)
+    # 按 order_index 排序
+    for g in groups.values():
+        g.sort(key=lambda c: c.order_index)
+
+    # 收集相邻对的文本 (各取首 800 字)
+    pair_texts: list[tuple[str, str]] = []
+    for chs in groups.values():
+        for i in range(len(chs) - 1):
+            a = (chs[i].content or "")[:800]
+            b = (chs[i + 1].content or "")[:800]
+            if a and b:
+                pair_texts.append((a, b))
+
+    if not pair_texts:
+        return None, "no_pairs"
+
+    # 一次性 embed 所有文本 (a + b interleaved)
+    flat_texts: list[str] = []
+    for a, b in pair_texts:
+        flat_texts.append(a)
+        flat_texts.append(b)
+    try:
+        vectors = await embed_batch(flat_texts)
+    except EmbeddingError as e:
+        logger.warning("book_consistency_embed_failed", error=str(e))
+        return None, "embedding_unavailable"
+    if len(vectors) != len(flat_texts):
+        return None, "embedding_unavailable"
+
+    sims: list[float] = []
+    for i, _pair in enumerate(pair_texts):
+        sims.append(cosine(vectors[2 * i], vectors[2 * i + 1]))
+    avg = sum(sims) / len(sims) if sims else 0.0
+    return round(avg, 3), "adjacent_chapter_cosine"
 
 
 def _build_outline_text(title: str, chapters: list["Chapter"]) -> str:

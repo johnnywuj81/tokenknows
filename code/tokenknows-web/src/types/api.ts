@@ -250,6 +250,8 @@ export interface AssetMetrics {
   citation_density: number  // 引用密度 0-1
   slop_score: number        // 空话比例 0-1 (越低越好)
   similarity: number        // 与历史相似度 0-1
+  /** v0.2 · book 跨章节连贯度 (相邻章 cosine 均值); 其它类型为 null */
+  consistency_score?: number | null
 }
 
 export interface Asset {

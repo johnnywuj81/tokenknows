@@ -4,6 +4,7 @@
  * 订阅 GET /api/v1/assets/:id/generation/stream (EventSource).
  * 服务端事件: snapshot / stage_started / stage_completed / chapter_completed
  *           / done / failed
+ *           / volume_outline_completed / chapter_outline_completed (v0.2 book)
  *
  * onEvent: 触发 TanStack Query invalidate 让 useAsset/useChapters 拉新.
  *
@@ -91,6 +92,9 @@ export function useGenerationSSE({
     es.addEventListener('chapter_completed', handle('chapter_completed'))
     es.addEventListener('done', handle('done'))
     es.addEventListener('failed', handle('failed'))
+    // v0.2 · book 两步大纲进度
+    es.addEventListener('volume_outline_completed', handle('volume_outline_completed'))
+    es.addEventListener('chapter_outline_completed', handle('chapter_outline_completed'))
 
     es.onerror = () => {
       // 浏览器会自动重连 - 仅日志

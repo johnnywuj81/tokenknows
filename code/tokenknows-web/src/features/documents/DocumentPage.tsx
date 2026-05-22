@@ -23,6 +23,7 @@ import { ChapterBlock } from './page/components/ChapterBlock'
 import { DocSidebar } from './page/components/DocSidebar'
 import { EvidenceDrawer } from './page/components/EvidenceDrawer'
 import { RegenerateDialog } from './page/components/RegenerateDialog'
+import { BookProgressCard } from './page/components/BookProgressCard'
 import { PublishDialog } from '../publish/PublishDialog'
 
 export default function DocumentPage() {
@@ -113,6 +114,14 @@ export default function DocumentPage() {
         submitting={submitMutation.isPending}
         onPublish={openPublish}
       />
+
+      {/* v0.2 · book 类型生成中显示卷/章计数 + 预计剩余 */}
+      {asset.type === 'book' && docId && (
+        <BookProgressCard
+          assetId={docId}
+          enabled={asset.status === 'generating'}
+        />
+      )}
 
       <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         {/* 左 · 大纲 */}
