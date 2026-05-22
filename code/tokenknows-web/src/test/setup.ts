@@ -45,3 +45,22 @@ if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
   Element.prototype.releasePointerCapture = vi.fn() as unknown as Element['releasePointerCapture']
   Element.prototype.setPointerCapture = vi.fn() as unknown as Element['setPointerCapture']
 }
+
+// EventSource polyfill (SSE clients in DocumentPage)
+if (typeof globalThis.EventSource === 'undefined') {
+  globalThis.EventSource = class EventSource {
+    url: string
+    readyState = 0
+    onopen: ((this: EventSource, ev: Event) => void) | null = null
+    onmessage: ((this: EventSource, ev: MessageEvent) => void) | null = null
+    onerror: ((this: EventSource, ev: Event) => void) | null = null
+    static readonly CONNECTING = 0
+    static readonly OPEN = 1
+    static readonly CLOSED = 2
+    constructor(url: string) { this.url = url }
+    addEventListener() {}
+    removeEventListener() {}
+    dispatchEvent() { return true }
+    close() { this.readyState = 2 }
+  } as unknown as typeof EventSource
+}
