@@ -6,20 +6,17 @@
  * Phase 3: InlineEvidence [N] 角标 + 重生成 disable
  * P2: EvidenceBadge 自定义 Node 接入, [N] 在编辑器内可被识别为 atom 单元,
  *     编辑后保存仍可往返
+ * A3 (v0.2): content > 20KB 默认走 LazyChapterEditor 预览态, 避免大文本卡顿.
  */
 
-import { useEffect, useMemo } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
-import Link from '@tiptap/extension-link'
+import { useMemo } from 'react'
 import MarkdownIt from 'markdown-it'
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Chapter } from '@/types/api'
 import { ChapterFooter } from './ChapterFooter'
 import { useChapterAutosave, type AutosaveState } from '../../hooks/useChapterAutosave'
-import { EvidenceBadge } from '../tiptap/EvidenceBadge'
+import { LazyChapterEditor } from './LazyChapterEditor'
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -66,41 +63,6 @@ export function ChapterBlock({
   )
   const editable = !readOnly && !regenerating
 
-  const editor = useEditor(
-    {
-      extensions: [
-        StarterKit,
-        Placeholder.configure({
-          placeholder: '开始编辑章节内容…',
-        }),
-        Link.configure({ openOnClick: false, autolink: true }),
-        // P2 · [N] 角标自定义 Node, 解决 StarterKit 吞 span class 的问题
-        EvidenceBadge,
-      ],
-      content: initialHTML,
-      editable,
-      onUpdate: ({ editor: e }) => {
-        if (!editable) return
-        handleEdit(e.getHTML())
-      },
-    },
-    [chapter.id],
-  )
-
-  // 章节外部刷新 (e.g. 重生成完成) → setContent 同步, 不触发 onUpdate
-  useEffect(() => {
-    if (!editor) return
-    const next = annotateEvidence(toEditorHTML(savedContent), chapter.id)
-    if (editor.getHTML() !== next) {
-      editor.commands.setContent(next, { emitUpdate: false })
-    }
-  }, [savedContent, editor, chapter.id])
-
-  // editable 跟随 regenerating / readOnly
-  useEffect(() => {
-    editor?.setEditable(editable)
-  }, [editor, editable])
-
   return (
     <article
       id={`chapter-anchor-${chapter.id}`}
@@ -136,18 +98,15 @@ export function ChapterBlock({
         </div>
       ) : null}
 
-      <EditorContent
-        editor={editor}
-        className="tiptap-prose font-content text-body-lg text-text-secondary leading-relaxed focus-visible:outline-none"
-        onClickCapture={(e) => {
-          const target = (e.target as HTMLElement).closest('[data-evidence-id]')
-          if (target) {
-            e.preventDefault()
-            e.stopPropagation()
-            const evId = target.getAttribute('data-evidence-id')
-            if (evId) onViewEvidence?.(chapter.id, evId)
-          }
-        }}
+      {/* A3 · 长文档懒挂载: content > 20KB 默认预览, 点击展开才挂 TipTap */}
+      <LazyChapterEditor
+        chapterId={chapter.id}
+        initialHTML={initialHTML}
+        rawLength={savedContent.length}
+        editable={editable}
+        onEdit={handleEdit}
+        onViewEvidence={onViewEvidence}
+        autosaveState={state}
       />
 
       <ChapterFooter
