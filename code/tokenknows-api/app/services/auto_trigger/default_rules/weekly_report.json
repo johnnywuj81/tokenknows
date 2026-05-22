@@ -1,0 +1,16 @@
+{
+  "name": "周一 09:00 自动周报",
+  "description": "每周一上午 9 点自动生成上周周报草稿; 要求上周事件数 ≥ 30 (避免低活跃项目产空报)",
+  "mode": "cron",
+  "asset_type": "weekly_report",
+  "priority": 50,
+  "enabled": true,
+  "cooldown_seconds": 86400,
+  "daily_cap": 1,
+  "cron_expr": "0 9 * * 1",
+  "extra_condition": {
+    "metric": "events_last_7d",
+    "comparator": ">=",
+    "value": 30
+  }
+}

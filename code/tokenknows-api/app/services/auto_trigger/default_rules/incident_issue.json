@@ -1,0 +1,14 @@
+{
+  "name": "Issue 含 incident label → 自动复盘",
+  "description": "GitHub Issue 创建且 labels 含 incident/outage/production-issue 时, 自动生成复盘草稿 (v0.4.1 事件触发上线)",
+  "mode": "event",
+  "asset_type": "incident",
+  "priority": 100,
+  "enabled": true,
+  "cooldown_seconds": 1800,
+  "daily_cap": 5,
+  "event_match": {
+    "event_type": "github_issue_opened",
+    "label_any": ["incident", "outage", "production-issue"]
+  }
+}

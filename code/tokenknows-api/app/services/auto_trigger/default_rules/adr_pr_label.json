@@ -1,0 +1,14 @@
+{
+  "name": "PR 含 architecture-decision label → ADR",
+  "description": "GitHub PR merge 且 labels 含 architecture-decision 或 adr 时, 自动生成 ADR 草稿 (v0.4.1 事件触发上线)",
+  "mode": "event",
+  "asset_type": "adr",
+  "priority": 85,
+  "enabled": true,
+  "cooldown_seconds": 3600,
+  "daily_cap": 5,
+  "event_match": {
+    "event_type": "github_pr_merged",
+    "label_any": ["architecture-decision", "adr"]
+  }
+}

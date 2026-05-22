@@ -1,0 +1,16 @@
+{
+  "name": "累积 50 章 approved → 自动书籍",
+  "description": "项目累积 50+ 个已审批章节且未生成过 book 时, 自动生成内部技术手册 (Q4 决策: 默认 enabled=false; 因 book token 用量大约周报 20 倍, 需 Owner 显式开启)",
+  "mode": "threshold",
+  "asset_type": "book",
+  "priority": 70,
+  "enabled": false,
+  "cooldown_seconds": 604800,
+  "daily_cap": 1,
+  "threshold_spec": {
+    "metric": "approved_chapters_total",
+    "comparator": ">=",
+    "value": 50,
+    "and_not_exists_asset_of_type": "book"
+  }
+}

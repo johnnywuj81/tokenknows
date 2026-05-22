@@ -24,6 +24,7 @@ from app.services.generation_service import _bootstrap_from_db
 from app.services.im import retention as im_retention
 from app.services.im import token_refresher as im_token_refresher
 from app.services.auto_trigger import scheduler as auto_trigger_scheduler
+from app.services.auto_trigger.seeder import seed_default_rules
 from app.services.auto_trigger_service import bootstrap as bootstrap_auto_trigger
 from app.services.im_service import bootstrap as bootstrap_im
 from app.services.skill_service import bootstrap as bootstrap_skills
@@ -58,6 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bootstrap_im()
     # v0.4 · Auto-Trigger 规则与执行历史 (T26: 仅记录数量; T27 才启动调度器)
     bootstrap_auto_trigger()
+    # v0.4 · T28 · seed 4 条预置规则 (实例级 project_id=NULL, 幂等)
+    seed_default_rules()
 
     # v0.3.1 P1 + I · 启动 IM 后台 task (retention 清理 + token 刷新)
     # 测试模式下不启 (避免污染 TestClient 测试 + 干扰 fixture)
