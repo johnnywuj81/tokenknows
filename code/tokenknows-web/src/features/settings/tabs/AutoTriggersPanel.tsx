@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   Bot,
   Calendar,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
   XCircle,
   Loader2,
   Plus,
+  ShieldOff,
   Zap,
 } from 'lucide-react'
 
@@ -48,6 +50,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { RuleEditorDialog } from './RuleEditorDialog'
 import { cn } from '@/lib/utils'
 import type {
+  QuotaResponse,
   TriggerExecution,
   TriggerMode,
   TriggerRule,
@@ -131,6 +134,9 @@ export function AutoTriggersPanel({ projectId }: AutoTriggersPanelProps) {
           新建规则
         </Button>
       </header>
+
+      {/* v0.4.4 · 月配额仪表盘 (体验要素 #32) */}
+      <QuotaCard projectId={projectId} />
 
       {/* 引导卡: 全部 disabled 时显示 (T35 体验要素 #35) */}
       {showOnboarding && (
@@ -675,4 +681,128 @@ function formatSeconds(s: number): string {
   if (s >= 3600) return `${Math.round(s / 3600)} 小时`
   if (s >= 60) return `${Math.round(s / 60)} 分钟`
   return `${s} 秒`
+}
+
+
+// ──────────────────────────────────────────────────────────
+// v0.4.4 月配额仪表盘 (体验要素 #32)
+// ──────────────────────────────────────────────────────────
+
+
+function QuotaCard({ projectId }: { projectId: string | undefined }) {
+  const qc = useQueryClient()
+  const quotaQuery = useQuery({
+    queryKey: ['auto-trigger', projectId, 'quota'],
+    queryFn: async (): Promise<QuotaResponse> => {
+      const { data } = await api.get(
+        `/projects/${projectId}/auto-triggers/quota`,
+      )
+      return data
+    },
+    enabled: Boolean(projectId),
+    refetchInterval: 30_000, // 30s 自动刷新, 让记账实时可见
+  })
+
+  const unthrottle = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.patch(
+        `/projects/${projectId}/auto-triggers/quota`,
+        { is_throttled: false },
+      )
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['auto-trigger', projectId, 'quota'] })
+    },
+  })
+
+  if (quotaQuery.isLoading || !quotaQuery.data) return null
+  const q = quotaQuery.data
+  const pct = Math.min(q.usage_ratio * 100, 100)
+  const stateMeta = {
+    healthy: { label: '正常', cls: 'text-success-dark', bar: 'bg-success-dark', icon: CheckCircle2 },
+    warning: { label: '即将耗尽', cls: 'text-warning', bar: 'bg-warning', icon: AlertTriangle },
+    throttled: { label: '已暂停', cls: 'text-danger', bar: 'bg-danger', icon: ShieldOff },
+  }[q.status]
+  const Icon = stateMeta.icon
+
+  return (
+    <div
+      className={cn(
+        'rounded-md border bg-bg-card p-4 space-y-3',
+        q.status === 'throttled'
+          ? 'border-danger'
+          : q.status === 'warning'
+          ? 'border-warning'
+          : 'border-border-subtle',
+      )}
+      aria-label="月配额仪表盘"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Icon className={cn('size-4', stateMeta.cls)} />
+          <span className="font-ui text-body font-medium text-text-primary">
+            本月 LLM 配额 · {q.year_month}
+          </span>
+          <Badge variant="outline" className={cn('font-ui text-micro', stateMeta.cls)}>
+            {stateMeta.label}
+          </Badge>
+        </div>
+        {q.is_throttled && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={unthrottle.isPending}
+            onClick={() => unthrottle.mutate()}
+            className="font-ui text-caption"
+          >
+            {unthrottle.isPending ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <ShieldOff className="size-3" />
+            )}
+            紧急放行
+          </Button>
+        )}
+      </div>
+
+      {/* 进度条 */}
+      <div>
+        <div className="flex justify-between font-ui text-caption text-text-muted mb-1">
+          <span>
+            {formatTokens(q.tokens_used)} / {formatTokens(q.monthly_token_limit)} tokens
+          </span>
+          <span className={stateMeta.cls}>{pct.toFixed(1)}%</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-bg-warm">
+          <div
+            className={cn('h-full transition-all', stateMeta.bar)}
+            style={{ width: `${Math.max(2, pct)}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 font-ui text-caption text-text-muted">
+        <span>已生成 {q.auto_gen_count} 份</span>
+        <span>·</span>
+        <span>每日上限 {q.daily_auto_gen_limit} 份</span>
+        {q.status === 'warning' && (
+          <span className="ml-auto text-warning">
+            ⚠ 用量已达 80%; 建议复核规则或调整月配额
+          </span>
+        )}
+        {q.status === 'throttled' && (
+          <span className="ml-auto text-danger font-medium">
+            🛑 自动触发已暂停 (含 LLM 用量)
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
 }

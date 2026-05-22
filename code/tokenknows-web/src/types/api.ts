@@ -732,3 +732,16 @@ export interface AssetTriggerMeta {
   fired_at: string
   trigger_execution_id?: string | null
 }
+
+// v0.4.4 T44 · 月配额仪表盘
+export interface QuotaResponse {
+  project_id: string
+  year_month: string
+  monthly_token_limit: number
+  daily_auto_gen_limit: number
+  tokens_used: number
+  auto_gen_count: number
+  is_throttled: boolean
+  usage_ratio: number
+  status: 'healthy' | 'warning' | 'throttled'
+}

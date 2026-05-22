@@ -488,6 +488,10 @@ def sweep_expired(grace_min: int = EXPIRED_GRACE_MIN) -> int:
 # ─── Quota (v0.4.0 占位; v0.4.4 才用) ─────────────────────
 
 
+QUOTA_WARN_THRESHOLD = 0.80
+"""用量比 ≥ 80% → 进入 warning 状态; 仍可触发, 但 UI 显示告警."""
+
+
 def get_or_create_quota(
     project_id: str,
     year_month: str | None = None,
@@ -532,6 +536,118 @@ def get_or_create_quota(
         json_str=quota.model_dump_json(),
     )
     return quota
+
+
+# ─── Quota 记账 + throttle (v0.4.4 T44) ───────────────────
+
+
+def record_token_usage(
+    project_id: str,
+    tokens: int,
+    *,
+    year_month: str | None = None,
+) -> GenerationQuota:
+    """T30 dispatcher.fire 成功后调用, 累加 tokens 到当月 quota.
+
+    自动:
+    - 用量 ≥ 100% → is_throttled=True (评估器后续跳过新触发)
+    - 写 audit log; UI 仪表盘 polling 看到状态变化
+    """
+    quota = get_or_create_quota(project_id, year_month=year_month)
+    updated_dict = quota.model_dump()
+    updated_dict["tokens_used"] = (quota.tokens_used or 0) + tokens
+    updated_dict["auto_gen_count"] = (quota.auto_gen_count or 0) + 1
+    new_used = updated_dict["tokens_used"]
+    new_throttled = new_used >= quota.monthly_token_limit
+    if new_throttled and not quota.is_throttled:
+        updated_dict["is_throttled"] = True
+        updated_dict["throttled_at"] = _now()
+        logger.warning(
+            "auto_trigger_quota_exhausted",
+            project_id=project_id,
+            year_month=quota.year_month,
+            tokens_used=new_used,
+            limit=quota.monthly_token_limit,
+        )
+    updated_dict["updated_at"] = _now()
+
+    updated = GenerationQuota.model_validate(updated_dict)
+    get_db().upsert_quota(
+        quota_id=updated.id,
+        project_id=updated.project_id,
+        year_month=updated.year_month,
+        monthly_token_limit=updated.monthly_token_limit,
+        daily_auto_gen_limit=updated.daily_auto_gen_limit,
+        tokens_used=updated.tokens_used,
+        auto_gen_count=updated.auto_gen_count,
+        is_throttled=updated.is_throttled,
+        updated_at=_to_iso(updated.updated_at),
+        json_str=updated.model_dump_json(),
+    )
+    return updated
+
+
+def is_quota_throttled(project_id: str, year_month: str | None = None) -> bool:
+    """评估器 schedule 前调用; True = 跳过新触发."""
+    quota = get_or_create_quota(project_id, year_month=year_month)
+    return quota.is_throttled
+
+
+def get_quota_usage_ratio(
+    project_id: str, year_month: str | None = None
+) -> float:
+    """0.0 - 1.0+; UI 仪表盘进度条用."""
+    quota = get_or_create_quota(project_id, year_month=year_month)
+    if quota.monthly_token_limit <= 0:
+        return 0.0
+    return quota.tokens_used / quota.monthly_token_limit
+
+
+def update_quota_limit(
+    project_id: str,
+    *,
+    monthly_token_limit: int | None = None,
+    daily_auto_gen_limit: int | None = None,
+    is_throttled: bool | None = None,
+    year_month: str | None = None,
+) -> GenerationQuota:
+    """Owner 调整月配额上限 + 解除 throttle (PATCH /quota 后台用)."""
+    quota = get_or_create_quota(project_id, year_month=year_month)
+    updated_dict = quota.model_dump()
+    if monthly_token_limit is not None:
+        if monthly_token_limit < 0:
+            raise ValueError("monthly_token_limit 不能为负")
+        updated_dict["monthly_token_limit"] = monthly_token_limit
+    if daily_auto_gen_limit is not None:
+        if daily_auto_gen_limit < 1:
+            raise ValueError("daily_auto_gen_limit 至少 1")
+        updated_dict["daily_auto_gen_limit"] = daily_auto_gen_limit
+    if is_throttled is not None:
+        updated_dict["is_throttled"] = is_throttled
+        if not is_throttled:
+            updated_dict["throttled_at"] = None
+    updated_dict["updated_at"] = _now()
+    updated = GenerationQuota.model_validate(updated_dict)
+    get_db().upsert_quota(
+        quota_id=updated.id,
+        project_id=updated.project_id,
+        year_month=updated.year_month,
+        monthly_token_limit=updated.monthly_token_limit,
+        daily_auto_gen_limit=updated.daily_auto_gen_limit,
+        tokens_used=updated.tokens_used,
+        auto_gen_count=updated.auto_gen_count,
+        is_throttled=updated.is_throttled,
+        updated_at=_to_iso(updated.updated_at),
+        json_str=updated.model_dump_json(),
+    )
+    logger.info(
+        "auto_trigger_quota_updated",
+        project_id=project_id,
+        monthly_token_limit=monthly_token_limit,
+        daily_auto_gen_limit=daily_auto_gen_limit,
+        is_throttled=is_throttled,
+    )
+    return updated
 
 
 # ─── 启动回填 (lifespan startup hook) ─────────────────────

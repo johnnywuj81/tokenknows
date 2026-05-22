@@ -150,6 +150,17 @@ def _evaluate_for_project(
     """单 (rule, project) 评估; 命中 → schedule; 否则 record_skip."""
     signal = _build_signal(rule, now)
 
+    # v0.4.4 · 月配额硬墙: throttled 项目跳过所有触发
+    if svc.is_quota_throttled(project_id):
+        svc.record_skip(
+            rule, project_id, signal, "quota_exceeded",
+            evaluation=TriggerEvaluation(matched=True, confidence=1.0,
+                                          notes="项目月配额已耗尽"),
+        )
+        stats.setdefault("skipped_quota", 0)
+        stats["skipped_quota"] += 1
+        return
+
     # 3a. cooldown
     if _check_cooldown(rule, project_id, now):
         svc.record_skip(

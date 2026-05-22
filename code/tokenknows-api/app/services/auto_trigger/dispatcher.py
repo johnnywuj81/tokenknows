@@ -38,6 +38,18 @@ DEFAULT_TIME_WINDOW = "last_7_days"
 SKILL_DISTILL_DAYS = 30
 SKILL_DISTILL_TOP_K = 20
 
+# T44 v0.4.4 · 按 asset_type 估算 token 用量 (用于月配额记账)
+# 真实 token 用量后续可从 generation_service / litellm 拿
+TOKEN_ESTIMATES_PER_TYPE = {
+    "weekly_report": 5000,
+    "tech_design": 8000,
+    "adr": 4000,
+    "incident": 4000,
+    "book": 50000,
+    "agent_skill": 2000,
+}
+TOKEN_ESTIMATE_DEFAULT = 5000
+
 
 class DispatcherError(Exception):
     """Dispatcher 业务异常."""
@@ -151,12 +163,29 @@ async def fire(execution_id: str) -> str | None:
             execution_id=execution_id,
             artifact_id=artifact_id,
         )
+
+    # 6. v0.4.4 · 月配额记账 (估算; 真实 token 用量后续可从 LLM Gateway 拿)
+    estimated_tokens = TOKEN_ESTIMATES_PER_TYPE.get(
+        rule.asset_type, TOKEN_ESTIMATE_DEFAULT
+    )
+    try:
+        svc.record_token_usage(execution.project_id, estimated_tokens)
+    except Exception as e:
+        # 记账失败不影响 fire 成功 (asset 已生成)
+        logger.error(
+            "auto_trigger_quota_record_failed",
+            project_id=execution.project_id,
+            tokens=estimated_tokens,
+            error=str(e),
+        )
+
     logger.info(
         "auto_trigger_dispatch_fired",
         execution_id=execution_id,
         rule_id=rule.id,
         artifact_id=artifact_id,
         asset_type=rule.asset_type,
+        estimated_tokens=estimated_tokens,
     )
     return artifact_id
 

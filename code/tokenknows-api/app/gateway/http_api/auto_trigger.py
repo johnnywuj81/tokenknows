@@ -77,6 +77,28 @@ class TestFireResponse(BaseModel):
     )
 
 
+class QuotaResponse(BaseModel):
+    """GET /quota 响应 (v0.4.4 T44 · 体验要素 #32)."""
+    project_id: str
+    year_month: str
+    monthly_token_limit: int
+    daily_auto_gen_limit: int
+    tokens_used: int
+    auto_gen_count: int
+    is_throttled: bool
+    usage_ratio: float
+    """0.0 - 1.0+; >= 0.8 warning; >= 1.0 throttled."""
+    status: Literal["healthy", "warning", "throttled"]
+
+
+class QuotaPatchRequest(BaseModel):
+    """PATCH /quota 请求 (Owner 调上限 / 解除 throttle)."""
+    monthly_token_limit: int | None = None
+    daily_auto_gen_limit: int | None = None
+    is_throttled: bool | None = None
+    """显式传 false 可解除 throttle (Owner 紧急放行场景)."""
+
+
 # ─── Request schemas ──────────────────────────────────────
 
 
@@ -342,6 +364,67 @@ async def flag_auto_trigger_false_positive(
     if exe.project_id != project_id:
         raise HTTPException(404, detail="execution not found")
     return svc.flag_false_positive(execution_id)
+
+
+# ─── Quota 仪表盘 (v0.4.4 T44 · 体验要素 #32) ────────────
+
+
+def _quota_to_response(quota) -> QuotaResponse:
+    ratio = (
+        quota.tokens_used / quota.monthly_token_limit
+        if quota.monthly_token_limit > 0
+        else 0.0
+    )
+    if quota.is_throttled or ratio >= 1.0:
+        status = "throttled"
+    elif ratio >= svc.QUOTA_WARN_THRESHOLD:
+        status = "warning"
+    else:
+        status = "healthy"
+    return QuotaResponse(
+        project_id=quota.project_id,
+        year_month=quota.year_month,
+        monthly_token_limit=quota.monthly_token_limit,
+        daily_auto_gen_limit=quota.daily_auto_gen_limit,
+        tokens_used=quota.tokens_used,
+        auto_gen_count=quota.auto_gen_count,
+        is_throttled=quota.is_throttled,
+        usage_ratio=ratio,
+        status=status,
+    )
+
+
+@router.get(
+    "/projects/{project_id}/auto-triggers/quota",
+    response_model=QuotaResponse,
+)
+async def get_auto_trigger_quota(
+    project_id: str,
+    year_month: str | None = Query(None, description="格式 YYYY-MM; 默认当月"),
+) -> QuotaResponse:
+    quota = svc.get_or_create_quota(project_id, year_month=year_month)
+    return _quota_to_response(quota)
+
+
+@router.patch(
+    "/projects/{project_id}/auto-triggers/quota",
+    response_model=QuotaResponse,
+)
+async def patch_auto_trigger_quota(
+    project_id: str,
+    body: QuotaPatchRequest,
+) -> QuotaResponse:
+    """Owner 调整月配额; Owner 也可显式 is_throttled=false 紧急放行."""
+    try:
+        quota = svc.update_quota_limit(
+            project_id,
+            monthly_token_limit=body.monthly_token_limit,
+            daily_auto_gen_limit=body.daily_auto_gen_limit,
+            is_throttled=body.is_throttled,
+        )
+    except ValueError as e:
+        raise HTTPException(400, detail=str(e)) from e
+    return _quota_to_response(quota)
 
 
 # ─── Demo: test-fire (体验要素 #30 撤回窗口演示) ────────

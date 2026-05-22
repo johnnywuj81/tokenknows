@@ -206,6 +206,17 @@ def _evaluate_for_project(
     """单 (rule, project) 评估; 命中 → schedule; cooldown/daily_cap 失败 → record_skip."""
     from datetime import timedelta
 
+    # v0.4.4 · quota throttle
+    if svc.is_quota_throttled(project_id):
+        svc.record_skip(
+            rule, project_id, signal, "quota_exceeded",
+            evaluation=TriggerEvaluation(matched=True, confidence=1.0,
+                                          notes="项目月配额已耗尽"),
+        )
+        stats.setdefault("skipped_quota", 0)
+        stats["skipped_quota"] += 1
+        return
+
     # cooldown
     if rule.cooldown_seconds > 0:
         since = now - timedelta(seconds=rule.cooldown_seconds)

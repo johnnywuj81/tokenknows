@@ -235,6 +235,12 @@ def _evaluate_for_project(
         )
         return
 
+    # v0.4.4 · quota throttle (静默跳过, 不写 record_skip 避免 15min 一次的噪声)
+    if svc.is_quota_throttled(project_id):
+        stats.setdefault("skipped_quota", 0)
+        stats["skipped_quota"] += 1
+        return
+
     # cooldown
     if rule.cooldown_seconds > 0:
         since = now - timedelta(seconds=rule.cooldown_seconds)
