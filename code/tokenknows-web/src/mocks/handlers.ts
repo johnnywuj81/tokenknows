@@ -16,15 +16,15 @@
 import { authHandlers } from './handlers/auth'
 import { projectHandlers } from './handlers/projects'
 import { eventHandlers } from './handlers/events'
-import { autoTriggerHandlers } from './handlers/auto-triggers'
 
 export const handlers = [
   ...authHandlers,
   ...projectHandlers,
   ...eventHandlers,
   // ...assetHandlers, ← 切到真后端 (W2D7 联调)
-  // v0.4 · auto-trigger REST API (后端 T32 未上线; MSW 兜底)
-  ...autoTriggerHandlers,
+  // ...autoTriggerHandlers, ← v0.4 T32 已上线, 切到真后端
+  //   保留 handlers/auto-triggers.ts + fixtures/auto-triggers.ts 作 v0.5 多实例
+  //   场景或 staging 离线 demo 用; 当前 vite proxy 透传到 :8001
   // ...其它 handler 在对应 sprint 加:
   // ...redactionHandlers,
   // ...publishHandlers,
