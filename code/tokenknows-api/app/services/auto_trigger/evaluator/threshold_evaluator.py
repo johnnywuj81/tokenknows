@@ -86,6 +86,12 @@ def _has_asset_of_type(project_id: str, asset_type: str) -> bool:
     return False
 
 
+def _count_im_signals(project_id: str, days: int) -> int:
+    """统计项目下近 N 天 is_signal=1 的 IM 消息数."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    return get_db().count_im_signals_in_project(project_id, since.isoformat())
+
+
 def _resolve_metric(
     metric: str, project_id: str, now: datetime
 ) -> float | None:
@@ -96,6 +102,11 @@ def _resolve_metric(
         return _count_events_in_window(project_id, 30)
     if metric == "events_count_7d":
         return _count_events_in_window(project_id, 7)
+    # v0.4.2 第二波 (T42) IM signal metrics
+    if metric == "im_signal_count_30d":
+        return _count_im_signals(project_id, 30)
+    if metric == "im_signal_count_7d":
+        return _count_im_signals(project_id, 7)
     return None
 
 

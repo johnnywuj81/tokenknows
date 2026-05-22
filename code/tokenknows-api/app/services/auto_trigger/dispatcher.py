@@ -19,18 +19,24 @@ execution → fire(execution.id) 单次执行.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from app.config.logging import logger
+from app.persistence import get_db
 from app.schemas.auto_trigger import AssetTriggerMeta, TriggerExecution, TriggerRule
 from app.schemas.generation import GenerateAssetRequest
 from app.services import auto_trigger_service as svc
-from app.services import generation_service
+from app.services import generation_service, skill_service
 
 
 # 默认 time_window: 自动触发的 asset 用"上周"窗口
 # (与 PRD §5.3 C1 "每周自动生成上周周报" 对齐)
 DEFAULT_TIME_WINDOW = "last_7_days"
+
+# T42 IM Skill 蒸馏: 拉最近 N 天 top-K signal 作为蒸馏源
+SKILL_DISTILL_DAYS = 30
+SKILL_DISTILL_TOP_K = 20
 
 
 class DispatcherError(Exception):
@@ -107,23 +113,15 @@ async def fire(execution_id: str) -> str | None:
         )
         return None
 
-    # 4. 构造 GenerateAssetRequest + trigger_meta
-    req = GenerateAssetRequest(
-        type=rule.asset_type,
-        time_window=DEFAULT_TIME_WINDOW,
-    )
+    # 4. 类型路由: agent_skill 走 skill_service.distill_skill;
+    #    其余走 generation_service.start_generation (T30 标准路径)
     trigger_meta = _build_trigger_meta(rule, execution)
-
-    # 5. 调 generation pipeline
     try:
-        asset = await generation_service.start_generation(
-            project_id=execution.project_id,
-            req=req,
-            user_id="system",
-            trigger_meta=trigger_meta,
-        )
+        if rule.asset_type == "agent_skill":
+            artifact_id = await _dispatch_skill_distill(execution, rule, trigger_meta)
+        else:
+            artifact_id = await _dispatch_generation(execution, rule, trigger_meta)
     except svc.InvalidTransition:
-        # 几乎不会到这里 (状态机已校验), 防御代码
         return None
     except Exception as e:
         logger.error(
@@ -140,24 +138,137 @@ async def fire(execution_id: str) -> str | None:
             pass
         return None
 
-    # 6. mark fired
+    if artifact_id is None:
+        # 蒸馏路径: 无 source IM signal → 提前 mark_failed 已经做过
+        return None
+
+    # 5. mark fired
     try:
-        svc.mark_fired(execution_id, asset_id=asset.id)
+        svc.mark_fired(execution_id, asset_id=artifact_id)
     except svc.InvalidTransition:
-        # 并发场景: 别处刚把它转走; asset 已经创建 (留下来等 Reviewer)
         logger.warning(
             "auto_trigger_dispatch_concurrent_transition",
             execution_id=execution_id,
-            asset_id=asset.id,
+            artifact_id=artifact_id,
         )
     logger.info(
         "auto_trigger_dispatch_fired",
         execution_id=execution_id,
         rule_id=rule.id,
-        asset_id=asset.id,
+        artifact_id=artifact_id,
         asset_type=rule.asset_type,
     )
+    return artifact_id
+
+
+# ─── 类型路由 ─────────────────────────────────────────────
+
+
+async def _dispatch_generation(
+    execution: TriggerExecution,
+    rule: TriggerRule,
+    trigger_meta: dict,
+) -> str | None:
+    """T30 标准路径: 走 generation_service.start_generation 5 阶段 pipeline.
+
+    适用于 weekly_report / tech_design / adr / incident / book.
+    """
+    req = GenerateAssetRequest(
+        type=rule.asset_type,
+        time_window=DEFAULT_TIME_WINDOW,
+    )
+    asset = await generation_service.start_generation(
+        project_id=execution.project_id,
+        req=req,
+        user_id="system",
+        trigger_meta=trigger_meta,
+    )
     return asset.id
+
+
+def _build_fake_chapter_from_signals(
+    project_id: str, signals: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """把 IM signal messages 包装成 1 个 fake chapter dump 喂给 skill_service.distill_skill.
+
+    distill_skill 期望的 chapter dump: { id, title, content, regeneration_history?, ... }
+    """
+    lines: list[str] = [
+        f"# IM 信号汇编 (项目 {project_id})",
+        "",
+        f"来源: 近 {SKILL_DISTILL_DAYS} 天 SignalGate 标记的高价值消息 (top {len(signals)})",
+        "",
+    ]
+    for i, m in enumerate(signals, 1):
+        sender = m.get("sender", {}) if isinstance(m.get("sender"), dict) else {}
+        sender_name = sender.get("name") or sender.get("user_id") or "?"
+        text = (
+            m.get("text")
+            or m.get("content")
+            or (m.get("body") or {}).get("text")
+            or ""
+        )
+        received_at = m.get("received_at", "")[:19]
+        lines.append(f"## §{i} · {sender_name} · {received_at}")
+        lines.append("")
+        lines.append(text.strip())
+        lines.append("")
+    content = "\n".join(lines)
+    return {
+        "id": f"synthetic-im-signals-{project_id}",
+        "asset_id": "synthetic",
+        "order_index": 0,
+        "title": f"IM 信号汇编 · {project_id}",
+        "content": content,
+        "approval_state": "approved",  # 蒸馏要求 source 是 approved
+        "regeneration_history": [],
+    }
+
+
+async def _dispatch_skill_distill(
+    execution: TriggerExecution,
+    rule: TriggerRule,
+    trigger_meta: dict,
+) -> str | None:
+    """T42 IM Skill 自动蒸馏: 拉 IM signals → 包装 fake chapter → 调 skill_service.distill_skill.
+
+    返回 skill.id 作为 artifact_id (替代 asset.id).
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=SKILL_DISTILL_DAYS)
+    signals = get_db().list_top_im_signals_in_project(
+        execution.project_id,
+        since_iso=since.isoformat(),
+        limit=SKILL_DISTILL_TOP_K,
+    )
+    if not signals:
+        logger.warning(
+            "auto_trigger_skill_distill_no_signals",
+            execution_id=execution.id,
+            project_id=execution.project_id,
+            rule_id=rule.id,
+        )
+        try:
+            svc.mark_failed(execution.id, error="无可用 IM signal source")
+        except svc.InvalidTransition:
+            pass
+        return None
+
+    fake_chapter = _build_fake_chapter_from_signals(execution.project_id, signals)
+    name_hint = f"im-distilled-{rule.name[:20]}"
+    skill = await skill_service.distill_skill(
+        project_id=execution.project_id,
+        source_chapters=[fake_chapter],
+        name_hint=name_hint,
+        project_label=execution.project_id,
+    )
+    logger.info(
+        "auto_trigger_skill_distilled",
+        skill_id=skill.id,
+        project_id=execution.project_id,
+        signals_used=len(signals),
+        trigger_meta_rule=trigger_meta.get("rule_name"),
+    )
+    return skill.id
 
 
 async def fire_batch(execution_ids: list[str]) -> dict[str, int]:

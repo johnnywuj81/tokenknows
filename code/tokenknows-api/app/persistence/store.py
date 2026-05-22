@@ -964,6 +964,48 @@ class SqliteStore:
         )
         return [json.loads(r["json"]) for r in rows]
 
+    def count_im_signals_in_project(
+        self, project_id: str, since_iso: str
+    ) -> int:
+        """统计 project 下所有 connection 在 since 后 is_signal=1 的消息数.
+
+        T42 用 (v0.4.2 IM Skill 自动蒸馏 metric).
+        """
+        rows = self._query(
+            """
+            SELECT COUNT(*) AS n
+            FROM im_messages m JOIN im_connections c ON m.connection_id = c.id
+            WHERE c.project_id = ?
+              AND m.is_signal = 1
+              AND m.received_at >= ?
+              AND m.redacted = 0
+            """,
+            (project_id, since_iso),
+        )
+        return rows[0]["n"]
+
+    def list_top_im_signals_in_project(
+        self, project_id: str, since_iso: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """拉 project 下 since 后 is_signal=1 的消息 (最新优先).
+
+        T42 用: 把这些 message 拼装成 fake chapter 喂给 skill_service.distill_skill.
+        """
+        rows = self._query(
+            """
+            SELECT m.json AS j
+            FROM im_messages m JOIN im_connections c ON m.connection_id = c.id
+            WHERE c.project_id = ?
+              AND m.is_signal = 1
+              AND m.received_at >= ?
+              AND m.redacted = 0
+            ORDER BY m.received_at DESC
+            LIMIT ?
+            """,
+            (project_id, since_iso, limit),
+        )
+        return [json.loads(r["j"]) for r in rows]
+
     def list_active_project_ids(self) -> list[str]:
         """返回 events 表里出现过的 distinct project_id 列表.
 
