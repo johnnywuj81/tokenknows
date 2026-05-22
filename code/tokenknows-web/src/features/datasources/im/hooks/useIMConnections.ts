@@ -202,3 +202,49 @@ export function useUpdateSignalConfig(projectId: string) {
     },
   })
 }
+
+// ─── v0.3.1 H · Distill 异步 + SSE ─────────────────────────
+
+export interface DistillJobInfo {
+  job_id: string
+  connection_id: string
+  chat_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  messages_total: number
+  messages_processed: number
+  segments_persisted: number
+  segment_ids: string[]
+  error: string | null
+}
+
+export function useTriggerDistillAsync(connectionId: string) {
+  return useMutation({
+    mutationFn: async (
+      body: DistillIMRequest,
+    ): Promise<DistillJobInfo> => {
+      const res = await api.post<DistillJobInfo>(
+        `/im/connections/${connectionId}/distill-async`,
+        body,
+      )
+      return res.data
+    },
+  })
+}
+
+export function useDistillJob(jobId: string | null) {
+  return useQuery({
+    queryKey: ['im', 'distill-job', jobId ?? ''] as const,
+    queryFn: async () => {
+      const res = await api.get<DistillJobInfo>(`/im/distill-jobs/${jobId}`)
+      return res.data
+    },
+    enabled: Boolean(jobId),
+    refetchInterval: (q) => {
+      // 终态停止轮询
+      const data = q.state.data as DistillJobInfo | undefined
+      if (!data) return 2000
+      if (data.status === 'completed' || data.status === 'failed') return false
+      return 2000
+    },
+  })
+}

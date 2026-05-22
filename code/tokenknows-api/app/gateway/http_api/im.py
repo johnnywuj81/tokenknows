@@ -13,7 +13,11 @@ from __future__ import annotations
 
 from typing import Literal
 
+import asyncio
+import json
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config.logging import logger
@@ -32,6 +36,8 @@ from app.services.im.connector_base import (
     ConnectorError,
     TokenExpiredError,
 )
+from app.services.im import distill_jobs
+from app.services.im.distill_jobs import DistillJob, JobStatus
 from app.services.im.value_segment_service import (
     process_messages_to_segments,
 )
@@ -349,6 +355,110 @@ async def get_signal_config(project_id: str) -> SignalConfig:
         threshold=s.signal_gate_threshold,
         llm_model=s.signal_gate_llm_model or None,
     )
+
+
+# ─── v0.3.1 H · Distill 异步 + SSE ────────────────────────
+
+
+class DistillJobInfo(BaseModel):
+    job_id: str
+    connection_id: str
+    chat_id: str
+    status: str
+    messages_total: int
+    messages_processed: int
+    segments_persisted: int
+    segment_ids: list[str]
+    error: str | None = None
+
+
+def _job_to_info(job: DistillJob) -> DistillJobInfo:
+    return DistillJobInfo(
+        job_id=job.job_id,
+        connection_id=job.connection_id,
+        chat_id=job.chat_id,
+        status=job.status.value,
+        messages_total=job.messages_total,
+        messages_processed=job.messages_processed,
+        segments_persisted=job.segments_persisted,
+        segment_ids=job.segment_ids,
+        error=job.error,
+    )
+
+
+@router.post(
+    "/im/connections/{connection_id}/distill-async",
+    response_model=DistillJobInfo,
+    status_code=202,
+)
+async def trigger_distill_async(
+    connection_id: str, body: DistillRequest
+) -> DistillJobInfo:
+    """异步触发蒸馏. 立即返 job_id; 前端订阅 /distill-jobs/{id}/stream 看进度."""
+    conn = im_service.get_connection(connection_id)
+    if conn is None:
+        raise HTTPException(404, detail="Connection not found")
+    job = distill_jobs.start_distill_job(
+        project_id=conn.project_id,
+        connection_id=connection_id,
+        chat_id=body.chat_id,
+        source_mode=body.source_mode,
+    )
+    return _job_to_info(job)
+
+
+@router.get(
+    "/im/distill-jobs/{job_id}",
+    response_model=DistillJobInfo,
+)
+async def get_distill_job(job_id: str) -> DistillJobInfo:
+    job = distill_jobs.get_registry().get(job_id)
+    if job is None:
+        raise HTTPException(404, detail="Job not found")
+    return _job_to_info(job)
+
+
+@router.get("/im/distill-jobs/{job_id}/stream")
+async def stream_distill_job(job_id: str) -> StreamingResponse:
+    """SSE 实时推送 distill 进度.
+
+    事件:
+      data: {"event": "started", ...}
+      data: {"event": "progress", "stage": "...", ...}
+      data: {"event": "completed", "segments_persisted": N, "segment_ids": [...]}
+      data: {"event": "failed", "error": "..."}
+    """
+    registry = distill_jobs.get_registry()
+    job = registry.get(job_id)
+    if job is None:
+        raise HTTPException(404, detail="Job not found")
+
+    async def generate():
+        q = registry.subscribe(job_id)
+        # 1. 推送当前快照 (前端 join 慢时也能立刻看状态)
+        snapshot = _job_to_info(registry.get(job_id) or job)
+        yield f"event: snapshot\ndata: {snapshot.model_dump_json()}\n\n"
+        try:
+            while True:
+                # 终态后跳出
+                cur = registry.get(job_id)
+                if cur and cur.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                    # 把剩余事件 drain 后退出
+                    try:
+                        ev = q.get_nowait()
+                        yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                        continue
+                    except asyncio.QueueEmpty:
+                        break
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=30.0)
+                    yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+        finally:
+            registry.unsubscribe(job_id, q)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.patch(
