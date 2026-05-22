@@ -597,9 +597,14 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **关联决策**：C.1 内置模板、C.4 标红警告
 
-#### C5 书籍类长文档 (v0.2 升级)
+#### C5 书籍类长文档 (v0.2 升级 · ✅ 2026-05-22 已实施 commit 994a6d2 / 8814cf3)
 
 **用户故事**：作为 Editor / 知识管理员，我希望把多个 PR、ADR、对话讨论沉淀为一本 10 万字+ 的内部技术手册 / 培训教材 / SOP 汇编，自动按"卷 → 章 → 节"组织。
+
+> **实施差异**：MVP 使用 2 层嵌套 (卷 → 章, depth=0/1)，3 层 (节 depth=2) 留 v0.3。
+> 文件入口：`app/services/generation_service.py::_stage_outline_book / _stage_content_book`，
+> `app/prompts/outline/book_volume.md` + `book_chapters.md`, `app/prompts/content/book.md`,
+> `code/tokenknows-web/src/features/documents/page/components/BookProgressCard.tsx`.
 
 **验收标准**
 
@@ -625,9 +630,17 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **关联决策**：C.1 内置模板 (扩展到嵌套结构)、C.4 标红警告 (跨章一致性指标)
 
-#### C6 Agent 专家技能 (v0.2 升级)
+#### C6 Agent 专家技能 (v0.2 升级 · ✅ 2026-05-22 已实施 commit 14bb007)
 
 **用户故事**：作为 Editor / Tech Lead，我希望从已通过审批的高质量章节里自动提炼出"专家技能" (类似 Anthropic Skills / Cursor Rules), 系统在下次生成文档时自动应用这些技能, 让 AI 越用越懂团队风格。
+
+> **实施差异**：
+> - 8 个 HTTP 端点 (list/get/distill/patch/lock/unlock/evolve/delete) 见 `app/gateway/http_api/skills.py`
+> - 自进化反馈 4 信号 (approve/reject/regen_big/small_diff) 见 `skill_service.on_chapter_state_changed`
+> - 注入策略 top-3 cosine × trust × recency + diversity gate(>0.7 跳过) + ε-greedy 5% 探索
+> - auto-active (usage≥50 ∧ acc≥0.8) / should_evolve (usage≥20 ∧ acc<0.5)
+> - 前端 `/projects/:id/skills` 见 `code/tokenknows-web/src/features/skills/SkillsPage.tsx`
+> - MVP 范围：项目级私有 (跨项目共享 / Skill marketplace 留 v0.3+)
 
 **验收标准**
 
@@ -915,9 +928,17 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **关联决策**：要素 #15 目的地选择、#16 发布回执 + 版本追溯
 
-### 5.8 模块 H · Skill 自进化机制 (v0.2)
+### 5.8 模块 H · Skill 自进化机制 (v0.2 · ✅ 2026-05-22 已实施)
 
 > 仅与 C6 配套。本节描述 skill 怎么"越用越懂团队"。
+>
+> **实施摘要** (commit 14bb007):
+> - 入口 H1 已实现 P0 (HTTP `POST /projects/:id/skills/distill`); P1 批量 / P2 后台留 v0.3
+> - 反馈 H2 实施: 4 信号写在 `skill_service.on_chapter_state_changed`,trust 公式简化为
+>   `trust = base_acceptance(Laplace) × recency_decay(30d) × usage_confidence(usage/10)`
+> - 进化 H3 阈值与 PRD 一致 (usage≥20 ∧ acc<0.5 → v2; usage≥50 ∧ acc≥0.8 → auto-active)
+> - 防过拟合 H4: diversity gate(>0.7 跳过) + ε-greedy 5% 已实现, 月度强制重蒸馏留 v0.3
+> - 用户控制 H5: lock / unlock / status 切换全部支持
 
 #### H1 蒸馏触发
 

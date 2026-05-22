@@ -308,7 +308,9 @@ CREATE TABLE publish_records (
   published_by UUID REFERENCES users(id)
 );
 
--- v0.2 · Agent Skill (项目级私有, 自进化)
+-- v0.2 · Agent Skill (项目级私有, 自进化) · ✅ 2026-05-22 已实施 commit 14bb007
+-- MVP SQLite 实现见 code/tokenknows-api/app/persistence/schema.sql `skills` 表
+-- (生产 PG 切换时直接换 VECTOR + JSONB; MVP 用 BLOB(embedding) + JSON TEXT)
 CREATE TABLE skills (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -326,6 +328,8 @@ CREATE TABLE skills (
   distilled_from JSONB DEFAULT '[]',       -- [chapter_id, ...]
   distilled_at TIMESTAMPTZ DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
+  -- v0.2 实施新增: 进化升级 timeline
+  parent_skill_id UUID REFERENCES skills(id),  -- evolve_skill_v2 时记录上一代
   -- 状态
   locked BOOLEAN DEFAULT FALSE,
   status TEXT DEFAULT 'draft',             -- draft / active / deprecated / archived
@@ -336,6 +340,11 @@ CREATE TABLE skills (
 CREATE INDEX skills_project_status_idx ON skills(project_id, status, trust_score DESC);
 CREATE INDEX skills_last_used_idx ON skills(last_used_at DESC);
 ```
+
+> **MVP 实施偏差**:
+> - 数据库使用 SQLite (生产 PG/pgvector 切换计划保留)
+> - `embedding` 字段实际存在 `json` 列内 (Pydantic dump), 非独立 BLOB; 加载到内存 `Skill.embedding: list[float]` 做 cosine
+> - `(project_id, name, version)` 唯一约束 MVP 未强制 (业务层去重, 避免 evolve race)
 
 ### 5.4 审计与出域日志
 
@@ -460,21 +469,26 @@ POST   /api/v1/publish-records/{id}/revoke
 GET    /api/v1/audit-log?project_id=&user_id=&action=
 GET    /api/v1/egress-log?project_id=
 
-# Skills (v0.2 升级 · 见 PRD §5.8 / §C6)
+# Skills (v0.2 升级 · 见 PRD §5.8 / §C6) · ✅ 2026-05-22 已实施 commit 14bb007
+# 8 个端点全部 ready, 见 app/gateway/http_api/skills.py
+# 与本节计划的偏差:
+#   - distill 实施为同步 (POST 直接 return 201 + skill body), 未做异步 + SSE
+#     (~30s 内可完成, MVP 无并发压力, 留 v0.3 升级)
+#   - lock/unlock 拆成 2 个 POST (无 body, 语义更明确), 而非 1 个带 body
+#   - DELETE 实施为硬删 (DELETE FROM), 不是软删除 status=archived
+#     (项目级私有低风险; 若需恢复后续走 PATCH status)
+#   - /usage 端点未单独实施 (前端可读 skill.distilled_from + skill.metrics 覆盖)
 GET    /api/v1/projects/{project_id}/skills?status=active|draft|deprecated
 GET    /api/v1/skills/{skill_id}
 POST   /api/v1/projects/{project_id}/skills/distill
-       body: { source_chapter_ids: [str], name?: str }
-       response: 202 + { skill_id, status: "distilling" }
-       SSE: GET /api/v1/skills/{skill_id}/distill/stream  (推送 distill_completed 事件)
+       body: { source_chapter_ids: [str], name_hint?: str }
+       response: 201 + Skill 全 body (同步返回, MVP)
 PATCH  /api/v1/skills/{skill_id}
        body: { skill_md?, status?, locked?, name? }
-       自动: version += 1, usage_count = 0 (若 skill_md 改动)
-POST   /api/v1/skills/{skill_id}/lock
-       body: { locked: true|false }
-POST   /api/v1/skills/{skill_id}/evolve   # 手动触发 v2 蒸馏
-DELETE /api/v1/skills/{skill_id}          # 软删除 (status=archived)
-GET    /api/v1/skills/{skill_id}/usage    # 应用历史 (chapter_id 列表 + accept/reject 状态)
+POST   /api/v1/skills/{skill_id}/lock        # locked = true
+POST   /api/v1/skills/{skill_id}/unlock      # locked = false
+POST   /api/v1/skills/{skill_id}/evolve      # 手动触发 v2 蒸馏 (需有 rejected chapter)
+DELETE /api/v1/skills/{skill_id}             # 硬删 (MVP)
 
 # Book 类长文档 (复用 /assets/generate, 仅 body 增 book 专属字段)
 POST   /api/v1/projects/{project_id}/assets/generate

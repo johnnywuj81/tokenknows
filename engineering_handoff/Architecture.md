@@ -483,9 +483,15 @@ async def generate(
 
 CI workflow 跑 `ruff check app/`，违反直接挂。
 
-### 5.7 PromptTemplate 子系统 (v0.2 升级)
+### 5.7 PromptTemplate 子系统 (v0.2 升级 · ✅ 2026-05-22 已实施)
 
 > 配套 PRD §C5/C6 + TDD §7.5/§7.6。把硬编码在 `generation_service.py` 各 stage 内的 prompt 抽到独立模板, 支持 Jinja2 占位符 + skill 注入。
+>
+> **实施摘要** (commit d5b10fc / 60f68df):
+> - MVP 实现使用 `_default.md` 共享模板 + `{{type_label}}` 占位符 (而非每类一个文件)
+> - 4 类老文档行为通过 `tests/test_prompts_byte_parity.py` (16 用例) 字节级回归保证
+> - 新 prompt: `outline/book_volume.md` + `outline/book_chapters.md` + `content/book.md`
+>   + `content/book_summarize.md` + `distill/skill_distill.md`
 
 ```
 app/prompts/
@@ -511,9 +517,13 @@ app/prompts/
 
 **回归保证**: A1 阶段提交时必须包含 "现有 4 类生成 LLM 输入字节级对齐" 测试, 防止 prompt 搬运过程偏移。
 
-### 5.8 Skill 自进化子系统 (v0.2 升级)
+### 5.8 Skill 自进化子系统 (v0.2 升级 · ✅ 2026-05-22 已实施 commit 14bb007)
 
 > 与 §5.7 配套, 是 v0.2 产品差异化的核心。
+>
+> **实施摘要**: 见 PRD §5.8 注释和 TDD §6.1 注释。
+> 核心文件: `app/services/skill_service.py` (~570 行) + `app/gateway/http_api/skills.py` (8 端点)
+> + 88 个测试 (`test_skill_schema/_service/_injection/_http`).
 
 **架构图**:
 ```
@@ -576,7 +586,15 @@ app/prompts/
 - 持久化 100% 走 `store.py`, 无直连 SQLite
 - 不允许 skill_service 直接调 `_stage_*`, 反向也禁止 (依赖单向, generation_service 调 skill_service)
 
-### 5.9 Book 长文档生成路径 (v0.2 升级)
+### 5.9 Book 长文档生成路径 (v0.2 升级 · ✅ 2026-05-22 已实施 commit 994a6d2 / 8814cf3)
+
+> **实施摘要**: 见 PRD §C5 注释。
+> 核心文件:
+> - `_stage_outline_book` + `_stage_content_book` 在 `generation_service.py`
+> - `_compute_book_consistency` 计算跨章 cosine (consistency_score 指标)
+> - 前端 `BookOutlineNav` (卷折叠) + `BookProgressCard` (卷/章计数 + ETA)
+> 23 个 book 测试 (`test_book_pipeline.py` + `test_book_consistency.py`).
+
 
 > 复用现有 5 阶段流水线, 通过 PromptTemplate + Chapter 嵌套 + 滚动 summary 三件套支撑。
 
