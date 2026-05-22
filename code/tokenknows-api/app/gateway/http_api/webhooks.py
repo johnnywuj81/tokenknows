@@ -27,6 +27,12 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from app.config.logging import logger
 from app.schemas.event import EventCreate
 from app.services import event_service as svc
+from app.services.auto_trigger.evaluator.event_evaluator import (
+    GitHubEvent,
+    evaluate_github_event,
+    normalize_issue_webhook,
+    normalize_pr_webhook,
+)
 
 router = APIRouter()
 
@@ -205,36 +211,61 @@ async def github_webhook(
     repo_full = (payload.get("repository") or {}).get("full_name") or "unknown"
 
     events_to_ingest: list[EventCreate] = []
+    auto_trigger_event: GitHubEvent | None = None  # v0.4.1: 喂给 EventEvaluator
+
     if x_github_event == "pull_request":
         ev = _pr_event(payload, repo_full)
         if ev:
             events_to_ingest.append(ev)
+        auto_trigger_event = normalize_pr_webhook(payload)
     elif x_github_event == "issues":
         ev = _issue_event(payload, repo_full)
         if ev:
             events_to_ingest.append(ev)
+        auto_trigger_event = normalize_issue_webhook(payload)
     elif x_github_event == "push":
         events_to_ingest.extend(_push_events(payload, repo_full))
     else:
         logger.info("github_webhook_unhandled", gh_event=x_github_event, repo=repo_full)
         return {"ok": True, "skipped": x_github_event}
 
-    if not events_to_ingest:
+    if not events_to_ingest and auto_trigger_event is None:
         return {"ok": True, "skipped": "no matching action"}
 
-    result = svc.ingest_events(DEFAULT_PROJECT_ID, events_to_ingest)
+    result = svc.ingest_events(DEFAULT_PROJECT_ID, events_to_ingest) if events_to_ingest else None
+
+    # v0.4.1 · 把归一化事件喂给 EventEvaluator (mode=event 规则评估)
+    # 不阻塞 webhook 响应; evaluator 内部串行评估 + schedule_execution
+    auto_trigger_stats: dict[str, int] | None = None
+    if auto_trigger_event is not None:
+        try:
+            auto_trigger_stats = evaluate_github_event(
+                auto_trigger_event, DEFAULT_PROJECT_ID
+            )
+        except Exception as e:
+            logger.error(
+                "auto_trigger_event_eval_failed",
+                gh_event=x_github_event,
+                error=str(e),
+                exc_info=True,
+            )
+
     logger.info(
         "github_webhook_ingested",
         gh_event=x_github_event,
         repo=repo_full,
         delivery=x_github_delivery,
-        ingested=result.ingested,
-        skipped=result.skipped,
+        ingested=result.ingested if result else 0,
+        skipped=result.skipped if result else 0,
+        auto_trigger_scheduled=(
+            auto_trigger_stats.get("scheduled", 0) if auto_trigger_stats else 0
+        ),
     )
     return {
         "ok": True,
         "event": x_github_event,
         "repo": repo_full,
-        "ingested": result.ingested,
-        "skipped": result.skipped,
+        "ingested": result.ingested if result else 0,
+        "skipped": result.skipped if result else 0,
+        "auto_trigger": auto_trigger_stats or {"scheduled": 0},
     }
