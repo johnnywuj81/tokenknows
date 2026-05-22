@@ -1,4 +1,4 @@
-"""SignalGate · 判定 IM 消息是否"价值信号" (v0.3 T20).
+"""SignalGate · 判定 IM 消息是否"价值信号" (v0.3 T20 + v0.3.1 G).
 
 来源:
 - engineering_handoff/tasks/T20-signal-gate.md
@@ -14,23 +14,32 @@
   R7 决策表述         → signal (>=0.7) 强制
   R8 复盘/总结        → signal (>=0.7) 强制
   R9 链接 + 长解读   → maybe → LLM
-  R10 默认            → LLM 给分
+  R10 默认            → LLM 给分 (v0.3.1: 接 Qwen2.5-3B; 失败回退启发式)
 
-合成: if R1-R4: 0.0; elif R6-R8: max(0.7, llm); else: llm
-
-MVP 简化: R10 不调 LLM, 直接给中性分 0.5. v0.3.1 接 Qwen2.5-3B 本地分类器.
+v0.3.1 G:
+- classify_message(use_llm=True) async wrapper 接 Ollama qwen2.5:3b
+- 同步入口 classify_message_sync 保留启发式 (单测 / 性能优先场景用)
+- threshold 由调用方传; 默认从 settings 读
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Sequence
 
+import httpx
+
+from app.config.logging import logger
+from app.config.settings import get_settings
 from app.services.im.connector_base import IMNormalizedMessage
 
 DEFAULT_THRESHOLD = 0.5
-"""score ≥ threshold → is_signal=True."""
+"""score ≥ threshold → is_signal=True.
+
+新代码应优先用 get_settings().signal_gate_threshold (运行时可调).
+"""
 
 
 @dataclass(frozen=True)
@@ -79,7 +88,9 @@ def classify_message(
     context_after: Sequence[IMNormalizedMessage] | None = None,
     threshold: float = DEFAULT_THRESHOLD,
 ) -> SignalResult:
-    """对单条消息判定 is_signal.
+    """对单条消息判定 is_signal (同步 / 启发式).
+
+    v0.3.1 注: R10 走启发式. 若需要 LLM 兜底, 用 classify_message_async.
 
     Args:
         message: 当前消息
@@ -171,7 +182,7 @@ def _has_followup_answer(
     return any(len((m.content or "").strip()) >= min_len for m in context_after)
 
 
-# ─── 批量处理 ───────────────────────────────────────────────
+# ─── 批量处理 (同步) ────────────────────────────────────────
 
 
 def classify_batch(
@@ -188,4 +199,140 @@ def classify_batch(
         results.append(
             classify_message(msg, before, after, threshold=threshold)
         )
+    return results
+
+
+# ─── v0.3.1 G · Qwen 异步分类 ──────────────────────────────
+
+
+_QWEN_TIMEOUT = 30.0
+_QWEN_SYSTEM_PROMPT = (
+    "你是一个对话价值判断器. 任务: 判断单条 IM 消息是否包含'价值信号'.\n"
+    "价值信号包括: 技术决策、复盘教训、问题解决方案、关键事实陈述.\n"
+    "不是价值信号: 闲聊、表情、确认词、转发链接无解读、问句无答.\n"
+    "严格返回 JSON 一行, 不要 markdown 代码块:\n"
+    '{"signal": true|false, "score": 0.0-1.0, "reason": "≤20字"}'
+)
+
+
+async def _qwen_score_message(
+    message_text: str, model: str | None = None
+) -> tuple[float, str] | None:
+    """调本地 Qwen 给 R10 消息打分. 返 (score, reason); 失败返 None.
+
+    复用 settings.ollama_base_url. 不走 LLM Gateway 主路 (不需要 audit / fallback,
+    这是单实例本地推理).
+    """
+    settings = get_settings()
+    use_model = model or settings.signal_gate_llm_model
+    if not use_model:
+        return None
+    base = settings.ollama_base_url.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    url = f"{base}/api/chat"
+    payload = {
+        "model": use_model,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": _QWEN_SYSTEM_PROMPT},
+            {"role": "user", "content": message_text[:600]},
+        ],
+        "options": {"temperature": 0.0},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=_QWEN_TIMEOUT) as client:
+            resp = await client.post(url, json=payload)
+        if resp.status_code != 200:
+            logger.warning(
+                "signal_gate_qwen_http_error",
+                status=resp.status_code, body=resp.text[:200],
+            )
+            return None
+        data = resp.json()
+        # Ollama /api/chat 返 {"message": {"content": "..."}}
+        content = (data.get("message") or {}).get("content") or ""
+        return _parse_qwen_output(content)
+    except (httpx.RequestError, ValueError) as e:
+        logger.warning("signal_gate_qwen_failed", error=str(e))
+        return None
+
+
+def _parse_qwen_output(content: str) -> tuple[float, str] | None:
+    """解析 Qwen 返的 JSON. 容错: 找第一个 { 到最后 } 之间的部分."""
+    content = content.strip()
+    if not content:
+        return None
+    # JSON 提取 (Qwen 偶尔会加前后多余文字)
+    start = content.find("{")
+    end = content.rfind("}")
+    if start < 0 or end < start:
+        return None
+    try:
+        parsed = json.loads(content[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    score = parsed.get("score")
+    reason = parsed.get("reason") or "qwen"
+    if not isinstance(score, (int, float)):
+        # 兜底: 用 signal 布尔值
+        sig = parsed.get("signal")
+        if isinstance(sig, bool):
+            score = 0.8 if sig else 0.2
+        else:
+            return None
+    score = max(0.0, min(1.0, float(score)))
+    return score, str(reason)[:30]
+
+
+async def classify_message_async(
+    message: IMNormalizedMessage,
+    context_before: Sequence[IMNormalizedMessage] | None = None,
+    context_after: Sequence[IMNormalizedMessage] | None = None,
+    threshold: float | None = None,
+    use_llm: bool = True,
+) -> SignalResult:
+    """async 版本; R10 默认会调 Qwen, 失败回退启发式.
+
+    Args:
+        threshold: 不传走 settings.signal_gate_threshold.
+        use_llm: False 时强制走启发式 (与同步 classify_message 等价).
+    """
+    threshold = (
+        threshold if threshold is not None
+        else get_settings().signal_gate_threshold
+    )
+    # 先跑启发式 (R1-R8 优先级强制)
+    heuristic = classify_message(message, context_before, context_after, threshold)
+    # 仅 R10 (启发式默认) 才走 LLM 兜底
+    if not use_llm or heuristic.rule_id != "R10":
+        return heuristic
+    text = (message.content or "").strip()
+    qwen = await _qwen_score_message(text)
+    if qwen is None:
+        # LLM 不可用 → 保留启发式结果
+        return heuristic
+    score, reason = qwen
+    return SignalResult(
+        is_signal=score >= threshold,
+        score=score,
+        reason=f"R10-llm: {reason}",
+    )
+
+
+async def classify_batch_async(
+    messages: list[IMNormalizedMessage],
+    context_window_before: int = 5,
+    context_window_after: int = 2,
+    threshold: float | None = None,
+    use_llm: bool = True,
+) -> list[SignalResult]:
+    """async 批量 (R10 走 Qwen). 比同步 classify_batch 慢但更准."""
+    results: list[SignalResult] = []
+    for i, msg in enumerate(messages):
+        before = messages[max(0, i - context_window_before):i]
+        after = messages[i + 1: i + 1 + context_window_after]
+        results.append(await classify_message_async(
+            msg, before, after, threshold=threshold, use_llm=use_llm,
+        ))
     return results

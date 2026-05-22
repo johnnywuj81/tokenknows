@@ -164,3 +164,41 @@ export function useDistillIMChat(connectionId: string) {
     },
   })
 }
+
+// ─── v0.3.1 G · SignalGate config ─────────────────────────
+
+export interface SignalConfig {
+  threshold: number
+  llm_model: string | null
+}
+
+export function useSignalConfig(projectId: string) {
+  return useQuery({
+    queryKey: ['im', projectId, 'signal-config'] as const,
+    queryFn: async () => {
+      const res = await api.get<SignalConfig>(
+        `/projects/${projectId}/im/signal/config`,
+      )
+      return res.data
+    },
+    enabled: Boolean(projectId),
+  })
+}
+
+export function useUpdateSignalConfig(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (
+      body: { threshold?: number; llm_model?: string | null },
+    ) => {
+      const res = await api.patch<SignalConfig>(
+        `/projects/${projectId}/im/signal/config`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['im', projectId, 'signal-config'] })
+    },
+  })
+}

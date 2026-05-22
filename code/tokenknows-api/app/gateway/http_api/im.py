@@ -81,6 +81,16 @@ class DistillResponse(BaseModel):
     segment_ids: list[str]
 
 
+class SignalConfig(BaseModel):
+    threshold: float = Field(ge=0.0, le=1.0)
+    llm_model: str | None = None
+
+
+class SignalConfigUpdate(BaseModel):
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    llm_model: str | None = None
+
+
 # ─── 连接 CRUD ───────────────────────────────────────────────
 
 
@@ -322,4 +332,42 @@ async def trigger_distill(
     return DistillResponse(
         segments_persisted=len(persisted),
         segment_ids=[s.id for s in persisted],
+    )
+
+
+# ─── v0.3.1 G · SignalGate 阈值 + 模型 ─────────────────────
+
+
+@router.get(
+    "/projects/{project_id}/im/signal/config",
+    response_model=SignalConfig,
+)
+async def get_signal_config(project_id: str) -> SignalConfig:
+    """读 SignalGate 当前配置 (MVP 实例级; project 隔离留 v0.4)."""
+    s = get_settings()
+    return SignalConfig(
+        threshold=s.signal_gate_threshold,
+        llm_model=s.signal_gate_llm_model or None,
+    )
+
+
+@router.patch(
+    "/projects/{project_id}/im/signal/config",
+    response_model=SignalConfig,
+)
+async def patch_signal_config(
+    project_id: str, body: SignalConfigUpdate
+) -> SignalConfig:
+    """运行时调阈值 / 切 LLM 模型 (持久化到 settings 实例; 重启失效).
+
+    生产应该持久化到 project.im_settings; 留 v0.4.
+    """
+    s = get_settings()
+    if body.threshold is not None:
+        s.signal_gate_threshold = body.threshold
+    if body.llm_model is not None:
+        s.signal_gate_llm_model = body.llm_model
+    return SignalConfig(
+        threshold=s.signal_gate_threshold,
+        llm_model=s.signal_gate_llm_model or None,
     )

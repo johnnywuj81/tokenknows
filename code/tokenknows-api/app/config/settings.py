@@ -121,6 +121,17 @@ class Settings(BaseSettings):
         default=None, alias="IM_ENCRYPTION_KEY"
     )
 
+    # ─── v0.3.1 · SignalGate R10 (本地分类器) ───────────────
+    # Ollama 本地小模型路径. 默认 qwen2.5:3b; 实测 4-8 token/s 单条 ~200ms.
+    # 设为空字符串 → 关闭 LLM 兜底, 退回纯启发式 (老 MVP 行为).
+    signal_gate_llm_model: str = Field(
+        default="qwen2.5:3b", alias="SIGNAL_GATE_LLM_MODEL"
+    )
+    # SignalGate is_signal 判定阈值 (0-1, score >= 此值视为 signal).
+    signal_gate_threshold: float = Field(
+        default=0.5, alias="SIGNAL_GATE_THRESHOLD", ge=0.0, le=1.0
+    )
+
     # ─── v0.3 · 飞书集成 (T18+T19) ────────────────────────────
     # 飞书开放平台 app 凭据. 生产前从飞书后台获取并通过 env 配置.
     # https://open.feishu.cn/app/{app_id}/baseinfo
