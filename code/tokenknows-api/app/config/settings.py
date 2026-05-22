@@ -121,6 +121,26 @@ class Settings(BaseSettings):
         default=None, alias="IM_ENCRYPTION_KEY"
     )
 
+    # ─── v0.3 · 飞书集成 (T18+T19) ────────────────────────────
+    # 飞书开放平台 app 凭据. 生产前从飞书后台获取并通过 env 配置.
+    # https://open.feishu.cn/app/{app_id}/baseinfo
+    feishu_app_id: str | None = Field(default=None, alias="FEISHU_APP_ID")
+    feishu_app_secret: str | None = Field(default=None, alias="FEISHU_APP_SECRET")
+    feishu_encrypt_key: str | None = Field(default=None, alias="FEISHU_ENCRYPT_KEY")
+    feishu_verification_token: str | None = Field(
+        default=None, alias="FEISHU_VERIFICATION_TOKEN"
+    )
+    # 飞书 OAuth callback 完整 URL (TokenKnows 自己的 endpoint)
+    feishu_oauth_redirect_uri: str = Field(
+        default="http://localhost:8001/api/v1/webhooks/feishu/auth-callback",
+        alias="FEISHU_OAUTH_REDIRECT_URI",
+    )
+    # 飞书 API base. 国际版用 https://open.larksuite.com
+    feishu_api_base: str = Field(
+        default="https://open.feishu.cn",
+        alias="FEISHU_API_BASE",
+    )
+
     # ─── 服务运行 ────────────────────────────────────────────────
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")

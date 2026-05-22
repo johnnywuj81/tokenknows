@@ -20,6 +20,7 @@ from app.config.settings import get_settings
 from app.gateway.http_api import api_router
 from app.persistence import bootstrap as bootstrap_db
 from app.services.generation_service import _bootstrap_from_db
+from app.services.im_service import bootstrap as bootstrap_im
 from app.services.skill_service import bootstrap as bootstrap_skills
 
 
@@ -42,6 +43,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _bootstrap_from_db()
     # v0.2 · skills 内存 cache (cache-aside)
     bootstrap_skills()
+    # v0.3 · IM connections 内存 cache
+    bootstrap_im()
     yield
     logger.info("tokenknows_api_stopping")
 
