@@ -9,12 +9,30 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档名称 | TokenKnows v0.3 · 企业 IM 知识蒸馏 产品技术方案 |
-| 文档版本 | v0.3-draft.1（起草中） |
-| 文档状态 | 起草中 · 待用户评审 |
+| 文档版本 | v0.3-impl.1 (主体已实施) |
+| 文档状态 | ✅ T16-T25 + v0.3.1 P1+P2 完成 (commit dce310b); 待生产环境冒烟 |
 | 撰写日期 | 2026-05-22 |
-| 关联文档 | [PRD MVP](./PRD_TokenKnows_MVP.md) · [TDD MVP](./TDD_TokenKnows_MVP.md) · [BRD](./BRD_AI研发知识资产引擎.md) |
+| 实施日期 | 2026-05-22 |
+| 关联文档 | [PRD MVP](./PRD_TokenKnows_MVP.md) · [TDD MVP](./TDD_TokenKnows_MVP.md) · [BRD](./BRD_AI研发知识资产引擎.md) · [部署指南](./docs/V0.3_IM_DEPLOY.md) |
 | 目标读者 | 产品、研发、合规、商务 |
 | 体例 | PRD + TDD 一体，§3-§8 偏产品，§9-§14 偏技术 |
+
+> **实施状态摘要** (2026-05-22 commit dce310b):
+> - ✅ T16 DB schema (38 tests) — 3 表 + Fernet token 加密
+> - ✅ T17 IMConnector ABC (13 tests) — 4 平台共享抽象
+> - ✅ T18 飞书 OAuth (35 tests) — 4 方法 + callback handler
+> - ✅ T19 飞书消息拉取 (20 tests) — list_chats / fetch_history 翻页
+> - ✅ T20 SignalGate (15 tests) — R1-R10 规则 (R10 启发式, Qwen2.5-3B 留 v0.3.1)
+> - ✅ T21 ValueSegment 组装 (15 tests) — 时间窗 + 话题切换
+> - ✅ T22 Retention (15 tests) — 90 天清理 + 撤回宽限 + 匿名化
+> - ✅ T23 REST API (20 tests) — 11 端点
+> - ✅ T24 前端向导 (8 tests) + T25 群管理 (UI)
+> - ✅ v0.3.1 P1 retention 后台 task (6 tests) — main.py 启动
+> - ✅ v0.3.1 P2 Webhook 签名+解密 (28 tests) — 完整链路
+>
+> **总计 205 新测试 / 750 backend 全绿 / 5 个 commit (75dfbe4..dce310b)**
+>
+> **生产前 checklist 见 [V0.3_IM_DEPLOY.md](./docs/V0.3_IM_DEPLOY.md)**.
 
 ### 1.1 与 MVP 的关系
 
