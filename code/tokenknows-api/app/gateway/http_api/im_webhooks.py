@@ -1,18 +1,17 @@
 """IM 集成 webhook + OAuth callback HTTP endpoints (v0.3 T18+).
 
 包含:
-- POST /webhooks/feishu/auth-callback: 飞书 OAuth 跳回 (T18)
-- POST /webhooks/feishu/events/{tenant_key}: 飞书消息 webhook (T19, 占位)
-- (后续 T19/T20 在此扩展)
+- GET  /webhooks/feishu/auth-callback: 飞书 OAuth 跳回 (T18)
+- POST /webhooks/feishu/events/{tenant_key}: 飞书消息 webhook (v0.3.1 P2)
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Header, Query, Request
 
 from app.config.logging import logger
 from app.services import im_service
-from app.services.im import feishu_connector  # noqa: F401 注册副作用
+from app.services.im import feishu_connector, feishu_webhook  # noqa: F401 注册副作用
 from app.services.im.connector_base import (
     ConnectorError,
     OAuthExchangeError,
@@ -60,3 +59,42 @@ async def feishu_auth_callback(
         "status": updated.status,
         "tenant_name": updated.tenant_name,
     }
+
+
+@router.post("/webhooks/feishu/events/{tenant_key}")
+async def feishu_event_webhook(
+    tenant_key: str,
+    request: Request,
+    x_lark_request_timestamp: str | None = Header(default=None),
+    x_lark_request_nonce: str | None = Header(default=None),
+    x_lark_signature: str | None = Header(default=None),
+) -> dict:
+    """飞书消息事件 webhook 主入口 (v0.3.1 P2).
+
+    职责:
+    1. 验证 X-Lark-Signature (encrypt_key 配置时)
+    2. AES 解密 payload['encrypt'] (encrypt_key 配置时)
+    3. URL verification challenge → 返 {"challenge": "xxx"}
+    4. im.message.receive_v1 → 解析 + SignalGate + 入库 im_messages
+    5. 其它 event_type 静默 ok
+
+    tenant_key: 路径参数 (一个 tenant 对应一个 IMConnection.tenant_name)
+    """
+    raw_body = await request.body()
+    try:
+        return feishu_webhook.handle_webhook(
+            raw_body=raw_body,
+            tenant_key=tenant_key,
+            timestamp=x_lark_request_timestamp,
+            nonce=x_lark_request_nonce,
+            signature=x_lark_signature,
+        )
+    except feishu_webhook.SignatureMismatch as e:
+        logger.warning("feishu_webhook_signature_mismatch", error=str(e))
+        raise HTTPException(401, detail=str(e)) from e
+    except feishu_webhook.DecryptError as e:
+        logger.warning("feishu_webhook_decrypt_failed", error=str(e))
+        raise HTTPException(400, detail=str(e)) from e
+    except feishu_webhook.FeishuWebhookError as e:
+        logger.warning("feishu_webhook_bad_request", error=str(e))
+        raise HTTPException(400, detail=str(e)) from e

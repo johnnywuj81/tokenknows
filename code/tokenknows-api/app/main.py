@@ -8,6 +8,7 @@ OpenAPI: <http://localhost:8000/docs>
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -20,8 +21,13 @@ from app.config.settings import get_settings
 from app.gateway.http_api import api_router
 from app.persistence import bootstrap as bootstrap_db
 from app.services.generation_service import _bootstrap_from_db
+from app.services.im import retention as im_retention
 from app.services.im_service import bootstrap as bootstrap_im
 from app.services.skill_service import bootstrap as bootstrap_skills
+
+# v0.3 · IM 保留期清理扫描间隔 (秒). 默认 1 小时.
+# 测试模式下 (PYTEST_CURRENT_TEST 环境变量存在) 不启动后台 task.
+_RETENTION_SWEEP_INTERVAL_SECONDS = 3600
 
 
 @asynccontextmanager
@@ -45,8 +51,37 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bootstrap_skills()
     # v0.3 · IM connections 内存 cache
     bootstrap_im()
+
+    # v0.3.1 P1 · 启动 IM retention 后台扫描 (90 天到期自动脱敏)
+    # 测试模式下不启 (避免污染 TestClient 测试 + 干扰 fixture)
+    retention_task: asyncio.Task | None = None
+    if not _is_test_mode():
+        retention_task = asyncio.create_task(
+            im_retention.retention_sweep_loop(_RETENTION_SWEEP_INTERVAL_SECONDS),
+            name="im-retention-sweep",
+        )
+        logger.info(
+            "im_retention_sweep_started",
+            interval_seconds=_RETENTION_SWEEP_INTERVAL_SECONDS,
+        )
+
     yield
+
+    # 优雅关停后台 task
+    if retention_task is not None:
+        retention_task.cancel()
+        try:
+            await retention_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("im_retention_sweep_stopped")
     logger.info("tokenknows_api_stopping")
+
+
+def _is_test_mode() -> bool:
+    """检测当前是否在 pytest 运行 (避免后台 task 污染测试)."""
+    import os
+    return "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("DISABLE_IM_RETENTION") == "1"
 
 
 app = FastAPI(
