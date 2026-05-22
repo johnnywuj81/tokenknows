@@ -37,6 +37,7 @@ from app.schemas.auto_trigger import (
     TriggerExecution,
     TriggerMode,
     TriggerRule,
+    TriggerSignal as TriggerSignalDTO,
 )
 from app.services import auto_trigger_service as svc
 
@@ -66,6 +67,14 @@ class OnboardingEnableRequest(BaseModel):
 class OnboardingEnableResponse(BaseModel):
     enabled_count: int
     skipped_count: int
+
+
+class TestFireResponse(BaseModel):
+    """POST .../rules/:rid/test-fire 响应; 体验要素 #30 演示用."""
+    execution: TriggerExecution
+    note: str = (
+        "Demo: 撤回窗口缩短为 30 秒, 方便演示. 真实自动触发用 5 分钟撤回窗口."
+    )
 
 
 # ─── Request schemas ──────────────────────────────────────
@@ -243,6 +252,53 @@ async def flag_auto_trigger_false_positive(
     if exe.project_id != project_id:
         raise HTTPException(404, detail="execution not found")
     return svc.flag_false_positive(execution_id)
+
+
+# ─── Demo: test-fire (体验要素 #30 撤回窗口演示) ────────
+
+
+@router.post(
+    "/projects/{project_id}/auto-triggers/rules/{rule_id}/test-fire",
+    response_model=TestFireResponse,
+)
+async def test_fire_auto_trigger_rule(
+    project_id: str,
+    rule_id: str,
+) -> TestFireResponse:
+    """立即创建一条 scheduled execution, 撤回窗口缩短到 30 秒 (demo 用).
+
+    用途:
+    - 体验要素 #30 浮动撤回通知卡演示: 真实场景 cron 5min, 太长不好演示;
+      此 endpoint 让用户能立即触发完整流程
+    - 用户点 30s 内取消 → 通知卡变红消失, LLM 不调
+    - 不点 → withdraw_window_resolver 自动 fire → asset 入库 (含 trigger_meta)
+
+    简化策略 (v0.4.0 demo only):
+    - 不做权限校验 (与其他 endpoint 一致)
+    - 不限频 (生产用 cooldown_seconds; demo 不约束)
+    - signal 标 type='manual_test_fire' 便于审计区分
+    """
+    rule = svc.get_rule(rule_id)
+    if rule is None:
+        raise HTTPException(404, detail="rule not found")
+    if rule.project_id is not None and rule.project_id != project_id:
+        raise HTTPException(404, detail="rule not found")
+
+    signal = TriggerSignalDTO(
+        type="manual_test_fire",
+        summary=f"[Demo] 立即触发演示 · {rule.name}",
+        payload={"demo": True, "withdraw_window_sec": 30},
+    )
+    exe = svc.schedule_execution(
+        rule, project_id, signal=signal, withdraw_window_min=0.5  # 30s
+    )
+    logger.info(
+        "auto_trigger_test_fire",
+        rule_id=rule.id,
+        project_id=project_id,
+        execution_id=exe.id,
+    )
+    return TestFireResponse(execution=exe)
 
 
 # ─── Onboarding (引导向导, 体验要素 #35) ─────────────────

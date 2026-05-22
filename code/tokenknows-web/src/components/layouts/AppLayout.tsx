@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { ProjectSwitcher } from '@/features/workbench/components/ProjectSwitcher'
+import { WithdrawNotification } from '@/features/auto-triggers/WithdrawNotification'
 
 export function AppLayout() {
   const user = useAuthStore((s) => s.user)
@@ -112,6 +113,9 @@ export function AppLayout() {
 
         {/* 抽屉槽位 (T04 / T07 通过 portal 渲染到 #drawer-slot) */}
         <div id="drawer-slot" aria-hidden="true" />
+
+        {/* v0.4 体验要素 #30 · 撤回窗口浮动通知卡 (右下角) */}
+        <WithdrawNotification />
       </div>
     </div>
   )

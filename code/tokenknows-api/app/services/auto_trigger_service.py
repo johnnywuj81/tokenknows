@@ -248,7 +248,7 @@ def schedule_execution(
     project_id: str,
     signal: TriggerSignal,
     *,
-    withdraw_window_min: int = DEFAULT_WITHDRAW_WINDOW_MIN,
+    withdraw_window_min: float = DEFAULT_WITHDRAW_WINDOW_MIN,
     evaluation: Any = None,
 ) -> TriggerExecution:
     """规则命中后调用, 写一条 status=scheduled 的执行记录.

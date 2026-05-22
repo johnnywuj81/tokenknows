@@ -287,6 +287,51 @@ def test_flag_false_positive_works_on_fired(client):
     assert body["status"] == "fired"  # status 不变
 
 
+# ─── Test-fire (demo endpoint, 体验要素 #30) ──────────────
+
+
+def test_test_fire_creates_short_window_scheduled(client):
+    rule = _create_weekly_rule(project_id="proj-1")
+    res = client.post(
+        f"/api/v1/projects/proj-1/auto-triggers/rules/{rule.id}/test-fire"
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert "execution" in body
+    exe = body["execution"]
+    assert exe["status"] == "scheduled"
+    assert exe["signal"]["type"] == "manual_test_fire"
+    # fire_at 应在 1 分钟内 (撤回窗口 30s)
+    fire_at = datetime.fromisoformat(exe["fire_at"].replace("Z", "+00:00"))
+    delta = (fire_at - datetime.now(timezone.utc)).total_seconds()
+    assert 25 < delta < 35  # 30s ± 5s tolerance
+
+
+def test_test_fire_404_missing_rule(client):
+    res = client.post(
+        "/api/v1/projects/proj-1/auto-triggers/rules/rule-nope/test-fire"
+    )
+    assert res.status_code == 404
+
+
+def test_test_fire_404_cross_project(client):
+    rule = _create_weekly_rule(project_id="proj-other")
+    res = client.post(
+        f"/api/v1/projects/proj-1/auto-triggers/rules/{rule.id}/test-fire"
+    )
+    assert res.status_code == 404
+
+
+def test_test_fire_instance_rule_works_for_any_project(client):
+    rule = _create_weekly_rule(project_id=None)  # 实例级
+    res = client.post(
+        f"/api/v1/projects/proj-X/auto-triggers/rules/{rule.id}/test-fire"
+    )
+    assert res.status_code == 200
+    # execution 落到 proj-X
+    assert res.json()["execution"]["project_id"] == "proj-X"
+
+
 # ─── Onboarding ───────────────────────────────────────────
 
 

@@ -22,6 +22,7 @@ import {
   Sparkles,
   XCircle,
   Loader2,
+  Zap,
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
@@ -254,6 +255,7 @@ interface RuleDetailProps {
 }
 
 function RuleDetail({ rule, projectId }: RuleDetailProps) {
+  const qc = useQueryClient()
   const executionsQuery = useQuery({
     queryKey: ['auto-trigger', projectId, 'rules', rule.id, 'executions'],
     queryFn: async (): Promise<TriggerExecution[]> => {
@@ -263,6 +265,25 @@ function RuleDetail({ rule, projectId }: RuleDetailProps) {
       return data.data ?? []
     },
     enabled: Boolean(projectId),
+  })
+
+  // v0.4 体验要素 #30 演示: 立即触发短窗口 (30s 撤回)
+  const testFireMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(
+        `/projects/${projectId}/auto-triggers/rules/${rule.id}/test-fire`,
+      )
+      return data
+    },
+    onSuccess: () => {
+      // 刷新当前规则的执行历史 + 全局 scheduled 列表 (浮动通知卡用)
+      qc.invalidateQueries({
+        queryKey: ['auto-trigger', projectId, 'rules', rule.id, 'executions'],
+      })
+      qc.invalidateQueries({
+        queryKey: ['auto-trigger', projectId, 'executions'],
+      })
+    },
   })
 
   const ModeIcon = MODE_META[rule.mode].icon
@@ -276,6 +297,32 @@ function RuleDetail({ rule, projectId }: RuleDetailProps) {
         </SheetTitle>
         <SheetDescription className="text-body-sm">{rule.description}</SheetDescription>
       </SheetHeader>
+
+      {/* 演示按钮: 立即触发 (30s 短窗口) */}
+      {rule.enabled && (
+        <div className="mt-4 flex items-center gap-2 rounded-md border border-accent-primary bg-accent-primary-light/30 p-3">
+          <Zap className="size-4 text-accent-primary-dark shrink-0" />
+          <div className="flex-1 text-caption text-text-secondary">
+            <strong>演示:</strong> 立即触发一次 (撤回窗口 30 秒) ·
+            右下角浮动通知会显示倒计时
+          </div>
+          <Button
+            size="sm"
+            disabled={testFireMutation.isPending || testFireMutation.isSuccess}
+            onClick={() => testFireMutation.mutate()}
+            className="font-ui shrink-0"
+          >
+            {testFireMutation.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : testFireMutation.isSuccess ? (
+              <CheckCircle2 className="size-3.5" />
+            ) : (
+              <Zap className="size-3.5" />
+            )}
+            {testFireMutation.isSuccess ? '已触发' : '立即触发演示'}
+          </Button>
+        </div>
+      )}
 
       {/* 触发条件 */}
       <section className="mt-6 space-y-2">
