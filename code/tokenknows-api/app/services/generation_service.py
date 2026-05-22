@@ -1845,8 +1845,14 @@ async def start_generation(
     project_id: str,
     req: GenerateAssetRequest,
     user_id: str | None = None,
+    trigger_meta: dict | None = None,
 ) -> Asset:
-    """触发文档生成. 立即返回 Asset (status=generating), 后台跑 5 阶段."""
+    """触发文档生成. 立即返回 Asset (status=generating), 后台跑 5 阶段.
+
+    Args:
+        trigger_meta: v0.4 自动触发标记 (None=手动生成); 非空时直接写入
+            asset.trigger_meta, 让 UI 显示 🤖 徽标 + 可解释卡 (体验要素 #33/#34).
+    """
     settings = get_settings()
     asset_id = f"asset-{uuid4().hex[:10]}"
     now = _now()
@@ -1859,6 +1865,7 @@ async def start_generation(
         current_version=0,
         template_id=f"tpl-{req.type}",
         created_by=user_id or "anonymous",
+        trigger_meta=trigger_meta,
         created_at=now,
         updated_at=now,
     )

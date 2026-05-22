@@ -56,21 +56,27 @@ async def threshold_scanner_job() -> None:
 
 
 async def withdraw_window_resolver_job() -> None:
-    """每 30 秒扫 status=scheduled 且 fire_at<=now 的执行.
+    """每 30 秒扫 status=scheduled 且 fire_at<=now 的执行 (T30+T31 真实现).
 
-    T27 stub: 只读 + sweep_expired (兜底 expired); 不调 dispatcher.fire.
-    T31 替换: 加 dispatcher 调度 + 单 FOR UPDATE 锁.
+    流程:
+    1. 拉一批 ready_to_fire 执行 (撤回窗口已过, 用户未取消)
+    2. 串行调 dispatcher.fire_batch → 真调 LLM 生成 asset
+    3. 兜底: scheduled 但 fire_at 过去 > 60min 仍未处理 → 标 expired (避免堆积)
     """
     try:
+        from app.services.auto_trigger.dispatcher import fire_batch
+
         ready = svc.list_ready_to_fire(limit=100)
         if ready:
+            execution_ids = [e.id for e in ready]
+            stats = await fire_batch(execution_ids)
             logger.info(
-                "auto_trigger_withdraw_resolver_ready",
-                stub=True,
-                count=len(ready),
-                note="T31 will dispatch these to LLM",
+                "auto_trigger_withdraw_resolver_dispatched",
+                ready=len(ready),
+                **stats,
             )
-        # 兜底: scheduled 但 fire_at 过去 > 60min 仍未被 dispatch → 标 expired
+
+        # 兜底: 长期 scheduled 标 expired
         expired_n = svc.sweep_expired()
         if expired_n > 0:
             logger.warning(
@@ -78,7 +84,7 @@ async def withdraw_window_resolver_job() -> None:
                 count=expired_n,
             )
     except Exception as e:
-        logger.error("auto_trigger_withdraw_resolver_failed", error=str(e))
+        logger.error("auto_trigger_withdraw_resolver_failed", error=str(e), exc_info=True)
 
 
 async def skill_evolve_checker_job() -> None:
