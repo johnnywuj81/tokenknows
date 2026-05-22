@@ -11,7 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-AssetType = Literal["weekly_report", "tech_design", "adr", "incident"]
+# v0.2 升级: 加 book (书籍长文) + agent_skill (蒸馏出的专家技能)
+AssetType = Literal["weekly_report", "tech_design", "adr", "incident", "book", "agent_skill"]
 
 AssetStatus = Literal[
     "generating",

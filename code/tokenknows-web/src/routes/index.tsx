@@ -40,6 +40,7 @@ const ReviewPage = lazy(() => import('@/features/review/ReviewPage'))
 const RedactionPage = lazy(() => import('@/features/redaction/RedactionPage'))
 const PublishReceiptPage = lazy(() => import('@/features/publish/PublishReceiptPage'))
 const ProjectSettingsPage = lazy(() => import('@/features/settings/ProjectSettingsPage'))
+const SkillsPage = lazy(() => import('@/features/skills/SkillsPage'))
 
 // ── Admin ──────────────────────────────────────────────────────
 const AdminStatsPage = lazy(() => import('@/features/admin/AdminStatsPage'))
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
       },
       { path: '/projects/:id/documents/:docId/redaction',            element: <Lazy variant="document"><RedactionPage /></Lazy> },
       { path: '/projects/:id/documents/:docId/published/:publishId', element: <Lazy variant="document"><PublishReceiptPage /></Lazy> },
+      { path: '/projects/:id/skills',                                element: <Lazy variant="list"><SkillsPage /></Lazy> },
       { path: '/projects/:id/settings/*',                            element: <Lazy><ProjectSettingsPage /></Lazy> },
     ],
   },

@@ -92,6 +92,20 @@ class Settings(BaseSettings):
         default="claude-sonnet-4-5-20250929", alias="TASK_INCIDENT_MODEL"
     )
 
+    # v0.2 · book 长文档生成 (上下文长 → 用 Sonnet 高级模型)
+    task_book_provider: str = Field(default="anthropic", alias="TASK_BOOK_PROVIDER")
+    task_book_model: str = Field(
+        default="claude-sonnet-4-5-20250929", alias="TASK_BOOK_MODEL"
+    )
+
+    # v0.2 · agent_skill 蒸馏 (输出短 + 高结构, 用 Sonnet 保质量)
+    task_agent_skill_provider: str = Field(
+        default="anthropic", alias="TASK_AGENT_SKILL_PROVIDER"
+    )
+    task_agent_skill_model: str = Field(
+        default="claude-sonnet-4-5-20250929", alias="TASK_AGENT_SKILL_MODEL"
+    )
+
     task_redaction_llm_provider: str = Field(
         default="minimax", alias="TASK_REDACTION_LLM_PROVIDER"
     )
@@ -139,6 +153,8 @@ class Settings(BaseSettings):
             "tech_design": self.task_tech_design_provider,
             "adr": self.task_adr_provider,
             "incident": self.task_incident_provider,
+            "book": self.task_book_provider,
+            "agent_skill": self.task_agent_skill_provider,
             "redaction_llm": self.task_redaction_llm_provider,
         }
         if task not in mapping:
@@ -153,6 +169,8 @@ class Settings(BaseSettings):
             "tech_design": self.task_tech_design_model,
             "adr": self.task_adr_model,
             "incident": self.task_incident_model,
+            "book": self.task_book_model,
+            "agent_skill": self.task_agent_skill_model,
             "redaction_llm": self.task_redaction_llm_model,
         }
         if task not in mapping:

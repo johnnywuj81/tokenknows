@@ -229,7 +229,13 @@ export interface ValueSegment {
 // Asset / Chapter / Evidence / PublishRecord
 // ────────────────────────────────────────────────────────────────────
 
-export type AssetType = 'weekly_report' | 'tech_design' | 'adr' | 'incident'
+export type AssetType =
+  | 'weekly_report'
+  | 'tech_design'
+  | 'adr'
+  | 'incident'
+  | 'book'           // v0.2: 书籍类长文档 (10万字+ 嵌套大纲)
+  | 'agent_skill'    // v0.2: 蒸馏出的专家技能 (Anthropic SKILL.md 风格)
 
 export type AssetStatus =
   | 'generating'   // 后端生成中(MVP UI 状态;mock 5s 后转 draft)
@@ -288,11 +294,21 @@ export interface ChapterGeneratedBy {
   completion_tokens: number
 }
 
+export interface AppliedSkill {
+  /** v0.2: 章节生成时被注入的 skill 记录 */
+  skill_id: string
+  version: number
+  applied_at: string
+  cosine_similarity?: number
+}
+
 export interface Chapter {
   id: string
   asset_id: string
   asset_version: number
   order_index: number
+  parent_id?: string | null    // v0.2: book 嵌套大纲 (NULL=顶层卷)
+  depth?: number               // v0.2: 0=卷, 1=章, 2=节 (4 类现有都是 0)
   title: string
   content: string                              // markdown
   layout: Record<string, unknown>              // 段落级版式 (callout / 警告 / 引用)
@@ -304,6 +320,7 @@ export interface Chapter {
     model: string
     previous_content?: string  // P3 · 重生成前的内容快照, 用于 diff 视图
   }>
+  applied_skills?: AppliedSkill[]   // v0.2: 该章节生成时注入的 skill 列表
   approval_state: 'pending' | 'approved' | 'rejected'
   redacted_spans: RedactedSpan[]
 }
@@ -473,4 +490,62 @@ export interface InstanceStats {
   llm_tokens_this_month: number
   storage_used_bytes: number
   storage_limit_bytes: number
+}
+
+// ────────────────────────────────────────────────────────────────────
+// v0.2 · Skill (蒸馏出的 Agent 专家技能)
+// ────────────────────────────────────────────────────────────────────
+
+export type SkillStatus = 'draft' | 'active' | 'deprecated'
+
+export interface SkillMetrics {
+  /** 被注入到 prompt 的累计次数 */
+  usage_count: number
+  /** 应用后用户 approve 的 chapter 数 */
+  acceptance_count: number
+  /** 应用后用户 reject 的 chapter 数 / 大 diff 重生成 */
+  rejection_count: number
+  /** acceptance / (acceptance + rejection), 0-1 */
+  avg_acceptance_rate: number
+  /** 综合分 (cosine × acceptance × recency × usage_confidence), 0-1 */
+  trust_score: number
+}
+
+export interface SkillDistillSource {
+  chapter_id: string
+  asset_id: string
+  asset_version: number
+  quoted_at: string
+}
+
+export interface Skill {
+  id: string
+  project_id: string
+  name: string
+  version: number
+  /** Anthropic SKILL.md 全文 (YAML frontmatter + 正文) */
+  skill_md: string
+  embedding: number[] | null
+  metrics: SkillMetrics
+  distilled_from: SkillDistillSource[]
+  distilled_at: string
+  last_used_at: string | null
+  locked: boolean
+  status: SkillStatus
+  /** evolve_skill_v2 时记录上一代 skill id */
+  parent_skill_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SkillDistillRequest {
+  source_chapter_ids: string[]
+  name_hint?: string
+}
+
+export interface SkillUpdateRequest {
+  skill_md?: string
+  name?: string
+  locked?: boolean
+  status?: SkillStatus
 }

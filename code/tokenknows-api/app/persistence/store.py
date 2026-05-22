@@ -424,6 +424,77 @@ class SqliteStore:
             return None
         return json.loads(rows[0]["json"])
 
+    # ─── Skills (v0.2 蒸馏专家技能) ─────────────────────
+
+    def upsert_skill(
+        self,
+        skill_id: str,
+        project_id: str,
+        name: str,
+        version: int,
+        status: str,
+        trust_score: float,
+        updated_at: str,
+        json_str: str,
+    ) -> None:
+        """新增 / 更新 skill 全字段."""
+        self._exec(
+            """
+            INSERT INTO skills
+                (id, project_id, name, version, status, trust_score, updated_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name        = excluded.name,
+                version     = excluded.version,
+                status      = excluded.status,
+                trust_score = excluded.trust_score,
+                updated_at  = excluded.updated_at,
+                json        = excluded.json
+            """,
+            (skill_id, project_id, name, version, status, trust_score,
+             updated_at, json_str),
+        )
+
+    def delete_skill(self, skill_id: str) -> None:
+        self._exec("DELETE FROM skills WHERE id = ?", (skill_id,))
+
+    def get_skill(self, skill_id: str) -> dict[str, Any] | None:
+        rows = self._query("SELECT json FROM skills WHERE id = ?", (skill_id,))
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_skills(
+        self,
+        project_id: str,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """按 trust_score DESC 排序; 可选按 status 过滤."""
+        if status:
+            rows = self._query(
+                """
+                SELECT json FROM skills
+                WHERE project_id = ? AND status = ?
+                ORDER BY trust_score DESC, updated_at DESC
+                """,
+                (project_id, status),
+            )
+        else:
+            rows = self._query(
+                """
+                SELECT json FROM skills
+                WHERE project_id = ?
+                ORDER BY trust_score DESC, updated_at DESC
+                """,
+                (project_id,),
+            )
+        return [json.loads(r["json"]) for r in rows]
+
+    def load_all_skills(self) -> list[dict[str, Any]]:
+        """启动时全量加载到内存 cache."""
+        rows = self._query("SELECT json FROM skills ORDER BY updated_at DESC")
+        return [json.loads(r["json"]) for r in rows]
+
     # ─── 调试 ────────────────────────────────────────
 
     def stats(self) -> dict[str, int]:
@@ -433,4 +504,5 @@ class SqliteStore:
             "evidence": self._query("SELECT COUNT(*) AS n FROM evidence")[0]["n"],
             "publish_records": self._query("SELECT COUNT(*) AS n FROM publish_records")[0]["n"],
             "events": self._query("SELECT COUNT(*) AS n FROM events")[0]["n"],
+            "skills": self._query("SELECT COUNT(*) AS n FROM skills")[0]["n"],
         }

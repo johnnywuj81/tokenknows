@@ -17,6 +17,8 @@ LLMTask = Literal[
     "tech_design",        # C2 · 技术方案
     "adr",                # C3 · ADR
     "incident",           # C4 · 问题复盘
+    "book",               # C5 (v0.2) · 书籍长文档
+    "agent_skill",        # C6 (v0.2) · skill 蒸馏 / 复用
     "redaction_llm",      # F · 脱敏 LLM 层 (轻量)
     "evidence_match",     # D · evidence 匹配兜底 (embedding)
 ]

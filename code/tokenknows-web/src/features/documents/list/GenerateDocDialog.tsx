@@ -56,6 +56,16 @@ const TYPES: { value: AssetType; label: string; description: string }[] = [
     label: '问题复盘',
     description: '从 Bug 与故障事件生成 6 部分复盘',
   },
+  {
+    value: 'book',
+    label: '技术书籍',
+    description: 'v0.2 · 卷-章-节嵌套大纲, 10 万字+ 长文档',
+  },
+  {
+    value: 'agent_skill',
+    label: 'Agent 专家技能',
+    description: 'v0.2 · 从已批准章节蒸馏可复用 skill (建议改用 /skills 页面)',
+  },
 ]
 
 const WINDOWS = [

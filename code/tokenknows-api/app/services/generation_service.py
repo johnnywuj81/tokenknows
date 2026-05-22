@@ -179,6 +179,9 @@ _TITLE_TEMPLATES: dict[AssetType, str] = {
     "tech_design": "技术方案 · 范围 = {window}",
     "adr": "ADR · 待填写决策主题",
     "incident": "问题复盘 · 时间窗 {window}",
+    # v0.2 升级
+    "book": "技术手册 · 范围 = {window}",
+    "agent_skill": "Skill 草稿 · {window}",
 }
 
 # 每类文档的章节大纲 (替代 outline LLM 调用)
@@ -206,6 +209,16 @@ _OUTLINE_TEMPLATES: dict[AssetType, list[str]] = {
         "解决过程",
         "改进措施",
         "时间线",
+    ],
+    # v0.2 升级 · book 顶层卷大纲 (默认 3 卷, LLM 在 _stage_outline 里展开成完整章)
+    "book": ["卷一 · 概述", "卷二 · 实现", "卷三 · 实践"],
+    # v0.2 升级 · agent_skill 5 段 (SKILL.md 内容骨架)
+    "agent_skill": [
+        "适用场景",
+        "核心原则",
+        "关键步骤",
+        "好例子 / 坏例子",
+        "相关 skill",
     ],
 }
 
@@ -357,6 +370,8 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
         "tech_design": "技术方案",
         "adr": "ADR 架构决策记录",
         "incident": "问题复盘报告",
+        "book": "技术书籍",
+        "agent_skill": "Agent 专家技能",
     }[req.type]
     fallback = _OUTLINE_TEMPLATES[req.type]
 
@@ -419,11 +434,18 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
 async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     """阶段 3 · 章节正文生成 (per-chapter LLM call · ★ 真 LLM).
 
+    v0.2 新增:
+    - 每章生成前先 select_skills_for_chapter(top-3 active skill) 注入 system_prompt
+    - chapter.applied_skills 追踪本次注入的 skill_id + version
+    - record_skill_application 累加 skill.usage_count
+
     每章一次 router.generate(task=req.type, ...) 并行执行 (asyncio.gather).
     失败的章节回退到 _placeholder_content 保证 demo 不挂.
 
     titles 优先从 outline 阶段产出读 (LLM 真生成的标题), 没有则 fallback 模板.
     """
+    from app.services import skill_service  # avoid circular import at module load
+
     settings = get_settings()
     progress = _progress[asset_id]
     outline_stage = next(
@@ -436,10 +458,29 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     model = req.model_override or settings.task_model(req.type)
     asset = _assets[asset_id]
 
-    # 并行调 LLM 生章节 - 收集 (content, latency_ms, usage, fallback_used)
-    async def gen_one(idx: int, title: str) -> tuple[int, str, str, dict, bool, int]:
+    # v0.2 · 每章并行召回 skill (避免阻塞主 LLM 调用)
+    async def select_one(title: str) -> list:
+        try:
+            return await skill_service.select_skills_for_chapter(
+                project_id=asset.project_id,
+                query_text=f"{title}\n{req.time_window}",
+            )
+        except Exception as e:
+            logger.warning("skill_select_failed", title=title, error=str(e))
+            return []
+
+    skill_picks_per_chapter = await asyncio.gather(
+        *(select_one(t) for t in outline)
+    )
+
+    # 并行调 LLM 生章节
+    async def gen_one(
+        idx: int, title: str, picked: list
+    ) -> tuple[int, str, str, dict, bool, int, list]:
+        skill_suffix = skill_service.render_skills_for_prompt(picked)
         result = await _call_chapter_llm(
-            asset.type, title, req.time_window, asset.project_id, provider, model
+            asset.type, title, req.time_window, asset.project_id,
+            provider, model, skill_suffix=skill_suffix,
         )
         # 推增量 SSE
         await _publish_event(
@@ -452,21 +493,38 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
                 ts=_now(),
             ),
         )
-        return (idx, title, result["content"], result["usage"], result["fallback_used"], result["latency_ms"])
+        return (
+            idx, title, result["content"], result["usage"],
+            result["fallback_used"], result["latency_ms"], picked,
+        )
 
-    results = await asyncio.gather(*(gen_one(i, t) for i, t in enumerate(outline)))
+    results = await asyncio.gather(
+        *(gen_one(i, t, picks) for i, (t, picks)
+          in enumerate(zip(outline, skill_picks_per_chapter)))
+    )
     results.sort(key=lambda x: x[0])
 
     chapters: list[Chapter] = []
-    for idx, title, content, usage, fb_used, latency in results:
+    total_skill_applications = 0
+    for idx, title, content, usage, fb_used, latency, picked in results:
+        chapter_id = f"chapter-{uuid4().hex[:8]}"
+        # 写 skill 应用记录 (chapter.applied_skills + skill.usage_count +1)
+        applied_records: list = []
+        if picked:
+            recs = skill_service.record_skill_application(
+                chapter_id=chapter_id, project_id=asset.project_id, picked=picked,
+            )
+            applied_records = [r.model_dump(mode="json") for r in recs]
+            total_skill_applications += len(applied_records)
         chapters.append(
             Chapter(
-                id=f"chapter-{uuid4().hex[:8]}",
+                id=chapter_id,
                 asset_id=asset_id,
                 asset_version=1,
                 order_index=idx,
                 title=title,
                 content=content,
+                applied_skills=applied_records,
                 generated_by=ChapterGeneratedBy(
                     model=model,
                     provider=provider,
@@ -483,6 +541,7 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
         "provider_used": provider,
         "model_used": model,
         "fallback_used_count": sum(1 for r in results if r[4]),
+        "skill_applications_count": total_skill_applications,
     }
 
 
@@ -493,8 +552,13 @@ async def _call_chapter_llm(
     project_id: str,
     provider: str,
     model: str,
+    skill_suffix: str = "",
 ) -> dict[str, Any]:
     """单章节 LLM 调用 · 失败回退到 placeholder content.
+
+    Args:
+        skill_suffix: v0.2 注入的项目专家技能段 (render_skills_for_prompt 输出);
+                      为空字符串时不修改 system_prompt.
 
     返回 {content, usage, fallback_used, latency_ms}.
     """
@@ -503,6 +567,8 @@ async def _call_chapter_llm(
         "tech_design": "技术方案",
         "adr": "ADR 架构决策记录",
         "incident": "问题复盘报告",
+        "book": "技术书籍",
+        "agent_skill": "Agent 专家技能",
     }[asset_type]
 
     # A1.2: 抽 prompt 到 app/prompts/content/_default.md.
@@ -513,12 +579,17 @@ async def _call_chapter_llm(
         "title": title,
     })
 
+    # v0.2 · skill 注入 system_prompt 末尾
+    system_prompt = rendered.system
+    if skill_suffix:
+        system_prompt = f"{system_prompt}\n\n{skill_suffix}"
+
     router = await get_router()
     try:
         response = await router.generate(
             task=asset_type,
             messages=[
-                LLMMessage(role="system", content=rendered.system),
+                LLMMessage(role="system", content=system_prompt),
                 LLMMessage(role="user", content=rendered.user),
             ],
             options=LLMOptions(**rendered.options),
@@ -1395,6 +1466,8 @@ async def regenerate_chapter(
         "tech_design": "技术方案",
         "adr": "ADR 架构决策记录",
         "incident": "问题复盘报告",
+        "book": "技术书籍",
+        "agent_skill": "Agent 专家技能",
     }[asset.type]
 
     # A1.3: 抽 prompt 到 app/prompts/regenerate/_default.md.
@@ -1450,6 +1523,10 @@ async def regenerate_chapter(
     )
     asset.updated_at = _now()
     _persist_asset(asset_id)   # P1
+
+    # v0.2 · 隐式反馈: 重生成 diff 比例反映用户对当前 skill 的认可度
+    # 大改 (> 50% 内容变更) → rejected 信号; 小改 → approved 信号
+    _notify_skill_feedback_regen(chapter, previous_content, new_content)
 
     # 推 SSE 通知其它订阅者 (例如同步的协作端).
     # 复用 stage="content" - regenerate 是 content 阶段的局部重跑.
@@ -1573,18 +1650,25 @@ def update_chapter_content(
 
 
 def approve_chapter(asset_id: str, chapter_id: str) -> Chapter | None:
-    """T09 · 章节级通过. 全部通过时把 asset.approval_state 升 approved + status review→approved."""
+    """T09 · 章节级通过. 全部通过时把 asset.approval_state 升 approved + status review→approved.
+
+    v0.2 · 反馈给应用的 skill: action=approved 累加 acceptance_count.
+    """
     chapter = _find_chapter(asset_id, chapter_id)
     if chapter is None:
         return None
     chapter.approval_state = "approved"
     _refresh_asset_approval(asset_id)
     _persist_asset(asset_id)   # P1
+    _notify_skill_feedback(chapter, action="approved")
     return chapter
 
 
 def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | None:
-    """T09 · 章节级退回. 任一章节退回时 asset.approval_state = 'rejected'."""
+    """T09 · 章节级退回. 任一章节退回时 asset.approval_state = 'rejected'.
+
+    v0.2 · 反馈给应用的 skill: action=rejected 累加 rejection_count.
+    """
     chapter = _find_chapter(asset_id, chapter_id)
     if chapter is None:
         return None
@@ -1603,7 +1687,75 @@ def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | Non
         asset.approval_state = "rejected"
         asset.updated_at = _now()
     _persist_asset(asset_id)   # P1
+    _notify_skill_feedback(chapter, action="rejected")
     return chapter
+
+
+def _notify_skill_feedback(chapter: Chapter, action: str) -> None:
+    """v0.2 · 把章节状态变化转发给 skill_service.
+
+    chapter.applied_skills 为空时 (4 类老文档或未注入) 直接返回.
+    """
+    if not getattr(chapter, "applied_skills", None):
+        return
+    try:
+        from app.services import skill_service  # 延迟 import 避免循环
+        skill_service.on_chapter_state_changed(
+            chapter_id=chapter.id,
+            applied_skill_records=list(chapter.applied_skills),
+            action=action,
+        )
+    except Exception as exc:
+        logger.warning(
+            "skill_feedback_notify_failed",
+            chapter_id=chapter.id,
+            action=action,
+            error=str(exc),
+        )
+
+
+_REGEN_BIG_DIFF_THRESHOLD = 0.5
+"""regenerate 后 字符 diff 比例 > 此值 → 大改 (rejected 信号)."""
+
+
+def _notify_skill_feedback_regen(
+    chapter: Chapter, old_content: str, new_content: str
+) -> None:
+    """v0.2 · regenerate 隐式反馈: diff 大 = skill 没用对, diff 小 = skill 帮上忙."""
+    if not getattr(chapter, "applied_skills", None):
+        return
+    if not old_content:
+        return
+    # 简单字符级 diff 比例 (避免依赖 difflib 重量库)
+    base_len = max(len(old_content), len(new_content))
+    if base_len == 0:
+        return
+    # 计算最长公共前缀 / 后缀以估算变更比例 (近似但快)
+    common_prefix = _common_prefix_len(old_content, new_content)
+    common_suffix = _common_suffix_len(old_content, new_content)
+    unchanged = common_prefix + common_suffix
+    diff_ratio = max(0.0, 1.0 - unchanged / base_len)
+    action = (
+        "regen_big_diff" if diff_ratio > _REGEN_BIG_DIFF_THRESHOLD
+        else "regen_small_diff"
+    )
+    _notify_skill_feedback(chapter, action=action)
+
+
+def _common_prefix_len(a: str, b: str) -> int:
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+def _common_suffix_len(a: str, b: str) -> int:
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[-1 - i] == b[-1 - i]:
+        i += 1
+    return i
 
 
 def submit_asset_for_review(asset_id: str) -> Asset | None:

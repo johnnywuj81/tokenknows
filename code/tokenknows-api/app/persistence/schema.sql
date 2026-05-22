@@ -75,3 +75,25 @@ CREATE INDEX IF NOT EXISTS events_project_occurred_idx
     ON events(project_id, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS events_source_idx
     ON events(project_id, source_type, occurred_at DESC);
+
+-- v0.2 · Skills · 蒸馏出的 Agent 专家技能 (项目级私有 MVP)
+-- 字段说明:
+--   trust_score: 注入下游生成时 top-k 排序用 (高分优先)
+--   status:      draft (待审批) / active (可被注入) / deprecated (停用)
+--   json:        完整 Skill dump (含 skill_md / embedding / metrics / distilled_from)
+CREATE TABLE IF NOT EXISTS skills (
+    id           TEXT PRIMARY KEY,
+    project_id   TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    version      INTEGER NOT NULL DEFAULT 1,
+    status       TEXT NOT NULL DEFAULT 'draft',
+    trust_score  REAL NOT NULL DEFAULT 0.5,
+    updated_at   TEXT NOT NULL,
+    json         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS skills_project_idx
+    ON skills(project_id, status);
+CREATE INDEX IF NOT EXISTS skills_trust_idx
+    ON skills(project_id, status, trust_score DESC);
+-- 同名 skill 不同 version 共存; (project_id, name, version) 不强制唯一
+-- 避免 evolve_skill_v2 race (rare 但可能); 业务层去重
