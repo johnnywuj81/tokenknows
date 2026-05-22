@@ -240,12 +240,12 @@ async def test_health_warn_when_creds_missing(no_app_creds) -> None:
 
 
 @pytest.mark.asyncio
-async def test_t19_methods_not_implemented_yet() -> None:
-    """T18 阶段, list_chats 等留 T19; 暂时 NotImplementedError."""
-    conn = FeishuConnector()
-    with pytest.raises(NotImplementedError):
+async def test_t19_methods_require_access_token() -> None:
+    """T19 已实施, 缺 token → TokenExpiredError."""
+    conn = FeishuConnector(access_token=None)
+    with pytest.raises(TokenExpiredError):
         await conn.list_chats()
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TokenExpiredError):
         await conn.add_bot_to_chat("chat-1")
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TokenExpiredError):
         await conn.list_chat_members("chat-1")

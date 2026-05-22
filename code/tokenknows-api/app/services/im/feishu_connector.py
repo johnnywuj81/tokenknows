@@ -175,32 +175,188 @@ class FeishuConnector(IMConnector):
             user_id=payload.get("open_id") or payload.get("user_id"),
         )
 
-    # ─── T19 留空; 此 PR 不实施 ────────────────────────
+    # ─── T19 群 / 消息 ────────────────────────────────
+
+    async def _get_with_token(self, path: str, params: dict | None = None) -> dict:
+        """带 user access_token 的 GET (业务接口)."""
+        if not self._access_token:
+            raise TokenExpiredError("access_token 缺; 需要重新授权")
+        url = f"{self._base}{path}"
+        async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
+            resp = await client.get(
+                url,
+                params=params or {},
+                headers={"Authorization": f"Bearer {self._access_token}"},
+            )
+        if resp.status_code == 401:
+            raise TokenExpiredError(f"飞书 401 鉴权失败: {resp.text[:200]}")
+        if resp.status_code != 200:
+            raise ConnectorError(
+                f"飞书 GET {path} HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+        data = resp.json()
+        if data.get("code") not in (0, None):
+            raise ConnectorError(
+                f"飞书 GET {path} code={data.get('code')} msg={data.get('msg')}"
+            )
+        return data
+
+    async def _post_with_token(self, path: str, json_body: dict) -> dict:
+        if not self._access_token:
+            raise TokenExpiredError("access_token 缺; 需要重新授权")
+        url = f"{self._base}{path}"
+        async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
+            resp = await client.post(
+                url, json=json_body,
+                headers={"Authorization": f"Bearer {self._access_token}"},
+            )
+        if resp.status_code == 401:
+            raise TokenExpiredError(f"飞书 401 鉴权失败: {resp.text[:200]}")
+        if resp.status_code != 200:
+            raise ConnectorError(
+                f"飞书 POST {path} HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+        data = resp.json()
+        if data.get("code") not in (0, None):
+            raise ConnectorError(
+                f"飞书 POST {path} code={data.get('code')} msg={data.get('msg')}"
+            )
+        return data
 
     async def list_chats(self) -> list[dict]:
-        raise NotImplementedError("T19 阶段实施")
+        """当前 user 可见的群 + 私聊.
+
+        返回每条含 chat_id / name / chat_type / description.
+        """
+        data = await self._get_with_token(
+            "/open-apis/im/v1/chats", params={"page_size": 50}
+        )
+        items = (data.get("data") or {}).get("items") or []
+        return items
 
     async def add_bot_to_chat(self, chat_id: str) -> None:
-        raise NotImplementedError("T19 阶段实施")
+        """把 bot 加进群. member_type=app, member_id=app_id."""
+        # 鉴权优先: 缺 access_token 直接抛 TokenExpiredError (与 _get/_post_with_token 行为一致)
+        if not self._access_token:
+            raise TokenExpiredError("access_token 缺; 需要重新授权")
+        app_id, _ = self._ensure_app_credentials()
+        await self._post_with_token(
+            f"/open-apis/im/v1/chats/{chat_id}/members",
+            {
+                "id_list": [app_id],
+                "member_id_type": "app_id",
+            },
+        )
 
     async def list_chat_members(self, chat_id: str) -> list[IMUser]:
-        raise NotImplementedError("T19 阶段实施")
+        """群成员列表."""
+        data = await self._get_with_token(
+            f"/open-apis/im/v1/chats/{chat_id}/members",
+            params={"page_size": 100},
+        )
+        items = (data.get("data") or {}).get("items") or []
+        out: list[IMUser] = []
+        for it in items:
+            out.append(IMUser(
+                user_id=it.get("member_id") or it.get("open_id") or "",
+                name=it.get("name"),
+            ))
+        return out
 
     def fetch_history(
         self, chat_id: str, start_time: datetime, end_time: datetime
     ) -> AsyncIterator[IMNormalizedMessage]:
-        async def _empty() -> AsyncIterator[IMNormalizedMessage]:
-            if False:  # pragma: no cover
-                yield  # type: ignore[misc]
-            raise NotImplementedError("T19 阶段实施")
-        return _empty()
+        """历史消息回填 (自动翻页)."""
+
+        async def _gen() -> AsyncIterator[IMNormalizedMessage]:
+            page_token: str | None = None
+            while True:
+                params = {
+                    "container_id_type": "chat",
+                    "container_id": chat_id,
+                    "start_time": str(int(start_time.timestamp() * 1000)),
+                    "end_time": str(int(end_time.timestamp() * 1000)),
+                    "page_size": 50,
+                }
+                if page_token:
+                    params["page_token"] = page_token
+                data = await self._get_with_token(
+                    "/open-apis/im/v1/messages", params=params
+                )
+                payload = data.get("data") or {}
+                items = payload.get("items") or []
+                for raw in items:
+                    msg = self._normalize_message(raw, chat_id)
+                    if msg is not None:
+                        yield msg
+                page_token = payload.get("page_token")
+                if not page_token:
+                    break
+
+        return _gen()
 
     def stream_messages(self, chat_id: str) -> AsyncIterator[IMNormalizedMessage]:
-        async def _empty() -> AsyncIterator[IMNormalizedMessage]:
-            if False:  # pragma: no cover
-                yield  # type: ignore[misc]
-            raise NotImplementedError("T19 阶段实施")
-        return _empty()
+        """实时事件流.
+
+        MVP: 复用 fetch_history(now - 5min, now), 调用方 sleep 5min 再 next().
+        生产: Webhook 推到 Redis pub/sub, 这里订阅.
+        """
+
+        async def _gen() -> AsyncIterator[IMNormalizedMessage]:
+            from datetime import timedelta
+            now = datetime.now(timezone.utc)
+            async for msg in self.fetch_history(
+                chat_id, now - timedelta(minutes=5), now
+            ):
+                yield msg
+
+        return _gen()
+
+    def _normalize_message(
+        self, raw: dict, chat_id: str
+    ) -> IMNormalizedMessage | None:
+        """飞书 message 对象 → IMNormalizedMessage. None=跳过 (e.g. 系统消息)."""
+        msg_type = raw.get("msg_type") or raw.get("message_type")
+        if msg_type and msg_type not in ("text", "post", "interactive"):
+            # 富媒体卡片暂不蒸馏; 后续 T20 SignalGate 也会 noise 掉
+            return None
+        body = raw.get("body") or {}
+        content_raw = body.get("content") or raw.get("content") or ""
+        if isinstance(content_raw, dict):
+            text = content_raw.get("text") or ""
+        else:
+            text = str(content_raw)
+        if not text:
+            return None
+        sender = raw.get("sender") or {}
+        sender_user = IMUser(
+            user_id=sender.get("id") or sender.get("sender_id") or "",
+            name=sender.get("name"),
+        )
+        # mentions
+        mentions: list[str] = []
+        for m in raw.get("mentions") or []:
+            uid = m.get("id") or m.get("open_id")
+            if uid:
+                mentions.append(uid)
+        # 时间戳: 飞书 create_time 是毫秒字符串
+        ts_raw = raw.get("create_time") or raw.get("received_at")
+        received = datetime.now(timezone.utc)
+        try:
+            if ts_raw:
+                received = datetime.fromtimestamp(int(ts_raw) / 1000, tz=timezone.utc)
+        except (ValueError, TypeError):
+            pass
+        return IMNormalizedMessage(
+            platform="feishu",
+            platform_chat_id=chat_id,
+            platform_msg_id=raw.get("message_id") or raw.get("id") or "",
+            sender=sender_user,
+            content=text,
+            mentions=mentions,
+            received_at=received,
+            raw_event_type=msg_type or "message",
+        )
 
     async def health(self) -> ConnectorHealth:
         """简单健康检查: 凭据齐 = ok."""
