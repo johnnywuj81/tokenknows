@@ -23,19 +23,20 @@ from app.services import auto_trigger_service as svc
 
 
 async def cron_evaluator_job() -> None:
-    """每分钟扫 enabled+mode=cron 的规则; T29 替换为真实 RuleEvaluator.
+    """每分钟扫 enabled+mode=cron 的规则 (T29 真实现).
 
-    Stub 行为: 仅记录扫描动作, 不评估规则.
+    实际评估委托给 evaluator.evaluate_cron_rules:
+    - CronMatcher: 是否在 60s 窗口内到点
+    - 实例级规则 fan-out 到所有 active project (events 表)
+    - 三层防护: cooldown / daily_cap / extra_condition
+    - 命中 → svc.schedule_execution (5min 撤回窗口); 否则 svc.record_skip
     """
     try:
-        rules = svc.list_rules(enabled=True, mode="cron", include_instance_defaults=True)
-        logger.debug(
-            "auto_trigger_cron_evaluator_tick",
-            stub=True,
-            candidate_rules=len(rules),
-        )
+        from app.services.auto_trigger.evaluator import evaluate_cron_rules
+        evaluate_cron_rules()
+        # 详细 stats log 由 evaluate_cron_rules 内部写 (auto_trigger_cron_evaluator_done)
     except Exception as e:
-        logger.error("auto_trigger_cron_evaluator_failed", error=str(e))
+        logger.error("auto_trigger_cron_evaluator_failed", error=str(e), exc_info=True)
 
 
 async def threshold_scanner_job() -> None:

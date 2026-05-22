@@ -810,6 +810,35 @@ class SqliteStore:
         )
         return [json.loads(r["json"]) for r in rows]
 
+    def list_all_trigger_rules(
+        self,
+        enabled: bool | None = None,
+        mode: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """跨项目拉所有规则 (含实例级 + 全部项目级).
+
+        T29 RuleEvaluator 用 (实例级规则 fan-out + 项目级独立都需要被评估).
+        UI 列表 / seeder 应继续用 list_trigger_rules (有 project 隔离语义).
+        """
+        where: list[str] = []
+        params: list[Any] = []
+        if enabled is not None:
+            where.append("enabled = ?")
+            params.append(1 if enabled else 0)
+        if mode is not None:
+            where.append("mode = ?")
+            params.append(mode)
+        where_sql = " AND ".join(where) if where else "1 = 1"
+        rows = self._query(
+            f"""
+            SELECT json FROM trigger_rules
+            WHERE {where_sql}
+            ORDER BY priority DESC, updated_at DESC
+            """,
+            tuple(params),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
     def delete_trigger_rule(self, rule_id: str) -> bool:
         """级联删除 (trigger_executions.FK CASCADE)."""
         with self._write_lock:
@@ -934,6 +963,35 @@ class SqliteStore:
             (now_iso, limit),
         )
         return [json.loads(r["json"]) for r in rows]
+
+    def list_active_project_ids(self) -> list[str]:
+        """返回 events 表里出现过的 distinct project_id 列表.
+
+        T29 RuleEvaluator 用: 实例级规则 (project_id=NULL) 需 fan-out 到所有"活跃"项目;
+        没事件的项目无意义触发周报等.
+        """
+        rows = self._query(
+            "SELECT DISTINCT project_id FROM events ORDER BY project_id"
+        )
+        return [r["project_id"] for r in rows]
+
+    def count_events_in_window(
+        self,
+        project_id: str,
+        since_iso: str,
+    ) -> int:
+        """统计 project 在 [since_iso, now] 时间窗内的 events 数.
+
+        给 T29 RuleEvaluator 的 ExtraCondition 'events_last_7d' 等指标用.
+        """
+        rows = self._query(
+            """
+            SELECT COUNT(*) AS n FROM events
+            WHERE project_id = ? AND occurred_at >= ?
+            """,
+            (project_id, since_iso),
+        )
+        return rows[0]["n"]
 
     def count_fired_in_window(
         self,

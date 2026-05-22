@@ -185,6 +185,18 @@ def list_rules(
     return [TriggerRule.model_validate(r) for r in raws]
 
 
+def list_all_rules(
+    enabled: bool | None = None,
+    mode: TriggerMode | None = None,
+) -> list[TriggerRule]:
+    """跨项目拉所有规则 (含实例级 + 全部项目级).
+
+    T29 RuleEvaluator 调用入口; UI 列表 / seeder 用 list_rules (有 project 隔离).
+    """
+    raws = get_db().list_all_trigger_rules(enabled=enabled, mode=mode)
+    return [TriggerRule.model_validate(r) for r in raws]
+
+
 def update_rule(rule_id: str, **changes: Any) -> TriggerRule:
     """部分更新 (UI 主要用于启停 + 改 priority/cooldown)."""
     current = get_rule(rule_id)

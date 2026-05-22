@@ -27,6 +27,8 @@ dependencies = [
     # v0.4 自动触发 · APScheduler 3.x (T27+); in-process AsyncIO, 无 Celery/Redis 重依赖
     # 决策偏差: Proposal 原写 4.x, 但 v4 仍 alpha (4.0.0a6), 改用稳定 3.10+
     "apscheduler>=3.10.0,<4.0",
+    # v0.4 自动触发 · cron 表达式解析 (T29 RuleEvaluator)
+    "croniter>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +38,8 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    # v0.4 T29 测试用 (cron 时间模拟)
+    "freezegun>=1.5.0",
 ]
 
 [build-system]
