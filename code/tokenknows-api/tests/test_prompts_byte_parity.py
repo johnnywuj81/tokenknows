@@ -222,3 +222,44 @@ def test_load_caches() -> None:
     a = load("outline/_default")
     b = load("outline/_default")
     assert a is b  # 缓存命中
+
+
+# ── regenerate/_default 字节级回归 ─────────────────────────────
+
+
+def _reproduce_old_regenerate_prompts(
+    type_label: str, chapter_title: str, chapter_content: str, instruction: str
+) -> tuple[str, str]:
+    system_prompt = (
+        "你是 AI 研发知识资产平台的章节重写助手。根据用户指令重写指定章节,"
+        "保留 markdown 格式与 [N] 证据角标占位风格 (后续阶段回填). 直接输出"
+        "新的 markdown 内容, 不要解释、不要前置说明。"
+    )
+    user_prompt = (
+        f"文档类型: {type_label}\n"
+        f"章节标题: {chapter_title}\n\n"
+        f"现有章节内容 (作为参考, 不必照搬):\n```markdown\n{chapter_content}\n```\n\n"
+        f"用户重生成指令:\n{instruction}\n\n"
+        "请按指令产出本章节的新版本 markdown (200-500 字)."
+    )
+    return system_prompt, user_prompt
+
+
+def test_regenerate_default_byte_parity() -> None:
+    tpl = PromptTemplate.load("regenerate/_default")
+    rendered = tpl.render({
+        "type_label": "项目周报",
+        "chapter_title": "本周进展",
+        "chapter_content": "原本的内容...",
+        "instruction": "用更生动语气重写",
+    })
+    expected_sys, expected_user = _reproduce_old_regenerate_prompts(
+        "项目周报", "本周进展", "原本的内容...", "用更生动语气重写"
+    )
+    assert rendered.system == expected_sys
+    assert rendered.user == expected_user
+    assert rendered.options == {
+        "temperature": 0.6,
+        "max_tokens": 900,
+        "timeout_seconds": 90,
+    }

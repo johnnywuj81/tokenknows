@@ -1397,31 +1397,23 @@ async def regenerate_chapter(
         "incident": "问题复盘报告",
     }[asset.type]
 
-    system_prompt = (
-        "你是 AI 研发知识资产平台的章节重写助手。根据用户指令重写指定章节,"
-        "保留 markdown 格式与 [N] 证据角标占位风格 (后续阶段回填). 直接输出"
-        "新的 markdown 内容, 不要解释、不要前置说明。"
-    )
-    user_prompt = (
-        f"文档类型: {type_label}\n"
-        f"章节标题: {chapter.title}\n\n"
-        f"现有章节内容 (作为参考, 不必照搬):\n```markdown\n{chapter.content}\n```\n\n"
-        f"用户重生成指令:\n{instruction}\n\n"
-        "请按指令产出本章节的新版本 markdown (200-500 字)."
-    )
+    # A1.3: 抽 prompt 到 app/prompts/regenerate/_default.md.
+    tpl = PromptTemplate.load("regenerate/_default")
+    rendered = tpl.render({
+        "type_label": type_label,
+        "chapter_title": chapter.title,
+        "chapter_content": chapter.content,
+        "instruction": instruction,
+    })
 
     router = await get_router()
     response = await router.generate(
         task=asset.type,
         messages=[
-            LLMMessage(role="system", content=system_prompt),
-            LLMMessage(role="user", content=user_prompt),
+            LLMMessage(role="system", content=rendered.system),
+            LLMMessage(role="user", content=rendered.user),
         ],
-        options=LLMOptions(
-            temperature=0.6,
-            max_tokens=900,
-            timeout_seconds=90,
-        ),
+        options=LLMOptions(**rendered.options),
         project_id=asset.project_id,
         user_id=user_id,
         provider_override=provider,
