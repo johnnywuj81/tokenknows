@@ -97,6 +97,36 @@ export function useRevokeIMConnection(projectId: string) {
   })
 }
 
+// ─── v0.3.1 J · 同意书签字 ─────────────────────────────────
+
+export interface ConsentRequest {
+  signed_by: string
+  user_id?: string
+  accepts_terms: boolean
+}
+
+export function useSignConsent(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      connectionId,
+      body,
+    }: {
+      connectionId: string
+      body: ConsentRequest
+    }) => {
+      const res = await api.post(
+        `/im/connections/${connectionId}/consent`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['im', projectId] })
+    },
+  })
+}
+
 export function useIMChats(connectionId: string | null) {
   return useQuery({
     queryKey: imKey.chats(connectionId ?? ''),

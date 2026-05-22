@@ -27,7 +27,11 @@ from app.schemas.im import (
     IMConnectionStatus,
     IMPlatform,
 )
-from app.services.im import feishu_connector  # noqa: F401 注册副作用
+from app.services.im import (  # noqa: F401 注册副作用
+    feishu_connector,
+    dingtalk_connector,
+    wework_connector,
+)
 from app.services.im.connector_base import (
     ConnectorError,
     IMConnector,

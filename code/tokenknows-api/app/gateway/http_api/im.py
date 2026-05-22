@@ -64,6 +64,18 @@ class UpdateConnectionRequest(BaseModel):
     """暂停/恢复使用 active/revoked."""
 
 
+class ConsentRequest(BaseModel):
+    """同意书签字请求 (v0.3.1 J)."""
+
+    signed_by: str
+    """签字人 (企业管理员 user_id 或 名称)."""
+
+    user_id: str | None = None
+    """员工 user_id (个人同意; 可选, 双签场景填)."""
+
+    accepts_terms: bool = Field(..., description="必须 true 才生效")
+
+
 class JoinChatResponse(BaseModel):
     ok: bool
     note: str | None = None
@@ -161,6 +173,44 @@ async def update_connection(
     updated = im_service.update_status(connection_id, body.status)
     if updated is None:
         raise HTTPException(404, detail="Connection not found")
+    return updated
+
+
+@router.post(
+    "/im/connections/{connection_id}/consent",
+    response_model=IMConnection,
+)
+async def sign_consent(
+    connection_id: str, body: ConsentRequest
+) -> IMConnection:
+    """v0.3.1 J · 同意书签字 endpoint.
+
+    用户在向导中勾选 "我已阅读并同意《数据使用同意书》" 后调用此 endpoint.
+    后端记录:
+      - consent_signed_by = body.signed_by
+      - consent_user_id = body.user_id
+      - consent_signed_at = now
+    """
+    from datetime import datetime, timezone
+    if not body.accepts_terms:
+        raise HTTPException(
+            400, detail="必须勾选 accepts_terms=true 才能签字"
+        )
+    conn = im_service.get_connection(connection_id)
+    if conn is None:
+        raise HTTPException(404, detail="Connection not found")
+    now = datetime.now(timezone.utc)
+    updated = conn.model_copy(update={
+        "consent_signed_by": body.signed_by,
+        "consent_user_id": body.user_id or conn.consent_user_id,
+        "consent_signed_at": now,
+        "updated_at": now,
+    })
+    im_service.get_registry().upsert(updated)
+    logger.info(
+        "im_consent_signed", id=connection_id,
+        signed_by=body.signed_by, user_id=body.user_id,
+    )
     return updated
 
 
