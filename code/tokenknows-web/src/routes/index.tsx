@@ -41,6 +41,8 @@ const RedactionPage = lazy(() => import('@/features/redaction/RedactionPage'))
 const PublishReceiptPage = lazy(() => import('@/features/publish/PublishReceiptPage'))
 const ProjectSettingsPage = lazy(() => import('@/features/settings/ProjectSettingsPage'))
 const SkillsPage = lazy(() => import('@/features/skills/SkillsPage'))
+const IMDatasourcesPage = lazy(() => import('@/features/datasources/im/IMDatasourcesPage'))
+const IMChatsPage = lazy(() => import('@/features/datasources/im/IMChatsPage'))
 
 // ── Admin ──────────────────────────────────────────────────────
 const AdminStatsPage = lazy(() => import('@/features/admin/AdminStatsPage'))
@@ -91,6 +93,8 @@ export const router = createBrowserRouter([
       { path: '/projects/:id/documents/:docId/redaction',            element: <Lazy variant="document"><RedactionPage /></Lazy> },
       { path: '/projects/:id/documents/:docId/published/:publishId', element: <Lazy variant="document"><PublishReceiptPage /></Lazy> },
       { path: '/projects/:id/skills',                                element: <Lazy variant="list"><SkillsPage /></Lazy> },
+      { path: '/projects/:id/datasources',                           element: <Lazy variant="list"><IMDatasourcesPage /></Lazy> },
+      { path: '/projects/:id/datasources/im/connections/:cid/chats', element: <Lazy variant="list"><IMChatsPage /></Lazy> },
       { path: '/projects/:id/settings/*',                            element: <Lazy><ProjectSettingsPage /></Lazy> },
     ],
   },

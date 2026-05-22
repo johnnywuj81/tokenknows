@@ -551,3 +551,75 @@ export interface SkillUpdateRequest {
   locked?: boolean
   status?: SkillStatus
 }
+
+// ────────────────────────────────────────────────────────────────────
+// v0.3 · IM 集成 (Lark / 钉钉 / 企微 / 邮件)
+// ────────────────────────────────────────────────────────────────────
+
+export type IMPlatform = 'feishu' | 'dingtalk' | 'wework' | 'email'
+
+export type IMConnectionStatus = 'pending' | 'active' | 'revoked'
+
+export type IMSourceMode = 'assistant' | 'archive'
+
+export interface IMConnection {
+  id: string
+  project_id: string
+  platform: IMPlatform
+  tenant_name: string | null
+  auth_token_enc: string | null
+  refresh_token_enc: string | null
+  token_expires_at: string | null
+  consent_signed_by: string | null
+  consent_user_id: string | null
+  consent_signed_at: string | null
+  revoked_at: string | null
+  status: IMConnectionStatus
+  last_synced_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface IMChat {
+  /** 飞书 chat_id / 钉钉 conversationId / 企微 chatid */
+  chat_id?: string
+  name?: string
+  chat_type?: string  // group | p2p | thread
+  description?: string
+  [key: string]: unknown
+}
+
+export interface IMContributor {
+  user_id: string
+  name?: string | null
+  messages: number
+}
+
+export interface IMChatStats {
+  chat_id: string
+  message_count: number
+  signal_count: number
+  signal_rate: number
+  top_contributors: IMContributor[]
+}
+
+export interface CreateIMConnectionRequest {
+  platform: IMPlatform
+  consent_signed_by?: string
+  consent_user_id?: string
+}
+
+export interface CreateIMConnectionResponse {
+  connection: IMConnection
+  authorize_url: string
+}
+
+export interface DistillIMRequest {
+  chat_id: string
+  source_mode?: IMSourceMode
+}
+
+export interface DistillIMResponse {
+  segments_persisted: number
+  segment_ids: string[]
+}
