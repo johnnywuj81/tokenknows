@@ -59,7 +59,10 @@ export interface User {
   email: string
   display_name: string
   is_instance_admin: boolean
-  email_verified_at: string | null
+  /** v1.1 后端 UserPublic 暂未实现 email 验证, 字段可选 (留 v1.2). */
+  email_verified_at?: string | null
+  /** v1.1 后端真 login 后 last_login_at = now. */
+  last_login_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -71,7 +74,11 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string
-  refresh_token: string
+  /** v1.1: 真后端 JWT 不签发 refresh_token (留 v1.2); 可选保留兼容 mock. */
+  refresh_token?: string
+  /** v1.1: 后端返 token_type=bearer + expires_in (秒). */
+  token_type?: 'bearer'
+  expires_in?: number
   user: User
 }
 
