@@ -9,7 +9,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import ReviewPage from './ReviewPage'
 import { api } from '@/lib/api'
-import type { Asset, Chapter } from '@/types/api'
+import type { Asset, Chapter, KnowledgeGraphLayout } from '@/types/api'
+
+
+// T125 · 在 jsdom 下 mock GraphCanvas 避免 React Flow 内部 crash;
+// 仅断言 ReviewPage 进 KG 分支 + 把 layout 透传过来.
+vi.mock('../documents/knowledge-graph/GraphCanvas', () => ({
+  GraphCanvas: ({ layout }: { layout: KnowledgeGraphLayout }) => (
+    <div data-testid="kg-graph-canvas">
+      canvas: {layout.nodes.length}n {layout.edges.length}e
+    </div>
+  ),
+}))
 
 
 const mkAsset = (overrides: Partial<Asset> = {}): Asset => ({
@@ -110,6 +121,81 @@ describe('ReviewPage', () => {
     render(withWrappers(<ReviewPage />))
     await waitFor(() => expect(screen.getByText(/返回文档/)).toBeInTheDocument())
     fireEvent.click(screen.getByText(/返回文档/))
+  })
+
+  // T125 · KG 资产: 应当渲染图谱 + 节点审计表, 不再走 markdown chapter 列表
+  it('renders KG canvas + node table for knowledge_graph asset', async () => {
+    const kgLayout: KnowledgeGraphLayout = {
+      schema_version: 'kg.v1',
+      nodes: [
+        {
+          id: 'n_alice',
+          type: 'person',
+          label: 'Alice',
+          properties: {},
+          source_event_ids: ['e1'],
+          trust_score: 0.9,
+          span_anchor: { char_offset: 0 },
+        },
+        {
+          id: 'n_event_x',
+          type: 'event',
+          label: 'Launch X',
+          properties: {},
+          source_event_ids: ['e1'],
+          trust_score: 0.8,
+          span_anchor: { char_offset: 30 },
+        },
+      ],
+      edges: [
+        {
+          id: 'rel_1',
+          source: 'n_alice',
+          target: 'n_event_x',
+          type: 'authored_by',
+          weight: 1,
+          source_event_ids: ['e1'],
+        },
+      ],
+      layout_hints: { algorithm: 'dagre', rankdir: 'LR' },
+    }
+    vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url.includes('/chapters/') && url.endsWith('/evidence')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/chapters')) {
+        return Promise.resolve({
+          data: [mkChapter({ id: 'kg-c1', layout: kgLayout })],
+        })
+      }
+      return Promise.resolve({
+        data: mkAsset({ type: 'knowledge_graph', title: 'KG · X' }),
+      })
+    })
+    render(withWrappers(<ReviewPage />))
+    await waitFor(() =>
+      expect(screen.getByTestId('kg-graph-canvas')).toBeInTheDocument(),
+    )
+    expect(screen.getByTestId('reviewer-node-table')).toBeInTheDocument()
+    // 不应渲染 markdown chapter 列表 (空标题 placeholder)
+    expect(screen.queryByText('无章节可审批')).not.toBeInTheDocument()
+  })
+
+  // T125 · KG 资产但 layout 是空 dict (legacy / parse_error) → 回退到 markdown 渲染
+  it('falls back to markdown chapter render when KG layout is empty', async () => {
+    vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url.includes('/chapters')) {
+        return Promise.resolve({
+          data: [mkChapter({ id: 'kg-c0', layout: {}, title: '占位章节' })],
+        })
+      }
+      return Promise.resolve({
+        data: mkAsset({ type: 'knowledge_graph', title: 'KG empty' }),
+      })
+    })
+    render(withWrappers(<ReviewPage />))
+    await waitFor(() => expect(screen.getByText('审批 · KG empty')).toBeInTheDocument())
+    expect(screen.queryByTestId('kg-graph-canvas')).not.toBeInTheDocument()
   })
 
   it('chapter approval progress count', async () => {

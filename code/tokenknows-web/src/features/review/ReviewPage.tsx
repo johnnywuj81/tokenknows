@@ -11,16 +11,20 @@
  * 设计依据: 任务包 T09 §4-§8
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { useDocumentUiStore } from '@/stores/documentUiStore'
 import { useAsset } from '../documents/hooks/useAsset'
 import { useChapters } from '../documents/hooks/useChapters'
+import { useChapterEvidence } from '../documents/hooks/useChapterEvidence'
 import { DocOutline } from '../documents/page/components/DocOutline'
 import { ChapterBlock } from '../documents/page/components/ChapterBlock'
 import { EvidenceDrawer } from '../documents/page/components/EvidenceDrawer'
+import { GraphCanvas } from '../documents/knowledge-graph/GraphCanvas'
+import { ReviewerNodeTable } from '../documents/knowledge-graph/ReviewerNodeTable'
+import type { KGNode, KnowledgeGraphLayout } from '@/types/api'
 import { ApprovalSidebar } from './components/ApprovalSidebar'
 import { BottomActionBar } from './components/BottomActionBar'
 
@@ -72,6 +76,13 @@ export default function ReviewPage() {
 
   const asset = assetQuery.data
   const chapters = chaptersQuery.data ?? []
+  // T125 · 提前算一次 KG layout (避免 JSX 里重复调 + 非空断言).
+  // chapters 可能为空数组, 此时 firstChapter 为 undefined, kgLayout 也为 null.
+  const firstChapter = chapters[0]
+  const kgLayout =
+    asset.type === 'knowledge_graph' && firstChapter
+      ? _kgLayout(firstChapter.layout)
+      : null
 
   function scrollToChapter(id: string) {
     setScrollToChapterId(id)
@@ -116,6 +127,15 @@ export default function ReviewPage() {
             <div className="rounded-lg border border-dashed border-border-medium bg-bg-card p-8 text-center">
               <p className="font-content text-h3 text-text-primary">无章节可审批</p>
             </div>
+          ) : kgLayout && firstChapter ? (
+            // T125 · KG asset 走图谱可视化 + 节点表 (reviewer 主要看实体/关系,
+            // 不是 markdown 节点索引). 复用 GraphCanvas (只读) + ReviewerNodeTable.
+            <KGReviewSection
+              layout={kgLayout}
+              chapterId={firstChapter.id}
+              assetId={asset.id}
+              onViewEvidence={handleViewEvidence}
+            />
           ) : (
             <div className="mx-auto max-w-3xl space-y-6">
               {chapters.map((ch) => (
@@ -155,6 +175,68 @@ export default function ReviewPage() {
 
       {/* T07 证据抽屉 (审批视角也允许打开看引用) */}
       <EvidenceDrawer assetId={docId} />
+    </div>
+  )
+}
+
+// ── T125 · KG asset 审批视图辅助 ──────────────────────────────────
+//
+// 后端把整图 JSON 塞进 `chapter.layout` (dict 字段), 这里做防御性窄化:
+// 只有出现 `nodes` 字段 + 数组形态 才认为是有效 KnowledgeGraphLayout,
+// 其它情形(空 layout / 旧 markdown chapter / parse_error) 返 null,
+// 调用方回退到默认 markdown 渲染.
+function _kgLayout(layout: unknown): KnowledgeGraphLayout | null {
+  if (!layout || typeof layout !== 'object') return null
+  const maybe = layout as { nodes?: unknown; edges?: unknown }
+  if (!Array.isArray(maybe.nodes) || !Array.isArray(maybe.edges)) return null
+  return layout as KnowledgeGraphLayout
+}
+
+interface KGReviewSectionProps {
+  layout: KnowledgeGraphLayout
+  chapterId: string
+  assetId: string
+  onViewEvidence: (chapterId: string, evidenceId?: string) => void
+}
+
+/**
+ * KG 审批主体: 上方 React Flow 图谱 (只读交互, 节点拖动仍允许便于检视) +
+ * 下方 ReviewerNodeTable (节点审计表). 节点点击复用 KnowledgeGraphView 同
+ * 一套 source_event_ids → evidence_id 匹配逻辑.
+ */
+function KGReviewSection({
+  layout,
+  chapterId,
+  assetId,
+  onViewEvidence,
+}: KGReviewSectionProps) {
+  const evidenceQuery = useChapterEvidence(assetId, chapterId)
+  // 稳定空数组引用避免 useCallback 依赖在每次渲染都变化 (react-hooks/exhaustive-deps).
+  const evidences = useMemo(() => evidenceQuery.data ?? [], [evidenceQuery.data])
+
+  const handleNodeClick = useCallback(
+    (node: KGNode): void => {
+      const eventIds = new Set(node.source_event_ids)
+      const match = evidences.find((ev) => eventIds.has(ev.event_id))
+      onViewEvidence(chapterId, match?.id)
+    },
+    [evidences, chapterId, onViewEvidence],
+  )
+
+  return (
+    <div className="space-y-4">
+      <div
+        className="h-[60vh] rounded-md border border-border-subtle bg-bg-card"
+        data-testid="kg-review-canvas"
+      >
+        <GraphCanvas
+          layout={layout}
+          onNodeClick={handleNodeClick}
+          assetId={assetId}
+          chapterId={chapterId}
+        />
+      </div>
+      <ReviewerNodeTable layout={layout} />
     </div>
   )
 }
