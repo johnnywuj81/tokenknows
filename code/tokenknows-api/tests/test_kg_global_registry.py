@@ -38,6 +38,8 @@ def fresh_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     generation_service._chapters.clear()
     p_reg.clear_for_test()
     g_reg.clear_for_test()
+    from app.services.knowledge_graph import audit as audit_module
+    audit_module.clear_for_test()
     yield
 
 

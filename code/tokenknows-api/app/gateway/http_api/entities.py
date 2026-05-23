@@ -12,11 +12,13 @@ from pydantic import BaseModel
 
 from app.gateway.http_api._session import get_current_user_id
 from app.schemas.entity_registry import (
+    EntityAuditLog,
     EntitySourceItem,
     GlobalEntity,
     ProjectEntity,
 )
 from app.services import generation_service as svc
+from app.services.knowledge_graph import audit as audit_service
 from app.services.knowledge_graph import entity_registry as registry
 from app.services.knowledge_graph import global_registry
 
@@ -130,11 +132,11 @@ async def get_node_entity(asset_id: str, node_id: str) -> ProjectEntity:
 )
 async def merge_entities(
     entity_id: str, body: MergeEntitiesRequest,
+    user_id: str | None = Depends(get_current_user_id),
 ) -> EntitiesMergedResult:
-    """v1.5 T98 · 把 entity_id 合并到 body.target_id (source 被吞).
+    """v1.5 T98 / v1.6 T102 · 把 entity_id 合并到 body.target_id (source 被吞).
 
-    Reviewer 在前端发现 assess 误拆同一实体 → 调此 API 合并.
-    返回 422 当: 跨 project / 跨 type / source==target / 任一不存在.
+    T102: 执行前 record audit log (含 source 快照).
     """
     if entity_id == body.target_id:
         raise HTTPException(422, detail="Cannot merge entity into itself")
@@ -146,6 +148,12 @@ async def merge_entities(
         raise HTTPException(422, detail="Cross-project merge not allowed")
     if src.type != tgt.type:
         raise HTTPException(422, detail="Cross-type merge not allowed")
+    # T102: 记录前先快照
+    audit_service.record_merge(
+        project_id=src.project_id, source=src,
+        target_id=tgt.id, target_label=tgt.label,
+        actor_id=user_id,
+    )
     merged = registry.merge_entities(entity_id, body.target_id)
     if merged is None:
         raise HTTPException(422, detail="Merge failed")
@@ -158,11 +166,11 @@ async def merge_entities(
 )
 async def split_entity_node(
     entity_id: str, body: SplitNodeRequest,
+    user_id: str | None = Depends(get_current_user_id),
 ) -> EntitiesSplitResult:
-    """v1.5 T98 · 从 entity 拆出一个 node ref 成新 entity.
+    """v1.5 T98 / v1.6 T102 · 从 entity 拆出一个 node ref 成新 entity.
 
-    场景: assess 误合两个同名不同人, Reviewer 选一个节点 "其实不是这个人".
-    422: ref 不存在 / 仅剩 1 个 ref 不可拆 / entity 不存在.
+    T102: 拆出后 record audit log; 可用 POST /entities/audit/:log_id/undo 撤销.
     """
     result = registry.split_node_to_new_entity(
         entity_id,
@@ -171,7 +179,6 @@ async def split_entity_node(
         new_label=body.new_label,
     )
     if result is None:
-        # 先 404 if entity 缺, 否则 422
         if registry.get_entity(entity_id) is None:
             raise HTTPException(404, detail="Entity not found")
         raise HTTPException(
@@ -179,7 +186,76 @@ async def split_entity_node(
             detail="Split failed (ref 不存在 或 仅剩 1 ref 不可拆)",
         )
     src, new_ent = result
+    # T102: 记录拆分供 undo
+    from app.schemas.entity_registry import EntitySourceRef
+    moved_ref = EntitySourceRef(
+        asset_id=body.asset_id, chapter_id=src.source_refs[0].chapter_id if not src.source_refs else next(
+            (r.chapter_id for r in new_ent.source_refs
+             if r.asset_id == body.asset_id and r.node_id == body.node_id),
+            new_ent.source_refs[0].chapter_id if new_ent.source_refs else "",
+        ),
+        node_id=body.node_id,
+    )
+    # 简化: 直接读 new_ent 的唯一 ref
+    if new_ent.source_refs:
+        moved_ref = new_ent.source_refs[0]
+    audit_service.record_split(
+        project_id=src.project_id,
+        source_id=src.id,
+        new_entity_id=new_ent.id,
+        moved_node_ref=moved_ref,
+        new_canonical=new_ent.canonical_label,
+        actor_id=user_id,
+    )
     return EntitiesSplitResult(source=src, new_entity=new_ent)
+
+
+# ── T102 · audit log endpoints ────────────────────────────────────
+
+
+@router.get(
+    "/projects/{project_id}/entities/audit_log",
+    response_model=list[EntityAuditLog],
+)
+async def list_entity_audit_log(
+    project_id: str,
+    op_type: Literal["merge", "split"] | None = Query(None),
+    only_undoable: bool = Query(False, description="仅返回未 undo 的 split"),
+    limit: int = Query(100, ge=1, le=500),
+) -> list[EntityAuditLog]:
+    return audit_service.list_logs(
+        project_id, op_type=op_type, only_undoable=only_undoable, limit=limit,
+    )
+
+
+@router.post(
+    "/entities/audit/{log_id}/undo",
+    response_model=EntityAuditLog,
+)
+async def undo_entity_audit(
+    log_id: str,
+    user_id: str | None = Depends(get_current_user_id),
+) -> EntityAuditLog:
+    """v1.6 T102 · 撤销 split 操作 (merge undo 留 v1.7).
+
+    422: log 不存在 / op_type=merge / 已 undone / state 已变.
+    """
+    log = audit_service.get_log(log_id)
+    if log is None:
+        raise HTTPException(404, detail="Audit log not found")
+    if log.op_type != "split":
+        raise HTTPException(
+            422, detail="Only split operations can be undone in this version",
+        )
+    if log.undone:
+        raise HTTPException(422, detail="Already undone")
+    updated = audit_service.undo_split(log_id, actor_id=user_id)
+    if updated is None:
+        raise HTTPException(
+            422,
+            detail="Undo failed (state 已变, 比如 new entity 被改动或合并)",
+        )
+    return updated
 
 
 # ── T99 · global (cross-project) entity endpoints ─────────────────

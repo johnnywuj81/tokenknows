@@ -93,3 +93,25 @@ class GlobalEntity(BaseModel):
     def project_count(self) -> int:
         """该 global entity 跨多少 project."""
         return len({link.project_id for link in self.linked})
+
+
+# ── v1.6 T102 · audit log ─────────────────────────────────────────
+
+
+class EntityAuditLog(BaseModel):
+    """v1.6 T102 · entity merge/split 操作审计日志.
+
+    payload 内容随 op_type 不同:
+      - merge: {source_snapshot (ProjectEntity dict), target_id, target_label}
+      - split: {source_id, new_entity_id, moved_node_ref: {asset_id, chapter_id, node_id}, new_canonical}
+    """
+
+    id: str
+    project_id: str
+    op_type: Literal["merge", "split"]
+    actor_id: str | None = None
+    created_at: datetime
+    payload: dict
+    undone: bool = False
+    undone_at: datetime | None = None
+    undone_by: str | None = None

@@ -39,6 +39,9 @@ def fresh_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     generation_service._assets.clear()
     generation_service._chapters.clear()
     registry.clear_for_test()
+    # v1.6 T102: audit log state
+    from app.services.knowledge_graph import audit as audit_module
+    audit_module.clear_for_test()
     yield
 
 

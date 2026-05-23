@@ -50,6 +50,9 @@ const GovernancePage = lazy(
 const MarketplacePage = lazy(
   () => import('@/features/marketplace/MarketplacePage'),
 )
+const GlobalEntitiesPage = lazy(
+  () => import('@/features/knowledge-graph-global/GlobalEntitiesPage'),
+)
 const IMDatasourcesPage = lazy(() => import('@/features/datasources/im/IMDatasourcesPage'))
 const IMChatsPage = lazy(() => import('@/features/datasources/im/IMChatsPage'))
 
@@ -105,6 +108,7 @@ export const router = createBrowserRouter([
       { path: '/projects/:id/skills/review-inbox',                   element: <Lazy variant="list"><ReviewerInboxPage /></Lazy> },
       { path: '/projects/:id/skills/governance',                     element: <Lazy variant="list"><GovernancePage /></Lazy> },
       { path: '/skills/marketplace',                                 element: <Lazy variant="list"><MarketplacePage /></Lazy> },
+      { path: '/global-entities',                                    element: <Lazy variant="list"><GlobalEntitiesPage /></Lazy> },
       { path: '/projects/:id/datasources',                           element: <Lazy variant="list"><IMDatasourcesPage /></Lazy> },
       { path: '/projects/:id/datasources/im/connections/:cid/chats', element: <Lazy variant="list"><IMChatsPage /></Lazy> },
       { path: '/projects/:id/settings/*',                            element: <Lazy><ProjectSettingsPage /></Lazy> },
