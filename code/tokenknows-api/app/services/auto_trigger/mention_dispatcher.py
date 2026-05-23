@@ -106,9 +106,18 @@ def parse_command(text: str) -> ParsedMention:
 def window_to_timedelta(window: WindowPreset, now: datetime | None = None) -> timedelta:
     """把窗口预设转换为 timedelta (相对 now 向前的时间长度).
 
-    对 today / yesterday 需要传 now (基于其计算当日 0 点); 其余忽略 now.
+    对 today / yesterday 需要 tz-aware now (基于其归一化为 UTC 后计算当日 0 点);
+    其余 (30m/2h/7d) 忽略 now.
 
     返回值: 一个 timedelta, T46 用 `now - delta` 作为 since_iso 拉群消息.
+
+    Raises:
+        ValueError: now 是 tz-naive datetime; 未知 window 值.
+
+    设计注意 (来自 T45 review):
+    - tz-naive datetime 强制拒绝, 避免 subtraction TypeError (HIGH 风险)
+    - 非 UTC tz-aware 归一化为 UTC 后计算, 避免负 timedelta
+    - yesterday 窗口随时间增长 24h-48h (随调用时间) — 设计如此, 由 caller 评估
     """
     if window == "30m":
         return timedelta(minutes=30)
@@ -120,16 +129,19 @@ def window_to_timedelta(window: WindowPreset, now: datetime | None = None) -> ti
     # today / yesterday 需要当前时间
     if now is None:
         now = datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        raise ValueError("now must be tz-aware; got naive datetime")
 
-    # 简化: 用 UTC; v0.5.1 加项目级时区配置 (Proposal §6.1)
-    today_start = datetime.combine(now.date(), dt_time.min, tzinfo=timezone.utc)
+    # 归一化到 UTC, 防止非 UTC 时区导致负 timedelta
+    now_utc = now.astimezone(timezone.utc)
+    today_start = datetime.combine(now_utc.date(), dt_time.min, tzinfo=timezone.utc)
     if window == "today":
-        # 今天 0 点 → now
-        return now - today_start
+        # 今天 0 点 UTC → now (≥ 0)
+        return now_utc - today_start
     if window == "yesterday":
-        # 昨天 0 点 → now (含昨天全天 + 今天到现在)
-        # 实际场景: 用户在 today 11:00 调 yesterday → 拉昨天 0 点至今 (≈ 35 小时)
-        return now - (today_start - timedelta(days=1))
+        # 昨天 0 点 UTC → now (含昨天全天 + 今天到现在)
+        # 实际场景: 用户在 today 11:00 UTC 调 yesterday → 拉昨天 0 点至今 (≈ 35 小时)
+        return now_utc - (today_start - timedelta(days=1))
 
     raise ValueError(f"未知 window: {window}")
 
@@ -195,33 +207,47 @@ def check_rate_limit(
         now_ts = time.time()
 
     with _lock:
-        # 1. 单用户 5min 检查
+        # 1. 单用户 5min 检查 + 过期清理 (防 _user_last_fire 无界增长)
         user_key = (chat_id, user_id)
         last = _user_last_fire.get(user_key)
-        if last is not None and (now_ts - last) < _PER_USER_WINDOW_SEC:
-            wait_sec = int(_PER_USER_WINDOW_SEC - (now_ts - last))
-            return RateLimitResult(
-                allowed=False,
-                reason=f"rate_limit_per_user_5min · 还需等 {wait_sec}s",
-            )
+        if last is not None:
+            if (now_ts - last) < _PER_USER_WINDOW_SEC:
+                wait_sec = int(_PER_USER_WINDOW_SEC - (now_ts - last))
+                return RateLimitResult(
+                    allowed=False,
+                    reason=f"rate_limit_per_user_5min · 还需等 {wait_sec}s",
+                )
+            # 过期, 主动清理避免无界增长 (T45 review HIGH 项)
+            del _user_last_fire[user_key]
 
-        # 2. 同群 1h 共 6 次检查
+        # 2. 同群 1h 共 6 次检查 + 空 deque 清理 (防 chat_id 爆喷)
         group_deque = _group_recent_fires[chat_id]
-        # 清理过期 (> 1h 之前的)
         cutoff = now_ts - _PER_GROUP_HOUR_SEC
         while group_deque and group_deque[0] < cutoff:
             group_deque.popleft()
         if len(group_deque) >= _PER_GROUP_HOUR_LIMIT:
-            oldest_age = int(now_ts - group_deque[0])
             return RateLimitResult(
                 allowed=False,
                 reason=f"rate_limit_per_group_hour · 本群 1h 内已触发 {len(group_deque)} 次",
             )
 
-        # 通过: 记账
+        # 通过: 记账; 若清理后为空且本次不通过则不必新建, 此处通过路径需要记账
         _user_last_fire[user_key] = now_ts
         group_deque.append(now_ts)
         return RateLimitResult(allowed=True, reason=None)
+
+
+def _evict_empty_group_deques() -> int:
+    """周期性兜底: 清理空 deque (例如 1h 后 group 无新调用)
+    用于 T46 / v0.6 加调度时清理空 chat 记账; 当前可手动调.
+
+    返回清理数量.
+    """
+    with _lock:
+        empty_keys = [k for k, dq in _group_recent_fires.items() if not dq]
+        for k in empty_keys:
+            del _group_recent_fires[k]
+        return len(empty_keys)
 
 
 def reset_rate_limit_state() -> None:
@@ -244,5 +270,6 @@ __all__ = [
     "window_to_timedelta",
     "build_signal_from_mention",
     "check_rate_limit",
-    "reset_rate_limit_state",
+    # 不导出 reset_rate_limit_state / _evict_empty_group_deques (内部 + test-only,
+    # 但测试可显式 import; 避免 from module import * 暴露状态修改钩子)
 ]

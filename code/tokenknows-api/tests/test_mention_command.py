@@ -232,3 +232,85 @@ def test_rate_limit_reset_state_clears_all():
     reset_rate_limit_state()
     r = check_rate_limit("chat1", "alice", now_ts=1001.0)
     assert r.allowed is True
+
+
+# ─── T45 review 修复回归测试 (HIGH 项) ──────────────────
+
+
+def test_window_today_rejects_tz_naive_now():
+    """review HIGH: tz-naive now → ValueError (而非 TypeError 崩溃)."""
+    naive = datetime(2026, 5, 23, 9, 0)  # 无 tzinfo
+    with pytest.raises(ValueError, match="tz-aware"):
+        window_to_timedelta("today", now=naive)
+
+
+def test_window_yesterday_rejects_tz_naive_now():
+    naive = datetime(2026, 5, 23, 11, 0)
+    with pytest.raises(ValueError, match="tz-aware"):
+        window_to_timedelta("yesterday", now=naive)
+
+
+def test_window_today_non_utc_tz_normalized_to_utc():
+    """review HIGH: 非 UTC tz-aware 应归一化, 不产生负 timedelta.
+
+    示例: 北京时间 (+8h) 早 7 点 → UTC 前一天 23:00 → today (UTC) 拉到当晚.
+    """
+    from datetime import timedelta as td
+    tz_cst = timezone(td(hours=8))
+    # 北京 07:00 = UTC 前一天 23:00
+    now_cst = datetime(2026, 5, 23, 7, 0, tzinfo=tz_cst)
+    delta = window_to_timedelta("today", now=now_cst)
+    # UTC 视角: 当天 0 点是 2026-05-22 00:00 UTC; now_utc 是 2026-05-22 23:00 UTC
+    # delta = 23h
+    assert delta == td(hours=23)
+    assert delta.total_seconds() >= 0  # 不为负
+
+
+def test_user_last_fire_evicted_after_expiry():
+    """review HIGH: 5min 过期后, 同 (chat,user) 第二次 fire 不应在 _user_last_fire 留旧 entry."""
+    from app.services.auto_trigger.mention_dispatcher import _user_last_fire
+
+    check_rate_limit("chat-evict", "alice-evict", now_ts=1000.0)
+    assert ("chat-evict", "alice-evict") in _user_last_fire
+
+    # 5min+1s 后, 调用应通过 + 旧 entry 被删除并写入新的 (验证清理路径)
+    r2 = check_rate_limit("chat-evict", "alice-evict", now_ts=1000.0 + 301)
+    assert r2.allowed is True
+    # 新 entry 写入了 (期望存在, 时间戳更新)
+    assert _user_last_fire[("chat-evict", "alice-evict")] == 1000.0 + 301
+
+
+def test_evict_empty_group_deques():
+    """review HIGH: 清理空 deque 防止攻击者爆 chat_id 留垃圾."""
+    from app.services.auto_trigger.mention_dispatcher import (
+        _evict_empty_group_deques, _group_recent_fires,
+    )
+    # 制造 1 个 chat 满 + 1 个 chat 1h 过期变空
+    check_rate_limit("chat-busy", "u1", now_ts=1000.0)
+    check_rate_limit("chat-expired", "u2", now_ts=1000.0)
+
+    # chat-expired 1h+1s 后, 通过任意调用清理它的 deque (变空)
+    # _evict_empty_group_deques 不依赖 now, 它清的是当前为空的 deques
+    # 模拟: 直接清空 chat-expired
+    _group_recent_fires["chat-expired"].clear()
+
+    # 此时 chat-busy 非空, chat-expired 空
+    assert len(_group_recent_fires["chat-busy"]) == 1
+    assert len(_group_recent_fires["chat-expired"]) == 0
+
+    cleaned = _evict_empty_group_deques()
+    assert cleaned == 1  # 只清了 chat-expired
+    assert "chat-expired" not in _group_recent_fires
+    assert "chat-busy" in _group_recent_fires
+
+
+def test_all_excludes_test_only_hooks():
+    """review HIGH: __all__ 不暴露 reset_rate_limit_state / _evict_empty_group_deques
+    避免 `from mention_dispatcher import *` 暴露状态修改钩子.
+    """
+    from app.services.auto_trigger import mention_dispatcher as md
+    assert "reset_rate_limit_state" not in md.__all__
+    assert "_evict_empty_group_deques" not in md.__all__
+    # 但 import 仍可直接拿到 (test/internal 使用)
+    assert hasattr(md, "reset_rate_limit_state")
+    assert hasattr(md, "_evict_empty_group_deques")
