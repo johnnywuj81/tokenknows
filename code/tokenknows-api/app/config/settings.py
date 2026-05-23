@@ -165,6 +165,13 @@ class Settings(BaseSettings):
         default=None, alias="WEWORK_BOT_USERID",
     )
 
+    # T47 · 群内 thread 回执的 link 拼接基准 (Proposal v0.5 OD-5)
+    # e.g. 'https://tokenknows.acme.com' → 拼成 /projects/:pid/auto-triggers/executions/:eid
+    # 未设时回执只含纯文本不含 link
+    public_base_url: str | None = Field(
+        default=None, alias="PUBLIC_BASE_URL",
+    )
+
     # ─── 服务运行 ────────────────────────────────────────────────
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")

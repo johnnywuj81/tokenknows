@@ -509,6 +509,34 @@ def dispatch_mention(
         subcommand=parsed.subcommand, window=parsed.window,
         project_id=project_id, execution_id=execution.id,
     )
+
+    # T47 · 群内 thread 回执 (Proposal OD-5).
+    # 失败仅 log 不抛 (reply 是次要 UX, asset 已 schedule, 不能阻塞主路径).
+    try:
+        from app.persistence import get_db
+        from app.services.im.thread_reply import build_reply_text, reply_in_thread
+
+        connection_raw = get_db().get_im_connection(connection_id)
+        if connection_raw is not None:
+            reply_text = build_reply_text(
+                subcommand=parsed.subcommand,
+                window=parsed.window,
+                execution_id=execution.id,
+                project_id=project_id,
+                user_id=event.user_id,
+            )
+            reply_in_thread(
+                connection_raw=connection_raw,
+                chat_id=event.chat_id,
+                parent_message_id=event.message_id,
+                text=reply_text,
+            )
+    except Exception as e:
+        logger.warning(
+            "mention_thread_reply_hook_failed",
+            execution_id=execution.id, error=str(e),
+        )
+
     return DispatchResult(
         ok=True, execution_id=execution.id,
         reason=f"scheduled · {parsed.subcommand}/{parsed.window}",
