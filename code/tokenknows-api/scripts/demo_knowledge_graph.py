@@ -32,7 +32,9 @@ from app.services.knowledge_graph.thumbnail import render_kg_svg
 from app.services.knowledge_graph.thumbnail_png import render_kg_png_b64
 
 
-PROJECT_ID = "demo-project"
+# 单 project seed: asset id 全局唯一, 前端任意 project 都能 GET 到
+# (frontend MSW 默认 proj-demo-001 + 真 backend 抓 demo-kg-001 → 跨 project URL 仍工作)
+PROJECT_IDS = ["demo-project"]
 ASSET_ID = "demo-kg-001"
 CHAPTER_ID = "ch-demo-kg-001"
 
@@ -200,53 +202,40 @@ EDGES = [
 ]
 
 
-def main() -> None:
-    # 1. Init persistence — 写到 backend 启动时默认加载的 state.sqlite
-    # (与 backend 用 SqliteStore.bootstrap() 加载路径一致)
-    db_path = Path(__file__).resolve().parent.parent / "data" / "state.sqlite"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    db = SqliteStore(db_path)
-    db._apply_schema()
-    store_module._db = db
+def _seed_one_project(project_id: str, asset_suffix: str = "") -> tuple[str, str]:
+    """给 project 写一份 KG asset + 1 个 weekly_report.
 
-    # 清空可能存在的旧数据 (内存 + sqlite 中的同 id)
-    generation_service._assets.clear()
-    generation_service._chapters.clear()
-    entity_registry.clear_for_test()
-    # 删旧的 demo asset (如果存在)
-    try:
-        db.delete_asset(ASSET_ID)
-        db.delete_asset("demo-wr-001")
-    except Exception:  # noqa: BLE001
-        pass
+    返回 (kg_asset_id, wr_asset_id) — 用后缀区分多 project 避免 id 冲突.
+    """
+    kg_id = f"{ASSET_ID}{asset_suffix}"
+    chapter_id = f"{CHAPTER_ID}{asset_suffix}"
+    wr_id = f"demo-wr-001{asset_suffix}"
+
+    # 删旧
+    db = store_module.get_db()
+    for aid in (kg_id, wr_id):
+        try:
+            db.delete_asset(aid)
+        except Exception:  # noqa: BLE001
+            pass
 
     now = datetime.now(timezone.utc)
 
-    # 2. Seed KG asset
-    asset = Asset(
-        id=ASSET_ID,
-        project_id=PROJECT_ID,
-        type="knowledge_graph",
-        title="2026 Q2 Gateway 故障复盘 (Demo)",
-        status="draft",
-        current_version=1,
-        template_id=None,
-        created_by="alice",
-        approval_state="pending",
-        redaction_state="all_confirmed",
+    # KG asset
+    kg_asset = Asset(
+        id=kg_id, project_id=project_id, type="knowledge_graph",
+        title=f"2026 Q2 Gateway 故障复盘 (Demo · {project_id})",
+        status="draft", current_version=1, template_id=None, created_by="alice",
+        approval_state="pending", redaction_state="all_confirmed",
         metrics=AssetMetrics(
-            coverage=0.88,
-            citation_density=0.72,
-            slop_score=0.05,
-            similarity=0.21,
-            consistency_score=0.90,
+            coverage=0.88, citation_density=0.72, slop_score=0.05,
+            similarity=0.21, consistency_score=0.90,
         ),
-        created_at=now,
-        updated_at=now,
+        created_at=now, updated_at=now,
     )
-    generation_service._assets[ASSET_ID] = asset
+    generation_service._assets[kg_id] = kg_asset
 
-    # 3. 构造 layout + 渲染 SVG/PNG
+    # Layout (每 project 副本 nodes 用相同 id, 因为 KG 节点 id 仅 chapter 内唯一)
     layout = {
         "schema_version": "kg.v1",
         "nodes": NODES,
@@ -268,70 +257,80 @@ def main() -> None:
     content_md = "\n".join(content_lines)
 
     chapter = Chapter(
-        id=CHAPTER_ID,
-        asset_id=ASSET_ID,
-        order_index=0,
-        title="实体关系图谱",
-        content=content_md,
-        layout=layout,
+        id=chapter_id, asset_id=kg_id, order_index=0,
+        title="实体关系图谱", content=content_md, layout=layout,
     )
-    generation_service._chapters[ASSET_ID] = [chapter]
+    generation_service._chapters[kg_id] = [chapter]
 
-    # 4. 注册 entity_registry
+    # entity_registry
     entity_registry.register_asset_nodes(
-        project_id=PROJECT_ID,
-        asset_id=ASSET_ID,
-        chapter_id=CHAPTER_ID,
+        project_id=project_id, asset_id=kg_id, chapter_id=chapter_id,
         nodes=NODES,
     )
 
-    # 5. 写一个 weekly_report 用于对照展示 list page
-    wr_id = "demo-wr-001"
+    # weekly_report 对照
     wr = Asset(
-        id=wr_id,
-        project_id=PROJECT_ID,
-        type="weekly_report",
-        title="2026 Q2 W21 周报 (Demo)",
-        status="draft",
-        current_version=1,
-        template_id=None,
-        created_by="alice",
-        approval_state="pending",
-        redaction_state="all_confirmed",
+        id=wr_id, project_id=project_id, type="weekly_report",
+        title=f"2026 Q2 W21 周报 (Demo · {project_id})",
+        status="draft", current_version=1, template_id=None, created_by="alice",
+        approval_state="pending", redaction_state="all_confirmed",
         metrics=AssetMetrics(
-            coverage=0.82, citation_density=0.61, slop_score=0.12,
-            similarity=0.35,
+            coverage=0.82, citation_density=0.61, slop_score=0.12, similarity=0.35,
         ),
-        created_at=now,
-        updated_at=now,
+        created_at=now, updated_at=now,
     )
     generation_service._assets[wr_id] = wr
 
-    # 6. 写 SVG 文件到 /tmp 供直接预览
-    svg_out = Path("/tmp/kg_demo.svg")
-    svg_out.write_text(layout["thumbnail_svg"], encoding="utf-8")
-
-    # 7. 落 sqlite
-    generation_service._persist_asset(ASSET_ID)
+    generation_service._persist_asset(kg_id)
     generation_service._persist_asset(wr_id)
+    return kg_id, wr_id
+
+
+def main() -> None:
+    # 1. Init persistence
+    db_path = Path(__file__).resolve().parent.parent / "data" / "state.sqlite"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db = SqliteStore(db_path)
+    db._apply_schema()
+    store_module._db = db
+
+    # 清空可能存在的旧数据 (内存)
+    generation_service._assets.clear()
+    generation_service._chapters.clear()
+    entity_registry.clear_for_test()
+
+    # 2. Seed 到所有 demo project
+    #    - demo-project: 语义清晰的 ID, 路由直接访问
+    #    - proj-demo-001: MSW mock 默认 project, 前端 TodoList/工作台用
+    seeded: list[tuple[str, str, str]] = []
+    for i, pid in enumerate(PROJECT_IDS):
+        # 第一个 project 用原 id (demo-kg-001), 后续加后缀避冲突
+        suffix = "" if i == 0 else f"-{pid.replace('-', '')[:6]}"
+        kg_id, wr_id = _seed_one_project(pid, suffix)
+        seeded.append((pid, kg_id, wr_id))
+
+    # 写 SVG 预览
+    layout_for_preview = {
+        "schema_version": "kg.v1", "nodes": NODES, "edges": EDGES,
+        "layout_hints": {"algorithm": "dagre", "rankdir": "LR"},
+    }
+    svg_out = Path("/tmp/kg_demo.svg")
+    svg_out.write_text(render_kg_svg(layout_for_preview), encoding="utf-8")
 
     print("─" * 60)
     print("✅ KG demo 数据已 seed")
     print("─" * 60)
-    print(f"  Project:   {PROJECT_ID}")
-    print(f"  KG Asset:  {ASSET_ID}")
-    print(f"  Chapter:   {CHAPTER_ID}")
+    for pid, kg_id, wr_id in seeded:
+        print(f"  [{pid}]")
+        print(f"    KG:      {kg_id}")
+        print(f"    Weekly:  {wr_id}")
+        print(f"    URL:     /projects/{pid}/documents/{kg_id}")
+    print()
     print(f"  节点数:    {len(NODES)} (3 person + 3 event + 3 concept + 2 artifact)")
     print(f"  边数:      {len(EDGES)} (含 1 contradicts 红线 + 2 caused_by 黄线)")
-    print(f"  实体注册:  {len(entity_registry._entities)} (跨 KG asset 可合并)")
-    print(f"  SVG 预览:  {svg_out}  (直接浏览器打开)")
+    print(f"  实体注册:  {len(entity_registry._entities)}")
+    print(f"  SVG 预览:  {svg_out}")
     print(f"  SQLite:    {db_path}")
-    print()
-    print("🚀 启动服务后访问:")
-    print(f"  Backend:   uvicorn app.main:app --reload --port 8000")
-    print(f"  Frontend:  cd ../tokenknows-web && npm run dev")
-    print(f"  浏览器:    http://localhost:5173/projects/{PROJECT_ID}/documents/{ASSET_ID}")
-    print(f"  API:       curl http://localhost:8000/api/v1/assets/{ASSET_ID}")
     print("─" * 60)
 
 
