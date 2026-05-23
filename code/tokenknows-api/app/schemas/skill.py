@@ -59,6 +59,37 @@ class ConsentRecord(BaseModel):
     """可选备注 (拒绝时常用, 如 '此聊天属于人事讨论不宜蒸馏')."""
 
 
+# ─── v0.6.0 · Reviewer 审批流 (T56) ───────────────────────────────
+
+
+ReviewState = Literal[
+    "not_submitted",   # 默认 (draft 但尚未提交审批)
+    "pending_review",  # submit_for_review 后, 等 reviewer 处理
+    "approved",        # reviewer 批准 → status 同步转 active
+    "rejected",        # reviewer 拒绝 → 保留 draft, 作者可修改后再提交
+]
+
+
+class ReviewRecord(BaseModel):
+    """单次审批结果 (approve / reject 都用同一类型).
+
+    Skill.review_history 是 list[ReviewRecord] (按时间顺序); 当前状态由
+    review_state 字段表达, 历史用于审计追溯.
+    """
+
+    reviewer_id: str
+    """审批者 user_id (MVP 由 endpoint body 传入; 生产换 session 解出)."""
+
+    action: Literal["submit", "approve", "reject"]
+    """submit = 作者提交; approve / reject = reviewer 决定."""
+
+    timestamp: datetime
+    """决定时刻 (UTC)."""
+
+    note: str | None = None
+    """reject 时必填 (≥ 1 字, 由 endpoint Pydantic 校验)."""
+
+
 class SkillMetrics(BaseModel):
     """Skill 自进化指标 (实时更新).
 
@@ -169,6 +200,30 @@ class Skill(BaseModel):
     → 转 expired_no_consent.
     """
 
+    # ─── v0.6.0 · Reviewer 审批流 (T56) ────────────────────────
+    review_state: ReviewState = "not_submitted"
+    """审批阶段状态. 与 status 正交 (e.g. draft + pending_review).
+
+    转换矩阵:
+    not_submitted → pending_review (submit_for_review)
+    pending_review → approved (reviewer approve, 同时 status: draft→active)
+    pending_review → rejected (reviewer reject)
+    rejected → pending_review (作者修改后重提)
+    approved → 终态 (不可改; 想改先 status: active→draft 走新 cycle)
+    """
+
+    review_history: list[ReviewRecord] = Field(default_factory=list)
+    """审批轨迹 (submit / approve / reject 都 append).
+
+    按时间顺序; UI 展示 reviewer timeline. 最新一项 = 当前 review_state 来源.
+    """
+
+    last_reviewer_id: str | None = None
+    """最近一次 approve / reject 的 reviewer (UI badge / 通知路由方便)."""
+
+    last_reviewed_at: datetime | None = None
+    """最近一次 approve / reject 的时刻."""
+
     created_at: datetime
     updated_at: datetime
 
@@ -181,11 +236,17 @@ class Skill(BaseModel):
         老数据 round-trip (json dump 再 load 不改值).
         """
         if isinstance(values, dict):
+            # v0.5 consent (T48)
             values.setdefault("contributors", [])
             values.setdefault("consent_required_from", [])
             values.setdefault("consent_signed_by", [])
             values.setdefault("consent_rejected_by", None)
             values.setdefault("consent_expires_at", None)
+            # v0.6 review (T56)
+            values.setdefault("review_state", "not_submitted")
+            values.setdefault("review_history", [])
+            values.setdefault("last_reviewer_id", None)
+            values.setdefault("last_reviewed_at", None)
         return values
 
 
@@ -248,6 +309,45 @@ class ConsentRejectResponse(BaseModel):
     skill_id: str
     current_status: SkillStatus
     rejected_by: str
+
+
+# ─── v0.6.0 · Reviewer 审批 endpoints (T57) ─────────────────────
+
+
+class SkillSubmitForReviewRequest(BaseModel):
+    """POST /skills/:id/submit-for-review body.
+
+    作者主动提交; user_id 是当前 contributor 之一 (或 project owner).
+    """
+
+    user_id: str = Field(..., min_length=1, max_length=128)
+    note: str | None = Field(default=None, max_length=300)
+    """可选: 给 reviewer 的说明."""
+
+
+class SkillReviewApproveRequest(BaseModel):
+    """POST /skills/:id/review/approve body."""
+
+    reviewer_id: str = Field(..., min_length=1, max_length=128)
+    note: str | None = Field(default=None, max_length=300)
+
+
+class SkillReviewRejectRequest(BaseModel):
+    """POST /skills/:id/review/reject body. reason 必填."""
+
+    reviewer_id: str = Field(..., min_length=1, max_length=128)
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class SkillReviewActionResponse(BaseModel):
+    """3 endpoint 公用响应."""
+
+    skill_id: str
+    status: SkillStatus
+    review_state: ReviewState
+    last_action: Literal["submit", "approve", "reject"]
+    last_reviewer_id: str | None = None
+    last_reviewed_at: datetime | None = None
 
 
 class SkillApplicationRecord(BaseModel):
