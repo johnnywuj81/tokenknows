@@ -14,12 +14,19 @@ import_skill: 从 marketplace 复制 1 个 public skill 到自己 project, 留�
 
 from __future__ import annotations
 
+import heapq
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from app.config.logging import logger
 from app.schemas.skill import Skill
+
+
+# v1.2 perf (T79): tz-aware 最小值供 heapq sort key fallback;
+# 防止 published_at=None 与 published_at=tz-aware 比较时崩.
+# 实际 list_marketplace 只放 visibility=public 的 skill, 必有 published_at.
+_TZ_AWARE_MIN = datetime.min.replace(tzinfo=timezone.utc)
 
 
 class MarketplaceError(Exception):
@@ -115,12 +122,17 @@ def list_marketplace(
                 "published_at": skill.published_at,
                 "skill_md_preview": skill.skill_md[:500],
             })
-        items.sort(
-            key=lambda it: it["published_at"] or datetime.min, reverse=True
+        # v1.2 perf (T79): heapq.nlargest 比 sort+[:limit] 在大集合 + 小 limit
+        # 时显著快 (O(N log k) vs O(N log N)). 排序 key 用 published_at;
+        # None 时用 tz-aware 最小值兜底 (避免 tz-naive/aware 比较崩).
+        items = heapq.nlargest(
+            limit,
+            items,
+            key=lambda it: it["published_at"] or _TZ_AWARE_MIN,
         )
     except Exception as e:  # noqa: BLE001
         logger.warning("marketplace_list_failed", error=str(e))
-    return items[:limit]
+    return items
 
 
 def import_skill(

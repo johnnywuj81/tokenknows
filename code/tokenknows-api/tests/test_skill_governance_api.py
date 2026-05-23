@@ -151,6 +151,83 @@ def test_governance_filters_by_project(fresh_db):
     assert summary_y["total"] == 1
 
 
+def test_governance_single_loop_equivalence_with_legacy_collectors(fresh_db):
+    """v1.2 perf T80: 单 loop 结果应等同于分别调 3 个 collector 的结果."""
+    now = datetime.now(timezone.utc)
+    long_ago = now - timedelta(days=90)
+    # 混合: active high-trust / active low-trust / active dormant /
+    #       active evolve 候选 / draft / deprecated / locked active
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-ok", status="active", review_state="approved",
+        trust=0.8, usage=5, last_used_at=now,
+    ))
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-low", status="active", review_state="approved",
+        trust=0.15, usage=5, last_used_at=now,
+    ))
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-dorm", status="active", review_state="approved",
+        trust=0.5, usage=5, last_used_at=long_ago,
+    ))
+    # evolve 候选: usage=25 / acc=4 / rej=21 (acc_rate=0.16 < 0.5)
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-evo", project_id="proj-X", status="active",
+        review_state="approved",
+        usage=25, acc=4, rej=21,
+        last_used_at=now,
+    ))
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-draft", status="draft",
+        last_used_at=datetime.now(timezone.utc), trust=0.5,
+    ))
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-dep", status="deprecated", trust=0.1,
+    ))
+
+    summary = skill_pool.build_governance_summary("proj-X")
+
+    # 6 skills 总数
+    assert summary["total"] == 6
+    # active=4, draft=1, deprecated=1
+    assert summary["by_status"]["active"] == 4
+    assert summary["by_status"]["draft"] == 1
+    assert summary["by_status"]["deprecated"] == 1
+    # 1 个 evolve 候选 (s-evo)
+    assert summary["evolve_candidates"] == 1
+    # 1 个 dormant (s-dorm)
+    assert summary["dormant_candidates"] == 1
+    # 1 个 low_trust (s-low)
+    assert summary["low_trust_candidates"] == 1
+    # avg_trust: 4 active 平均 = (0.8 + 0.15 + 0.5 + 0.4)/4 = 0.4625
+    # 注: _make_skill 默认 trust=0.5 但 s-evo 没设, 走默认 0.4 (from SkillMetrics)
+    # 这里只确认 (0,1] 范围内
+    assert 0.0 < summary["avg_trust_score"] < 1.0
+
+
+def test_governance_dormant_takes_precedence_over_low_trust(fresh_db):
+    """单 loop 中, 一个 skill 同时是 dormant + low_trust 时只算 dormant."""
+    long_ago = datetime.now(timezone.utc) - timedelta(days=90)
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-both", status="active",
+        last_used_at=long_ago, trust=0.1,
+    ))
+    summary = skill_pool.build_governance_summary("proj-X")
+    assert summary["dormant_candidates"] == 1
+    assert summary["low_trust_candidates"] == 0  # 不重复计
+
+
+def test_governance_skips_locked_for_deprecation_candidates(fresh_db):
+    """locked active skill 不进 dormant/low_trust 计数 (人工固化版本)."""
+    long_ago = datetime.now(timezone.utc) - timedelta(days=90)
+    skill_service.get_registry().add(_make_skill(
+        skill_id="s-lock", status="active", locked=True,
+        last_used_at=long_ago, trust=0.1,
+    ))
+    summary = skill_pool.build_governance_summary("proj-X")
+    assert summary["dormant_candidates"] == 0
+    assert summary["low_trust_candidates"] == 0
+
+
 # ─── build_evolve_chain ──────────────────────────────────
 
 

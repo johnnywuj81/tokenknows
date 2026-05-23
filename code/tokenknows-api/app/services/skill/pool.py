@@ -175,19 +175,32 @@ def collect_deprecation_candidates(
     return candidates
 
 
-def build_governance_summary(project_id: str) -> dict[str, Any]:
+def build_governance_summary(
+    project_id: str, *, now: datetime | None = None
+) -> dict[str, Any]:
     """T62 · 项目级 Skill 池总览 (dashboard 用).
+
+    v1.2 perf (T80): 合并 3 次全量扫描为 1 次, 复用 should_evolve /
+    dormant / low_trust 判定. 每个 skill 仅 instance-level check 一次.
 
     返回 dict 而非 Pydantic (endpoint 层再 wrap), 便于复用.
     """
     from app.services import skill_service
+
+    now_utc = now or datetime.now(timezone.utc)
+    dormant_cutoff = now_utc - timedelta(days=DORMANT_DAYS)
 
     by_status: dict[str, int] = {}
     by_review_state: dict[str, int] = {}
     total = 0
     trust_sum = 0.0
     trust_count = 0
+    evolve_n = 0
+    dormant_n = 0
+    low_trust_n = 0
+
     try:
+        # 单次扫描, 用 list_skills 已按 project filter (无需再判断 project_id)
         skills = skill_service.list_skills(project_id)
         for s in skills:
             total += 1
@@ -195,27 +208,29 @@ def build_governance_summary(project_id: str) -> dict[str, Any]:
             by_review_state[s.review_state] = (
                 by_review_state.get(s.review_state, 0) + 1
             )
+
+            # active skill 累计 trust 平均
             if s.status == "active":
                 trust_sum += s.metrics.trust_score
                 trust_count += 1
+
+                # active + non-locked → 检查 deprecation 候选
+                if not s.locked:
+                    ref_time = s.last_used_at or s.created_at
+                    if ref_time < dormant_cutoff:
+                        dormant_n += 1
+                    elif s.metrics.trust_score < LOW_TRUST_FLOOR:
+                        low_trust_n += 1
+
+            # evolve 候选: 复用 should_evolve (usage>=20, acc<0.5, 非 locked)
+            if skill_service.should_evolve(s):
+                evolve_n += 1
     except Exception as e:  # noqa: BLE001
         logger.warning(
             "governance_summary_failed",
             project_id=project_id, error=str(e),
         )
 
-    evolve_n = sum(
-        1 for c in collect_evolve_candidates() if c["project_id"] == project_id
-    )
-    deprecation = collect_deprecation_candidates()
-    dormant_n = sum(
-        1 for c in deprecation
-        if c["project_id"] == project_id and c["reason"] == "dormant"
-    )
-    low_trust_n = sum(
-        1 for c in deprecation
-        if c["project_id"] == project_id and c["reason"] == "low_trust"
-    )
     avg_trust = trust_sum / trust_count if trust_count > 0 else 0.0
 
     return {

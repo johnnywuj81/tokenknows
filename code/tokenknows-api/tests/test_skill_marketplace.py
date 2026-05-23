@@ -187,6 +187,33 @@ def test_list_marketplace_sorted_by_published_at_desc(fresh_db):
     assert [it["skill_id"] for it in items] == ["new", "old"]
 
 
+def test_list_marketplace_heapq_returns_top_limit_by_published_at(fresh_db):
+    """v1.2 perf T79: heapq.nlargest 应只返回 published_at 最近的 N 个."""
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    # 10 个 public skill, published_at 间隔 1 天
+    from datetime import timedelta
+    for i in range(10):
+        s = _make_skill(skill_id=f"s-{i}", visibility="public")
+        s = s.model_copy(update={
+            "published_at": base + timedelta(days=i)
+        })
+        skill_service.get_registry().add(s)
+    # limit=3 → 取最新 3 个 (s-9, s-8, s-7)
+    items = marketplace.list_marketplace(limit=3)
+    assert len(items) == 3
+    assert [it["skill_id"] for it in items] == ["s-9", "s-8", "s-7"]
+
+
+def test_list_marketplace_limit_exceeds_count_returns_all(fresh_db):
+    """limit > 实际数量 → 全返."""
+    for i in range(3):
+        skill_service.get_registry().add(
+            _make_skill(skill_id=f"few-{i}", visibility="public")
+        )
+    items = marketplace.list_marketplace(limit=100)
+    assert len(items) == 3
+
+
 def test_list_marketplace_preview_truncated(fresh_db):
     long_md = "x" * 1000
     s = _make_skill(skill_id="long", visibility="public")
