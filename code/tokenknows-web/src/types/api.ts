@@ -243,6 +243,7 @@ export type AssetType =
   | 'incident'
   | 'book'           // v0.2: 书籍类长文档 (10万字+ 嵌套大纲)
   | 'agent_skill'    // v0.2: 蒸馏出的专家技能 (Anthropic SKILL.md 风格)
+  | 'knowledge_graph' // v1.2: 实体关系图谱 (chapter.layout 承载 KG JSON)
 
 export type AssetStatus =
   | 'generating'   // 后端生成中(MVP UI 状态;mock 5s 后转 draft)
@@ -277,6 +278,56 @@ export interface Asset {
   trigger_meta?: AssetTriggerMeta | null
   created_at: string
   updated_at: string
+}
+
+// v1.2 · Knowledge Graph (T81)
+export type KGNodeType = 'person' | 'event' | 'concept' | 'artifact'
+
+export type KGEdgeType =
+  | 'authored_by'
+  | 'mentions'
+  | 'depends_on'
+  | 'contradicts'
+  | 'caused_by'
+  | 'related_to'
+
+export interface KGSpanAnchor {
+  char_offset: number
+}
+
+export interface KGNode {
+  id: string
+  type: KGNodeType
+  label: string
+  summary?: string | null
+  properties: Record<string, unknown>
+  source_event_ids: string[]
+  trust_score: number
+  span_anchor?: KGSpanAnchor | null
+}
+
+export interface KGEdge {
+  id: string
+  source: string
+  target: string
+  type: KGEdgeType
+  label?: string | null
+  weight: number
+  source_event_ids: string[]
+}
+
+export interface KGLayoutHints {
+  algorithm: 'dagre' | 'force' | 'manual'
+  rankdir: 'LR' | 'TB' | 'BT' | 'RL'
+}
+
+export interface KnowledgeGraphLayout {
+  schema_version: 'kg.v1'
+  nodes: KGNode[]
+  edges: KGEdge[]
+  layout_hints: KGLayoutHints
+  parse_error?: string | null
+  raw_output?: string | null
 }
 
 export type RedactedSpanType =

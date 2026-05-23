@@ -106,6 +106,14 @@ class Settings(BaseSettings):
         default="claude-sonnet-4-5-20250929", alias="TASK_AGENT_SKILL_MODEL"
     )
 
+    # v1.2 · knowledge_graph (实体关系抽取, 严格 JSON 输出; 用 Sonnet 保结构准确)
+    task_knowledge_graph_provider: str = Field(
+        default="anthropic", alias="TASK_KNOWLEDGE_GRAPH_PROVIDER"
+    )
+    task_knowledge_graph_model: str = Field(
+        default="claude-sonnet-4-5-20250929", alias="TASK_KNOWLEDGE_GRAPH_MODEL"
+    )
+
     task_redaction_llm_provider: str = Field(
         default="minimax", alias="TASK_REDACTION_LLM_PROVIDER"
     )
@@ -227,6 +235,7 @@ class Settings(BaseSettings):
             "incident": self.task_incident_provider,
             "book": self.task_book_provider,
             "agent_skill": self.task_agent_skill_provider,
+            "knowledge_graph": self.task_knowledge_graph_provider,
             "redaction_llm": self.task_redaction_llm_provider,
         }
         if task not in mapping:
@@ -243,6 +252,7 @@ class Settings(BaseSettings):
             "incident": self.task_incident_model,
             "book": self.task_book_model,
             "agent_skill": self.task_agent_skill_model,
+            "knowledge_graph": self.task_knowledge_graph_model,
             "redaction_llm": self.task_redaction_llm_model,
         }
         if task not in mapping:

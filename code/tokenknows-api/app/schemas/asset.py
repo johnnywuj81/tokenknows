@@ -12,7 +12,16 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # v0.2 升级: 加 book (书籍长文) + agent_skill (蒸馏出的专家技能)
-AssetType = Literal["weekly_report", "tech_design", "adr", "incident", "book", "agent_skill"]
+# v1.2 升级: 加 knowledge_graph (实体关系图谱; chapter.layout 承载 KG JSON)
+AssetType = Literal[
+    "weekly_report",
+    "tech_design",
+    "adr",
+    "incident",
+    "book",
+    "agent_skill",
+    "knowledge_graph",
+]
 
 AssetStatus = Literal[
     "generating",

@@ -34,6 +34,11 @@ const TYPE_LABEL: Record<AssetType, string> = {
   tech_design: '技术方案',
   adr: 'ADR',
   incident: '复盘',
+  // v0.2 补全 (此前缺)
+  book: '书籍',
+  agent_skill: '专家技能',
+  // v1.2 新增
+  knowledge_graph: '知识图谱',
 }
 
 const STATUS_META: Record<
