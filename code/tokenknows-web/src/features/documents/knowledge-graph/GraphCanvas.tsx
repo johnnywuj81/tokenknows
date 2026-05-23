@@ -315,26 +315,26 @@ export function GraphCanvas({
       >
         <Background />
         <Controls />
-        {/* v1.8 T114/T115 · MiniMap 自定义 nodeColor + nodeStrokeColor
-            修白板; 容器加大让节点在 minimap 内可见 (默认 200x150 太小 + 3 节点
-            布局跨度大 → 节点缩到亚像素). */}
-        <MiniMap
-          pannable
-          zoomable
-          nodeColor={(n) => _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#94a3b8'}
-          nodeStrokeColor={(n) =>
-            _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#475569'
-          }
-          nodeStrokeWidth={6}
-          nodeBorderRadius={2}
-          maskColor="rgba(15, 23, 42, 0.12)"
-          style={{
-            backgroundColor: '#f5f5f4',
-            border: '1px solid #e7e5e4',
-            width: 220,
-            height: 160,
-          }}
-        />
+        {/* v1.8 T116 · 小图 (≤30 节点) 不显示 MiniMap (3 节点缩到 1px 看着像
+            白板, 反而干扰). 大图启用 + 自定义着色. */}
+        {rfNodes.length > 30 ? (
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) =>
+              _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#94a3b8'
+            }
+            nodeStrokeColor={(n) =>
+              _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#475569'
+            }
+            nodeStrokeWidth={4}
+            maskColor="rgba(15, 23, 42, 0.12)"
+            style={{
+              backgroundColor: '#f5f5f4',
+              border: '1px solid #e7e5e4',
+            }}
+          />
+        ) : null}
       </ReactFlow>
     </div>
   )
