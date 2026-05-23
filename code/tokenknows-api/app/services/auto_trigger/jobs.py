@@ -95,18 +95,97 @@ async def withdraw_window_resolver_job() -> None:
 
 
 async def skill_evolve_checker_job() -> None:
-    """每天 03:00 检查 Skill 自进化候选; v0.4.2 真实现.
+    """每天 03:00 检查 Skill 自进化候选; v0.7.0 真实现 (T59).
 
-    Stub 行为: 仅 log 触发时刻.
+    流程:
+      1. collect_evolve_candidates: usage >= 20 + acc_rate < 0.5 的 skill
+      2. 对每个候选拉 failing chapters (应用过它但被 reject 的章节)
+      3. evolve_skill_v2 触发蒸馏新版本; 新版自动 status=draft,
+         旧版被 evolve 自身标 deprecated
+      4. 给原 skill 的 contributors 发 web notification: "你的 skill 已进化到 v2"
+         让 contributors 来 SkillsPage 走 submit_for_review → reviewer 审批
+
+    Tolerance: 单 skill 失败不阻断下一个 (try-except per skill).
     """
     try:
+        from app.services import skill_service
+        from app.services.skill import pool as skill_pool
+        from app.services.skill import review_notifier
+
+        candidates = skill_pool.collect_evolve_candidates()
+        if not candidates:
+            logger.debug("skill_evolve_checker_no_candidates")
+            return
+
+        evolved = 0
+        no_failing = 0
+        errors = 0
+        for c in candidates:
+            try:
+                failing = skill_pool.collect_failing_chapters_for_skill(
+                    c["project_id"], c["skill_id"]
+                )
+                if not failing:
+                    no_failing += 1
+                    logger.debug(
+                        "skill_evolve_no_failing_chapters",
+                        skill_id=c["skill_id"],
+                    )
+                    continue
+                new_skill = await skill_service.evolve_skill_v2(
+                    skill_id=c["skill_id"],
+                    failing_chapters=failing,
+                    project_label=c["project_id"],
+                )
+                if new_skill is None:
+                    no_failing += 1
+                    continue
+                evolved += 1
+                # 通知原 contributors: 新版本待你 submit-for-review
+                old_skill = skill_service.get_skill(c["skill_id"])
+                contributors = (
+                    list(old_skill.contributors) if old_skill else []
+                )
+                if contributors:
+                    try:
+                        review_notifier.notify_review_request(
+                            new_skill,
+                            reviewer_user_ids=contributors,
+                            author_user_id="system-evolve",
+                        )
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            "skill_evolve_notify_failed",
+                            new_skill_id=new_skill.id,
+                            error=str(e),
+                        )
+                logger.info(
+                    "skill_evolved_auto",
+                    old_skill_id=c["skill_id"],
+                    new_skill_id=new_skill.id,
+                    new_version=new_skill.version,
+                )
+            except Exception as e:  # noqa: BLE001
+                errors += 1
+                logger.warning(
+                    "skill_evolve_single_failed",
+                    skill_id=c.get("skill_id"),
+                    error=str(e),
+                )
+
         logger.info(
-            "auto_trigger_skill_evolve_checker_tick",
-            stub=True,
-            note="v0.4.2 will check usage_count >= 20 AND acceptance_rate < 0.5",
+            "skill_evolve_checker_done",
+            candidates=len(candidates),
+            evolved=evolved,
+            no_failing=no_failing,
+            errors=errors,
         )
     except Exception as e:
-        logger.error("auto_trigger_skill_evolve_checker_failed", error=str(e))
+        logger.error(
+            "auto_trigger_skill_evolve_checker_failed",
+            error=str(e),
+            exc_info=True,
+        )
 
 
 async def quota_resetter_job() -> None:
