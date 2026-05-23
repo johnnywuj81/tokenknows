@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.config.logging import logger
 from app.schemas.skill import (
@@ -36,7 +36,9 @@ from app.schemas.skill import (
     SkillSubmitForReviewRequest,
     SkillUpdateRequest,
 )
+from app.gateway.http_api._session import get_current_user_id
 from app.services import generation_service, skill_service
+from app.services.project import membership
 from app.services.skill import consent as skill_consent
 from app.services.skill import pool as skill_pool
 from app.services.skill import review as skill_review
@@ -385,9 +387,15 @@ async def submit_for_review_endpoint(
     response_model=SkillReviewActionResponse,
 )
 async def approve_review_endpoint(
-    skill_id: str, body: SkillReviewApproveRequest
+    skill_id: str,
+    body: SkillReviewApproveRequest,
+    session_user: str | None = Depends(get_current_user_id),
 ) -> SkillReviewActionResponse:
-    """Reviewer 批准: review_state=approved + status draft→active."""
+    """Reviewer 批准: review_state=approved + status draft→active.
+
+    ACL (v0.9 T66): 若 X-User-Id header 传入, 校验该 user 在 project 持有
+    reviewer 或 owner; backward-compat 兼容老 client (无 header 时降级).
+    """
     skill = skill_service.get_skill(skill_id)
     if skill is None:
         raise HTTPException(404, detail="Skill not found")
@@ -397,6 +405,22 @@ async def approve_review_endpoint(
             detail=(
                 f"review_state={skill.review_state}; "
                 f"approve 仅在 pending_review 阶段允许"
+            ),
+        )
+    # v0.9 T66 ACL: 优先用 session header (更难伪造) 而非 body.reviewer_id
+    effective_reviewer = session_user or body.reviewer_id
+    if session_user and session_user != body.reviewer_id:
+        # body 与 session 不一致 → 拒 (防 client 伪造)
+        raise HTTPException(
+            403,
+            detail="body.reviewer_id mismatch with X-User-Id session",
+        )
+    if not membership.can_review(effective_reviewer, skill.project_id):
+        raise HTTPException(
+            403,
+            detail=(
+                f"user {effective_reviewer} lacks reviewer role for "
+                f"project {skill.project_id}"
             ),
         )
     try:
@@ -439,9 +463,14 @@ async def approve_review_endpoint(
     response_model=SkillReviewActionResponse,
 )
 async def reject_review_endpoint(
-    skill_id: str, body: SkillReviewRejectRequest
+    skill_id: str,
+    body: SkillReviewRejectRequest,
+    session_user: str | None = Depends(get_current_user_id),
 ) -> SkillReviewActionResponse:
-    """Reviewer 拒绝: review_state=rejected; status 保留 draft."""
+    """Reviewer 拒绝: review_state=rejected; status 保留 draft.
+
+    ACL: 同 approve_review_endpoint.
+    """
     skill = skill_service.get_skill(skill_id)
     if skill is None:
         raise HTTPException(404, detail="Skill not found")
@@ -451,6 +480,20 @@ async def reject_review_endpoint(
             detail=(
                 f"review_state={skill.review_state}; "
                 f"reject 仅在 pending_review 阶段允许"
+            ),
+        )
+    effective_reviewer = session_user or body.reviewer_id
+    if session_user and session_user != body.reviewer_id:
+        raise HTTPException(
+            403,
+            detail="body.reviewer_id mismatch with X-User-Id session",
+        )
+    if not membership.can_review(effective_reviewer, skill.project_id):
+        raise HTTPException(
+            403,
+            detail=(
+                f"user {effective_reviewer} lacks reviewer role for "
+                f"project {skill.project_id}"
             ),
         )
     try:

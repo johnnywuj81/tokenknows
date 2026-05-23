@@ -10,6 +10,7 @@ from app.gateway.http_api import (
     im,
     im_webhooks,
     llm_preview,
+    members,
     notifications,
     skills,
     webhooks,
@@ -27,3 +28,4 @@ api_router.include_router(im.router, tags=["im"])                      # v0.3 RE
 api_router.include_router(im_webhooks.router, tags=["im"])             # v0.3 webhook
 api_router.include_router(auto_trigger.router, tags=["auto-trigger"])  # v0.4 T32
 api_router.include_router(notifications.router)                        # v0.5.1 T49+T51
+api_router.include_router(members.router)                              # v0.9.0 T66
