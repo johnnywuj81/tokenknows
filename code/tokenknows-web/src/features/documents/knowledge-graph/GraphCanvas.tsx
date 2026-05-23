@@ -315,14 +315,25 @@ export function GraphCanvas({
       >
         <Background />
         <Controls />
-        {/* v1.8 T114 · MiniMap 自定义 nodeColor (自定义 Node 用 Tailwind class 不是
-            inline style, MiniMap 取不到 bgColor → 全白看不见节点). 按 type 上色. */}
+        {/* v1.8 T114/T115 · MiniMap 自定义 nodeColor + nodeStrokeColor
+            修白板; 容器加大让节点在 minimap 内可见 (默认 200x150 太小 + 3 节点
+            布局跨度大 → 节点缩到亚像素). */}
         <MiniMap
           pannable
           zoomable
           nodeColor={(n) => _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#94a3b8'}
-          nodeStrokeWidth={2}
-          maskColor="rgba(250, 250, 249, 0.7)"
+          nodeStrokeColor={(n) =>
+            _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#475569'
+          }
+          nodeStrokeWidth={6}
+          nodeBorderRadius={2}
+          maskColor="rgba(15, 23, 42, 0.12)"
+          style={{
+            backgroundColor: '#f5f5f4',
+            border: '1px solid #e7e5e4',
+            width: 220,
+            height: 160,
+          }}
         />
       </ReactFlow>
     </div>
