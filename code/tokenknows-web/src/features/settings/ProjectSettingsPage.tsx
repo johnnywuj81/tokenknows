@@ -19,6 +19,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { useProject } from '../workbench/hooks/useProject'
 import { LlmEgressPanel } from './tabs/LlmEgressPanel'
 import { AutoTriggersPanel } from './tabs/AutoTriggersPanel'
+import { MembersPanel } from './tabs/MembersPanel'
 import { cn } from '@/lib/utils'
 
 type Tab = 'info' | 'members' | 'datasources' | 'llm' | 'auto-triggers'
@@ -96,7 +97,7 @@ export default function ProjectSettingsPage() {
       <main className="overflow-auto bg-bg-page px-6 py-6">
         <div className="mx-auto max-w-3xl space-y-4">
           {tab === 'info' ? <InfoTab projectId={projectId} initialName={project.name} initialDescription={project.description} /> : null}
-          {tab === 'members' ? <MembersTab /> : null}
+          {tab === 'members' && projectId ? <MembersTab projectId={projectId} /> : null}
           {tab === 'datasources' ? <DataSourcesTab /> : null}
           {tab === 'llm' ? <LlmEgressPanel projectId={projectId} /> : null}
           {tab === 'auto-triggers' ? <AutoTriggersPanel projectId={projectId} /> : null}
@@ -212,54 +213,8 @@ function InfoTab({ projectId, initialName, initialDescription }: InfoTabProps) {
   )
 }
 
-function MembersTab() {
-  return (
-    <section className="space-y-3">
-      <header>
-        <h2 className="font-content text-h2 text-text-primary">成员</h2>
-        <p className="font-ui text-caption text-text-muted">
-          项目成员列表 (只读). MVP 不支持邀请 / 编辑角色, 留 v2 接入 RBAC.
-        </p>
-      </header>
-      <div className="rounded-md border border-border-subtle bg-bg-card">
-        <table className="w-full font-ui text-body-sm">
-          <thead className="border-b border-border-subtle bg-bg-warm">
-            <tr className="text-left text-caption text-text-muted">
-              <th className="px-3 py-2">成员</th>
-              <th className="px-3 py-2">角色</th>
-              <th className="px-3 py-2">加入时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-border-subtle">
-              <td className="px-3 py-2 text-text-primary">示例用户</td>
-              <td className="px-3 py-2"><RoleBadge role="owner" /></td>
-              <td className="px-3 py-2 font-mono text-caption text-text-subtle">2026/05/01</td>
-            </tr>
-            <tr>
-              <td className="px-3 py-2 text-text-primary">Alice</td>
-              <td className="px-3 py-2"><RoleBadge role="editor" /></td>
-              <td className="px-3 py-2 font-mono text-caption text-text-subtle">2026/05/15</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
-}
-
-function RoleBadge({ role }: { role: string }) {
-  const map: Record<string, string> = {
-    owner: 'bg-accent-primary-light text-accent-primary-dark',
-    editor: 'bg-info-bg text-info',
-    reviewer: 'bg-success-bg text-success-dark',
-    viewer: 'bg-bg-warm text-text-muted',
-  }
-  return (
-    <span className={cn('rounded-full px-2 py-0.5 font-ui text-micro', map[role] ?? 'bg-bg-warm text-text-muted')}>
-      {role}
-    </span>
-  )
+function MembersTab({ projectId }: { projectId: string }) {
+  return <MembersPanel projectId={projectId} />
 }
 
 function DataSourcesTab() {

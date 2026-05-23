@@ -18,11 +18,16 @@ export const api: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// ── Request interceptor · 注入 Authorization ──────────────────────
+// ── Request interceptor · 注入 Authorization + X-User-Id (v0.9 T67) ──
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken
+  const state = useAuthStore.getState()
+  const token = state.accessToken
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  // v0.9 MVP: 后端用 X-User-Id 解 session (未来 JWT subject)
+  if (state.user?.id) {
+    config.headers['X-User-Id'] = state.user.id
   }
   return config
 })

@@ -103,12 +103,29 @@ describe('ProjectSettingsPage', () => {
   })
 
   it('clicking 成员 tab switches view', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: mkProject() })
+    // v0.9 T67: MembersPanel 走真 API; mock 空列表
+    vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url.includes('/members')) {
+        return Promise.resolve({
+          data: {
+            project_id: 'p1',
+            items: [],
+            owner_count: 0,
+            reviewer_count: 0,
+            contributor_count: 0,
+          },
+        })
+      }
+      return Promise.resolve({ data: mkProject() })
+    })
     render(withWrappers(<ProjectSettingsPage />))
     await waitFor(() => expect(screen.getByText('项目设置')).toBeInTheDocument())
     const memberButtons = screen.getAllByText('成员')
     fireEvent.click(memberButtons[0])
-    await waitFor(() => expect(screen.getByText('示例用户')).toBeInTheDocument())
+    // v0.9 MembersPanel 空 project 显示 bootstrap CTA
+    await waitFor(() =>
+      expect(screen.getByText(/项目尚未配置成员/)).toBeInTheDocument(),
+    )
   })
 
   it('数据源 tab shows datasource list', async () => {
@@ -138,11 +155,43 @@ describe('ProjectSettingsPage', () => {
     expect(screen.getByText(/返回工作台/).closest('a')).toHaveAttribute('href', '/projects/p1')
   })
 
-  it('member roles all rendered (owner + editor)', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: mkProject() })
+  it('member roles all rendered (owner + reviewer)', async () => {
+    // v0.9 T67: 用真 ProjectMembersResponse mock
+    vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url.includes('/members')) {
+        return Promise.resolve({
+          data: {
+            project_id: 'p1',
+            items: [
+              {
+                id: 'm-1', project_id: 'p1',
+                user_id: 'ou-alice', role: 'owner',
+                added_by: 'ou-alice', added_at: '2026-01-01',
+                note: null,
+              },
+              {
+                id: 'm-2', project_id: 'p1',
+                user_id: 'ou-bob', role: 'reviewer',
+                added_by: 'ou-alice', added_at: '2026-01-02',
+                note: null,
+              },
+            ],
+            owner_count: 1, reviewer_count: 1, contributor_count: 0,
+          },
+        })
+      }
+      return Promise.resolve({ data: mkProject() })
+    })
     render(withWrappers(<ProjectSettingsPage />, '/projects/p1/settings?tab=members'))
-    await waitFor(() => expect(screen.getByText('owner')).toBeInTheDocument())
-    expect(screen.getByText('editor')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByTestId('members-table')).toBeInTheDocument(),
+    )
+    // alice row + bob row 渲染
+    expect(screen.getByTestId('member-row-ou-alice')).toBeInTheDocument()
+    expect(screen.getByTestId('member-row-ou-bob')).toBeInTheDocument()
+    // role chips / 计数显示 (Owner/Reviewer 各 ≥ 1)
+    expect(screen.getAllByText('Owner').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(0)
   })
 
   it('description from null falls back to empty', async () => {

@@ -636,6 +636,33 @@ export interface SkillEvolveChainResponse {
   nodes: SkillEvolveChainNode[]
 }
 
+// v0.9.0 · Project member + ACL (T65-T67)
+export type ProjectMemberRole = 'owner' | 'reviewer' | 'contributor'
+
+export interface ProjectMember {
+  id: string
+  project_id: string
+  user_id: string
+  role: ProjectMemberRole
+  added_by: string
+  added_at: string
+  note: string | null
+}
+
+export interface ProjectMembersResponse {
+  project_id: string
+  items: ProjectMember[]
+  owner_count: number
+  reviewer_count: number
+  contributor_count: number
+}
+
+export interface AddProjectMemberRequest {
+  user_id: string
+  role: ProjectMemberRole
+  note?: string
+}
+
 // v0.5.1 · Consent endpoints (T50)
 export interface ConsentSignRequest {
   user_id: string
