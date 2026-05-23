@@ -205,6 +205,96 @@ async def quota_resetter_job() -> None:
         logger.error("auto_trigger_quota_resetter_failed", error=str(e))
 
 
+async def skill_deprecation_sweep_job() -> None:
+    """每天 03:10 扫 dormant / low-trust skill 自动 deprecate (T60).
+
+    - last_used_at > 60d 或从未用且 created > 60d → 'dormant'
+    - trust_score < 0.2 → 'low_trust'
+    - 仅扫 active 状态 (deprecated/locked 不动)
+    - 转 deprecated 后通知 last_reviewer + contributors
+
+    Tolerance: 单 skill 失败 try-except.
+    """
+    try:
+        from datetime import datetime, timezone
+
+        from app.persistence import store as store_module
+        from app.services import skill_service
+        from app.services.skill import pool as skill_pool
+        from app.services.skill import review_notifier
+
+        candidates = skill_pool.collect_deprecation_candidates()
+        if not candidates:
+            logger.debug("skill_deprecation_sweep_no_candidates")
+            return
+
+        db = store_module.get_db()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        deprecated = 0
+        errors = 0
+        for c in candidates:
+            try:
+                skill = skill_service.get_skill(c["skill_id"])
+                if skill is None:
+                    continue
+                if skill.status != "active":  # race
+                    continue
+                new_skill = skill.model_copy(update={
+                    "status": "deprecated",
+                    "updated_at": datetime.fromisoformat(now_iso),
+                })
+                skill_service.get_registry().update(new_skill)
+                deprecated += 1
+                logger.info(
+                    "skill_auto_deprecated",
+                    skill_id=c["skill_id"],
+                    reason=c["reason"],
+                    trust_score=c["trust_score"],
+                    last_used_at=c["last_used_at"],
+                )
+                # 通知: 仅 web (不发 IM, 避免噪音); 用 review_notifier 的
+                # decision 通道 (skill_review_rejected 语义近: skill 不再有效)
+                recipients = list({
+                    *c["contributors"],
+                    *([c["last_reviewer_id"]] if c["last_reviewer_id"] else []),
+                })
+                if recipients:
+                    try:
+                        review_notifier.notify_review_decision(
+                            new_skill,
+                            type_="skill_review_rejected",
+                            author_user_id=recipients[0],  # 主收件人
+                            reviewer_id="system-deprecate",
+                            reason=(
+                                f"自动归档 ({c['reason']}): "
+                                f"trust_score={c['trust_score']:.2f}, "
+                                f"last_used_at={c['last_used_at'] or 'never'}"
+                            ),
+                        )
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            "skill_deprecate_notify_failed",
+                            skill_id=c["skill_id"], error=str(e),
+                        )
+            except Exception as e:  # noqa: BLE001
+                errors += 1
+                logger.warning(
+                    "skill_deprecate_single_failed",
+                    skill_id=c.get("skill_id"), error=str(e),
+                )
+
+        logger.info(
+            "skill_deprecation_sweep_done",
+            candidates=len(candidates),
+            deprecated=deprecated,
+            errors=errors,
+        )
+    except Exception as e:
+        logger.error(
+            "skill_deprecation_sweep_failed", error=str(e), exc_info=True
+        )
+
+
 async def consent_sweep_expired_job() -> None:
     """每天 03:05 sweep skill consent: 把 30 天无人签的 pending 转 expired_no_consent.
 
@@ -247,6 +337,7 @@ async def cleanup_audit_log_job() -> None:
 __all__ = [
     "consent_sweep_expired_job",
     "cron_evaluator_job",
+    "skill_deprecation_sweep_job",
     "threshold_scanner_job",
     "withdraw_window_resolver_job",
     "skill_evolve_checker_job",

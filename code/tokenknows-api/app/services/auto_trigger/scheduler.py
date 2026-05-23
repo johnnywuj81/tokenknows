@@ -189,6 +189,15 @@ def _register_fixed_jobs(scheduler: AsyncIOScheduler) -> None:
         name="Skill consent 超时清理 (每天 03:05)",
     )
 
+    # 8. T60 v0.7.0 · Skill dormancy + low-trust 自动 deprecate: 每天 03:10
+    scheduler.add_job(
+        auto_trigger_jobs.skill_deprecation_sweep_job,
+        trigger=CronTrigger(hour=3, minute=10, timezone=SCHEDULER_TIMEZONE),
+        id="skill_deprecation_sweep",
+        replace_existing=True,
+        name="Skill 自动归档 (每天 03:10)",
+    )
+
     logger.debug("auto_trigger_jobs_registered", count=len(scheduler.get_jobs()))
 
 
