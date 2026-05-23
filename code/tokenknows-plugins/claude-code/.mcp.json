@@ -1,0 +1,16 @@
+{
+  "_comment_1": "Claude Code 的 .mcp.json 支持 ${VAR} 从 host env 替换 (官方文档: 'any ${ENV_VAR} from the environment'). 默认值语法 ${VAR:-default} 文档未明确保证, 不依赖.",
+  "_comment_2": "用户必须先在 shell profile (e.g. ~/.zshrc) export 这 4 个变量再启 claude. 详见 README · 环境变量.",
+  "mcpServers": {
+    "tokenknows": {
+      "command": "python",
+      "args": ["-m", "mcp_server"],
+      "env": {
+        "TOKENKNOWS_API_BASE": "${TOKENKNOWS_API_BASE}",
+        "TOKENKNOWS_DEFAULT_PROJECT": "${TOKENKNOWS_DEFAULT_PROJECT}",
+        "TOKENKNOWS_API_TOKEN": "${TOKENKNOWS_API_TOKEN}",
+        "PYTHONPATH": "${TOKENKNOWS_API_ROOT}"
+      }
+    }
+  }
+}

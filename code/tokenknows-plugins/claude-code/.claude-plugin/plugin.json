@@ -1,0 +1,19 @@
+{
+  "name": "tokenknows",
+  "version": "2.0.0",
+  "description": "把当前 Claude session 蒸馏成结构化文档 (周报 / 技术方案 / ADR / 复盘 / 书籍 / Skill / 知识图谱), 通过 MCP 接 tokenknows-api 后端 5-stage pipeline.",
+  "author": {
+    "name": "TokenKnows",
+    "url": "https://github.com/johnnywuj81/tokenknows"
+  },
+  "homepage": "https://github.com/johnnywuj81/tokenknows/tree/main/code/tokenknows-plugins/claude-code",
+  "repository": "https://github.com/johnnywuj81/tokenknows",
+  "license": "MIT",
+  "keywords": [
+    "knowledge-distill",
+    "weekly-report",
+    "adr",
+    "knowledge-graph",
+    "mcp"
+  ]
+}
