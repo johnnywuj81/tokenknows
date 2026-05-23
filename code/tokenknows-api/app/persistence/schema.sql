@@ -224,6 +224,23 @@ CREATE TABLE IF NOT EXISTS generation_quotas (
 CREATE INDEX IF NOT EXISTS generation_quotas_project_idx
     ON generation_quotas(project_id, year_month DESC);
 
+-- v0.9.0 · 项目成员 + 角色 (T65)
+-- 一个 user 在一个 project 内仅 1 role; 同 user 跨 project 各自一行.
+CREATE TABLE IF NOT EXISTS project_members (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    role        TEXT NOT NULL,         -- owner / reviewer / contributor
+    added_by    TEXT NOT NULL,
+    added_at    TEXT NOT NULL,
+    json        TEXT NOT NULL,         -- 完整 ProjectMember dump
+    UNIQUE (project_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS project_members_project_role_idx
+    ON project_members(project_id, role);
+CREATE INDEX IF NOT EXISTS project_members_user_idx
+    ON project_members(user_id);
+
 -- v0.5.1 · 站内通知 (T49 ConsentNotifier 主表)
 -- 关键索引: (user_id, read, created_at DESC) 服务铃铛角标查询.
 CREATE TABLE IF NOT EXISTS notifications (

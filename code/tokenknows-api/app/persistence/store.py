@@ -1123,6 +1123,90 @@ class SqliteStore:
             return None
         return json.loads(rows[0]["json"])
 
+    # ─── 项目成员 (v0.9.0 · T65) ─────────────────────────
+
+    def upsert_project_member(
+        self,
+        member_id: str,
+        project_id: str,
+        user_id: str,
+        role: str,
+        added_by: str,
+        added_at: str,
+        json_str: str,
+    ) -> None:
+        """新增 / 更新 (project_id, user_id) 唯一约束自动 reconciles."""
+        self._exec(
+            """
+            INSERT INTO project_members
+                (id, project_id, user_id, role, added_by, added_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(project_id, user_id) DO UPDATE SET
+                role = excluded.role,
+                json = excluded.json
+            """,
+            (
+                member_id, project_id, user_id, role, added_by,
+                added_at, json_str,
+            ),
+        )
+
+    def get_project_member(
+        self, project_id: str, user_id: str
+    ) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM project_members WHERE project_id = ? AND user_id = ?",
+            (project_id, user_id),
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_project_members(
+        self, project_id: str, role: str | None = None
+    ) -> list[dict[str, Any]]:
+        if role:
+            rows = self._query(
+                """
+                SELECT json FROM project_members
+                WHERE project_id = ? AND role = ?
+                ORDER BY added_at ASC
+                """,
+                (project_id, role),
+            )
+        else:
+            rows = self._query(
+                """
+                SELECT json FROM project_members
+                WHERE project_id = ?
+                ORDER BY added_at ASC
+                """,
+                (project_id,),
+            )
+        return [json.loads(r["json"]) for r in rows]
+
+    def remove_project_member(self, project_id: str, user_id: str) -> bool:
+        with self._write_lock:
+            cur = self._conn.execute(
+                "DELETE FROM project_members WHERE project_id = ? AND user_id = ?",
+                (project_id, user_id),
+            )
+            return cur.rowcount > 0
+
+    def list_user_project_memberships(
+        self, user_id: str
+    ) -> list[dict[str, Any]]:
+        """某 user 在所有 project 的 role (跨项目)."""
+        rows = self._query(
+            """
+            SELECT json FROM project_members
+            WHERE user_id = ?
+            ORDER BY added_at ASC
+            """,
+            (user_id,),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
     # ─── 站内通知 (v0.5.1 · T49) ─────────────────────────
 
     def upsert_notification(
