@@ -23,6 +23,7 @@ import { AdminLayout } from '@/components/layouts/AdminLayout'
 import { RequireAuth } from '@/components/guards/RequireAuth'
 import { RequireRole } from '@/components/guards/RequireRole'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
+import { RouteErrorBoundary } from '@/components/shared/RouteErrorBoundary'
 
 // ── Auth ────────────────────────────────────────────────────────
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
@@ -72,6 +73,7 @@ export const router = createBrowserRouter([
   // ── 公开路由(认证) ─────────────────────────────────────────
   {
     element: <AuthLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/login',           element: <Lazy><LoginPage /></Lazy> },
       { path: '/register',        element: <Lazy><RegisterPage /></Lazy> },
@@ -88,6 +90,7 @@ export const router = createBrowserRouter([
         <AppLayout />
       </RequireAuth>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/',                                                   element: <Lazy variant="workbench"><WorkbenchPage /></Lazy> },
       { path: '/projects/new',                                       element: <Lazy><NewProjectPage /></Lazy> },
@@ -124,6 +127,7 @@ export const router = createBrowserRouter([
         </RequireRole>
       </RequireAuth>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/admin',         element: <Lazy variant="list"><AdminStatsPage /></Lazy> },
       { path: '/admin/users',   element: <Lazy variant="list"><AdminUsersPage /></Lazy> },

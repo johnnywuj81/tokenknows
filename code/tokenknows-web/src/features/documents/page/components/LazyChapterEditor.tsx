@@ -107,7 +107,15 @@ function MountedEditor({
       editable,
       onUpdate: ({ editor: e }) => {
         if (!editable) return
-        onEdit(e.getHTML())
+        // T124 · TipTap editor 在 destroy 后某些异步回调仍会触发, getHTML
+        // 会在 DOMSerializer.fromSchema 拿 null schema → crash. 加 guard.
+        if (e.isDestroyed) return
+        try {
+          onEdit(e.getHTML())
+        } catch (err) {
+          // schema 未完全 ready / 卸载竞态; 跳过本次更新, 下次 onUpdate 再来
+          console.warn('[LazyChapterEditor] getHTML failed (ignored):', err)
+        }
       },
     },
     [chapterId],
@@ -115,8 +123,15 @@ function MountedEditor({
 
   // 章节外部刷新 (e.g. 重生成完成) → setContent 同步, 不触发 onUpdate
   useEffect(() => {
-    if (!editor) return
-    if (editor.getHTML() !== initialHTML) {
+    if (!editor || editor.isDestroyed) return
+    let current: string
+    try {
+      current = editor.getHTML()
+    } catch {
+      // schema 未 ready, 跳过本次同步; effect 会随 editor/initialHTML 重跑
+      return
+    }
+    if (current !== initialHTML) {
       editor.commands.setContent(initialHTML, { emitUpdate: false })
     }
   }, [initialHTML, editor])
