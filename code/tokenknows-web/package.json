@@ -15,6 +15,7 @@
     "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource/lora": "^5.2.8",
     "@fontsource/poppins": "^5.2.7",
@@ -40,6 +41,7 @@
     "@tiptap/starter-kit": "^3.23.5",
     "@types/diff": "^7.0.2",
     "@types/markdown-it": "^14.1.2",
+    "@xyflow/react": "^12.10.2",
     "axios": "^1.16.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
