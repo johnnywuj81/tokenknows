@@ -13,7 +13,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+import asyncio
+from typing import AsyncIterator
+
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 from app.config.logging import logger
 from app.persistence import store as store_module
@@ -21,8 +25,11 @@ from app.schemas.notification import (
     WebNotification,
     WebNotificationListResponse,
 )
+from app.services import notification_sse
 
 router = APIRouter(prefix="/me/notifications", tags=["notifications"])
+
+_SSE_HEARTBEAT_S = 15.0
 
 
 @router.get("", response_model=WebNotificationListResponse)
@@ -73,3 +80,66 @@ async def mark_all_read(
         "notifications_mark_all_read", user_id=user_id, affected=affected
     )
     return {"affected": affected}
+
+
+@router.get("/stream")
+async def stream_notifications(
+    request: Request,
+    user_id: str = Query(..., min_length=1, max_length=128),
+) -> StreamingResponse:
+    """SSE 推送当前用户的 consent 事件 (T52).
+
+    事件: consent_request / consent_signed / consent_rejected / consent_expired / snapshot
+    断开重连由前端 EventSource 自动处理.
+
+    隐私: 严格按 user_id 路由, 不广播 project 内其他用户的事件.
+    """
+    queue = await notification_sse.subscribe(user_id)
+    db = store_module.get_db()
+
+    async def event_stream() -> AsyncIterator[bytes]:
+        try:
+            # 1. 发一次 snapshot (当前 unread_count) 让晚连客户端立刻同步
+            try:
+                unread = db.count_unread_notifications(user_id)
+                snapshot = notification_sse.SseNotificationEvent(
+                    event="snapshot",
+                    user_id=user_id,
+                    unread_count=unread,
+                )
+                yield _sse_format(
+                    event="snapshot", data=snapshot.to_json()
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "notification_sse_snapshot_failed",
+                    user_id=user_id, error=str(e),
+                )
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    ev = await asyncio.wait_for(
+                        queue.get(), timeout=_SSE_HEARTBEAT_S
+                    )
+                except asyncio.TimeoutError:
+                    yield b": heartbeat\n\n"
+                    continue
+                yield _sse_format(event=ev.event, data=ev.to_json())
+        finally:
+            await notification_sse.cleanup(user_id, queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # 关 nginx buffering
+            "Connection": "keep-alive",
+        },
+    )
+
+
+def _sse_format(*, event: str, data: str) -> bytes:
+    return f"event: {event}\ndata: {data}\n\n".encode("utf-8")

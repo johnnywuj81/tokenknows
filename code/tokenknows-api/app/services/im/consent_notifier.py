@@ -159,7 +159,7 @@ def notify_all(
 
 
 def _write_web_notification(skill: Skill, user_id: str) -> WebNotification:
-    """单条 web 通知 (consent_request 类型)."""
+    """单条 web 通知 (consent_request 类型) + SSE 推送."""
     settings = get_settings()
     base = (settings.public_base_url or "").rstrip("/")
     link = f"{base}/skills/{skill.id}" if base else f"/skills/{skill.id}"
@@ -179,7 +179,40 @@ def _write_web_notification(skill: Skill, user_id: str) -> WebNotification:
         related_skill_id=skill.id,
     )
     _persist_notification(notif)
+    # T53: 实时推送给已订阅 SSE 的客户端 (best-effort)
+    _publish_sse_notification(notif, skill_id=skill.id)
     return notif
+
+
+def _publish_sse_notification(
+    notif: WebNotification,
+    *,
+    skill_id: str | None = None,
+    extra: dict | None = None,
+) -> None:
+    """统一 SSE 推送入口 (try-except 不阻塞主路径)."""
+    try:
+        from app.services import notification_sse
+        from app.services.notification_sse import SseNotificationEvent
+        from app.persistence import store as store_module
+
+        unread = store_module.get_db().count_unread_notifications(notif.user_id)
+        ev = SseNotificationEvent(
+            event=notif.type,
+            user_id=notif.user_id,
+            skill_id=skill_id or notif.related_skill_id,
+            notification_id=notif.id,
+            unread_count=unread,
+            extra=extra,
+        )
+        notification_sse.publish_to_user(notif.user_id, ev)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "consent_sse_publish_failed",
+            user_id=notif.user_id,
+            notif_id=notif.id,
+            error=str(e),
+        )
 
 
 def _persist_notification(notif: WebNotification) -> None:
@@ -425,13 +458,18 @@ def notify_followup(
         )
         try:
             _persist_notification(notif)
+            _publish_sse_notification(
+                notif,
+                skill_id=skill.id,
+                extra={"actor_user_id": actor_user_id} if actor_user_id else None,
+            )
             count += 1
         except Exception as e:  # noqa: BLE001
             logger.warning(
                 "consent_followup_notify_failed",
                 skill_id=skill.id,
                 user_id=uid,
-                type=type_,
+                notif_type=type_,
                 error=str(e),
             )
     return count
