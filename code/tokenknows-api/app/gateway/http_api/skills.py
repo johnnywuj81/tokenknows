@@ -22,11 +22,16 @@ from fastapi import APIRouter, HTTPException
 
 from app.config.logging import logger
 from app.schemas.skill import (
+    ConsentRejectRequest,
+    ConsentRejectResponse,
+    ConsentSignRequest,
+    ConsentSignResponse,
     Skill,
     SkillDistillRequest,
     SkillUpdateRequest,
 )
 from app.services import generation_service, skill_service
+from app.services.skill import consent as skill_consent
 
 router = APIRouter()
 
@@ -156,6 +161,143 @@ async def delete_skill_endpoint(skill_id: str) -> None:
     if not skill_service.delete_skill(skill_id):
         raise HTTPException(404, detail="Skill not found")
     return None
+
+
+# ─── v0.5.1 · Consent endpoints (T50) ──────────────────────────
+
+
+@router.post(
+    "/skills/{skill_id}/consent/sign",
+    response_model=ConsentSignResponse,
+)
+async def sign_consent_endpoint(
+    skill_id: str, body: ConsentSignRequest
+) -> ConsentSignResponse:
+    """Contributor 签字同意发布该 skill.
+
+    全员签 → status 自动转 draft (进入 Reviewer 审批流).
+    幂等: 同一 user 第二次 sign 返 200 但只计一次.
+    """
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if skill.status != "pending_contributor_consent":
+        raise HTTPException(
+            409,
+            detail=(
+                f"Skill status={skill.status}; "
+                f"consent sign 仅在 pending_contributor_consent 阶段允许"
+            ),
+        )
+    if body.user_id not in skill.consent_required_from:
+        raise HTTPException(
+            403,
+            detail=(
+                f"user_id {body.user_id} 不在 consent_required_from 列表; "
+                f"required={skill.consent_required_from}"
+            ),
+        )
+    try:
+        new_skill, all_signed = skill_consent.sign_consent(
+            skill,
+            user_id=body.user_id,
+            channel=body.channel,
+            note=body.note,
+        )
+    except skill_consent.InvalidTransition as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().update(new_skill)
+    # 回执通知给其他 contributor
+    try:
+        from app.services.im import consent_notifier
+        other = [
+            u for u in new_skill.consent_required_from if u != body.user_id
+        ]
+        if other:
+            consent_notifier.notify_followup(
+                new_skill,
+                type_="consent_signed",
+                recipient_user_ids=other,
+                actor_user_id=body.user_id,
+            )
+    except Exception as e:
+        logger.warning(
+            "consent_sign_followup_failed", skill_id=skill_id, error=str(e)
+        )
+
+    return ConsentSignResponse(
+        skill_id=new_skill.id,
+        current_status=new_skill.status,
+        signed_count=len(new_skill.consent_signed_by),
+        required_count=len(new_skill.consent_required_from),
+        all_signed=all_signed,
+    )
+
+
+@router.post(
+    "/skills/{skill_id}/consent/reject",
+    response_model=ConsentRejectResponse,
+)
+async def reject_consent_endpoint(
+    skill_id: str, body: ConsentRejectRequest
+) -> ConsentRejectResponse:
+    """Contributor 拒绝该 skill 发布 (单否决冻结).
+
+    一旦任一 contributor 拒绝, status → rejected_by_contributor;
+    其他人后续 sign 无效 (409).
+    """
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if skill.status != "pending_contributor_consent":
+        raise HTTPException(
+            409,
+            detail=(
+                f"Skill status={skill.status}; "
+                f"consent reject 仅在 pending_contributor_consent 阶段允许"
+            ),
+        )
+    if body.user_id not in skill.consent_required_from:
+        raise HTTPException(
+            403,
+            detail=(
+                f"user_id {body.user_id} 不在 consent_required_from 列表"
+            ),
+        )
+    try:
+        new_skill = skill_consent.reject_consent(
+            skill,
+            user_id=body.user_id,
+            channel=body.channel,
+            reason=body.reason,
+        )
+    except skill_consent.InvalidTransition as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().update(new_skill)
+    try:
+        from app.services.im import consent_notifier
+        other = [
+            u for u in new_skill.consent_required_from if u != body.user_id
+        ]
+        if other:
+            consent_notifier.notify_followup(
+                new_skill,
+                type_="consent_rejected",
+                recipient_user_ids=other,
+                actor_user_id=body.user_id,
+            )
+    except Exception as e:
+        logger.warning(
+            "consent_reject_followup_failed", skill_id=skill_id, error=str(e)
+        )
+
+    return ConsentRejectResponse(
+        skill_id=new_skill.id,
+        current_status=new_skill.status,
+        rejected_by=body.user_id,
+    )
 
 
 # ─── 辅助 ───────────────────────────────────────────────────

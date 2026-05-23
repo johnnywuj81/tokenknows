@@ -46,7 +46,7 @@ def ensure_scheduler_clean():
 
 
 @pytest.mark.asyncio
-async def test_start_scheduler_registers_six_jobs():
+async def test_start_scheduler_registers_seven_jobs():
     sched = auto_trigger_scheduler.start_scheduler()
     assert sched.running is True
     jobs = sched.get_jobs()
@@ -58,8 +58,9 @@ async def test_start_scheduler_registers_six_jobs():
         "skill_evolve_checker",
         "quota_resetter",
         "cleanup_audit_log",
+        "consent_sweep_expired",  # v0.5.1 T50
     }
-    assert len(jobs) == 6
+    assert len(jobs) == 7
 
 
 @pytest.mark.asyncio
@@ -68,7 +69,7 @@ async def test_start_scheduler_idempotent():
     s2 = auto_trigger_scheduler.start_scheduler()
     assert s1 is s2  # 单例
     assert s1.running is True
-    assert len(s1.get_jobs()) == 6  # 不重复注册
+    assert len(s1.get_jobs()) == 7  # 不重复注册
 
 
 @pytest.mark.asyncio

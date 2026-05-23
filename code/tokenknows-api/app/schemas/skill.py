@@ -211,6 +211,45 @@ class SkillUpdateRequest(BaseModel):
     status: SkillStatus | None = None
 
 
+# ─── v0.5.1 · Consent Sign/Reject (T50) ───────────────────────────
+
+
+class ConsentSignRequest(BaseModel):
+    """POST /api/v1/skills/:id/consent/sign body."""
+
+    user_id: str = Field(..., min_length=1, max_length=128)
+    """签字者 user_id (从 IM 链接或 web 登录态获取).
+
+    MVP 阶段无完整 SSO, endpoint 接收 user_id 作为 trust-on-faith;
+    生产应换为 session 解出, 这里仅传入便于测试 + 写审计.
+    """
+    channel: Literal["im_dm", "web"] = "web"
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ConsentRejectRequest(BaseModel):
+    """POST /api/v1/skills/:id/consent/reject body."""
+
+    user_id: str = Field(..., min_length=1, max_length=128)
+    channel: Literal["im_dm", "web"] = "web"
+    reason: str = Field(..., min_length=1, max_length=500)
+    """必填; 用于审计 + SignalGate 调权."""
+
+
+class ConsentSignResponse(BaseModel):
+    skill_id: str
+    current_status: SkillStatus
+    signed_count: int
+    required_count: int
+    all_signed: bool
+
+
+class ConsentRejectResponse(BaseModel):
+    skill_id: str
+    current_status: SkillStatus
+    rejected_by: str
+
+
 class SkillApplicationRecord(BaseModel):
     """Chapter 中记录的 skill 应用 (chapter.applied_skills 单项).
 

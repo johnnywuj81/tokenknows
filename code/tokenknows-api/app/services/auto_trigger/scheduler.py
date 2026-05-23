@@ -180,6 +180,15 @@ def _register_fixed_jobs(scheduler: AsyncIOScheduler) -> None:
         name="审计日志清理 (每天 04:00)",
     )
 
+    # 7. T50 v0.5.1 · skill consent 30d 无响应 sweep: 每天 03:05 (避开 evolve 03:00)
+    scheduler.add_job(
+        auto_trigger_jobs.consent_sweep_expired_job,
+        trigger=CronTrigger(hour=3, minute=5, timezone=SCHEDULER_TIMEZONE),
+        id="consent_sweep_expired",
+        replace_existing=True,
+        name="Skill consent 超时清理 (每天 03:05)",
+    )
+
     logger.debug("auto_trigger_jobs_registered", count=len(scheduler.get_jobs()))
 
 

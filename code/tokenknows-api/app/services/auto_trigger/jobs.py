@@ -126,6 +126,28 @@ async def quota_resetter_job() -> None:
         logger.error("auto_trigger_quota_resetter_failed", error=str(e))
 
 
+async def consent_sweep_expired_job() -> None:
+    """每天 03:05 sweep skill consent: 把 30 天无人签的 pending 转 expired_no_consent.
+
+    与 skill_evolve_checker_job 03:00 错开 5 分钟避撞.
+    单条失败 try/except 内部已处理, 这里只 wrap log.
+    """
+    try:
+        from app.services.skill.consent import sweep_expired_consents
+        result = sweep_expired_consents()
+        if result["expired"] > 0 or result["errors"] > 0:
+            logger.info(
+                "consent_sweep_expired_done",
+                expired=result["expired"],
+                errors=result["errors"],
+                scanned=result["scanned"],
+            )
+        else:
+            logger.debug("consent_sweep_expired_noop", scanned=result["scanned"])
+    except Exception as e:
+        logger.error("consent_sweep_expired_failed", error=str(e), exc_info=True)
+
+
 async def cleanup_audit_log_job() -> None:
     """每天 04:00 清理 90+ 天的 trigger_execution; audit_log 表本身保留 2 年.
 
@@ -144,6 +166,7 @@ async def cleanup_audit_log_job() -> None:
 
 
 __all__ = [
+    "consent_sweep_expired_job",
     "cron_evaluator_job",
     "threshold_scanner_job",
     "withdraw_window_resolver_job",

@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from app.schemas.skill import ConsentRecord, Skill, SkillStatus
 
@@ -214,6 +215,157 @@ def is_expired(skill: Skill, *, now: datetime | None = None) -> bool:
     return (now or datetime.now(timezone.utc)) > skill.consent_expires_at
 
 
+# ─── Sweep (T50 daily 03:00) ──────────────────────────────────────
+
+
+def sweep_expired_consents(*, now: datetime | None = None) -> dict[str, int]:
+    """扫所有 status='pending_contributor_consent' 且 expires_at < now 的 skill,
+    转 expired_no_consent + 通知 contributors.
+
+    每天 03:00 由 APScheduler 调; 单条失败 try/except, 不阻塞下一条.
+
+    Returns:
+        {'expired': N, 'errors': M, 'scanned': S}
+    """
+    from app.persistence import store as store_module
+
+    # 延迟 import 避免 consent.py ↔ consent_notifier 循环
+    from app.services.im import consent_notifier as _notifier
+
+    now_utc = now or datetime.now(timezone.utc)
+    db = store_module.get_db()
+
+    rows = db._query(  # noqa: SLF001 - sweep 内部用, 不暴露 API
+        """
+        SELECT json FROM skills
+        WHERE status = ?
+        """,
+        ("pending_contributor_consent",),
+    )
+    expired = 0
+    errors = 0
+    scanned = len(rows)
+    for r in rows:
+        try:
+            import json as _json
+            skill_dict = _json.loads(r["json"])
+            skill = Skill.model_validate(skill_dict)
+            if not is_expired(skill, now=now_utc):
+                continue
+            new_skill = mark_expired(skill, now=now_utc)
+            db.upsert_skill(
+                skill_id=new_skill.id,
+                project_id=new_skill.project_id,
+                name=new_skill.name,
+                version=new_skill.version,
+                status=new_skill.status,
+                trust_score=new_skill.metrics.trust_score,
+                updated_at=new_skill.updated_at.isoformat(),
+                json_str=new_skill.model_dump_json(),
+            )
+            # 回执通知 (web only, 不 IM 噪音)
+            try:
+                _notifier.notify_followup(
+                    new_skill,
+                    type_="consent_expired",
+                    recipient_user_ids=new_skill.consent_required_from,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            expired += 1
+        except Exception:  # noqa: BLE001
+            errors += 1
+
+    return {"expired": expired, "errors": errors, "scanned": scanned}
+
+
+# ─── 高层 helper: 给 endpoint 用 ─────────────────────────────────
+
+
+def sign_consent(
+    skill: Skill,
+    *,
+    user_id: str,
+    channel: Literal["im_dm", "web"] = "web",
+    note: str | None = None,
+    now: datetime | None = None,
+) -> tuple[Skill, bool]:
+    """同意闭环 helper (供 T50 endpoint 调).
+
+    Args:
+        skill: 当前 Skill 实例 (status 必须 pending)
+        user_id: 签字者 platform user_id
+        channel / note: 来源元数据
+        now: 测试用 freeze; 默认 utcnow
+
+    Returns:
+        (updated_skill, all_signed):
+        - updated_skill: 应用 sign 后的 Skill (若全员签则已转 draft)
+        - all_signed: 是否全员签 + 已转 draft
+
+    Raises:
+        InvalidTransition: skill 非 pending / 已 rejected / user_id 不在 required_from
+    """
+    if skill.status != "pending_contributor_consent":
+        raise InvalidTransition(
+            f"sign_consent only on pending, got {skill.status}"
+        )
+    if user_id not in skill.consent_required_from:
+        raise InvalidTransition(
+            f"user {user_id} not in consent_required_from"
+        )
+    record = ConsentRecord(
+        user_id=user_id,
+        signed_at=now or datetime.now(timezone.utc),
+        channel=channel,
+        note=note,
+    )
+    new_skill = apply_sign(skill, record)
+    if check_all_signed(new_skill):
+        # 自动转 draft (T50 §7 spec)
+        assert_can_transition(new_skill.status, "draft")
+        new_skill = new_skill.model_copy(
+            update={"status": "draft", "updated_at": record.signed_at}
+        )
+        return new_skill, True
+    return new_skill, False
+
+
+def reject_consent(
+    skill: Skill,
+    *,
+    user_id: str,
+    channel: Literal["im_dm", "web"] = "web",
+    reason: str,
+    now: datetime | None = None,
+) -> Skill:
+    """拒绝闭环 helper.
+
+    Args:
+        skill: 当前 pending skill
+        user_id: 拒绝者
+        reason: 必填理由 (≤ 500 字; 此处不强制截断, endpoint 层 Pydantic 控)
+
+    Raises:
+        InvalidTransition: 非 pending / 已 rejected / user 不在 required_from
+    """
+    if skill.status != "pending_contributor_consent":
+        raise InvalidTransition(
+            f"reject_consent only on pending, got {skill.status}"
+        )
+    if user_id not in skill.consent_required_from:
+        raise InvalidTransition(
+            f"user {user_id} not in consent_required_from"
+        )
+    record = ConsentRecord(
+        user_id=user_id,
+        signed_at=now or datetime.now(timezone.utc),
+        channel=channel,
+        note=reason,
+    )
+    return apply_reject(skill, record)
+
+
 __all__ = [
     "InvalidTransition",
     "apply_reject",
@@ -224,4 +376,7 @@ __all__ = [
     "initialize_pending",
     "is_expired",
     "mark_expired",
+    "reject_consent",
+    "sign_consent",
+    "sweep_expired_consents",
 ]
