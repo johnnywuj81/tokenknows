@@ -276,6 +276,35 @@ _OUTLINE_TEMPLATES: dict[AssetType, list[str]] = {
 }
 
 
+def _parse_llm_json(text: str) -> Any:
+    """v1.8 T112 · 容错解析 LLM JSON 输出.
+
+    LLM 经常把 JSON 包在 markdown ```json ... ``` 里, 或前后加说明文字 (Anthropic
+    Claude 尤其爱这样). 直接 json.loads 会挂. 这里 3 层容错:
+        1. strip + 去 markdown code fence (```json...```/```...```)
+        2. 提取第一个完整 {...} 或 [...] 块
+        3. json.loads
+    任一步失败上抛 json.JSONDecodeError.
+    """
+    s = (text or "").strip()
+    # 1) markdown code fence
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json|JSON)?\s*\n?", "", s)
+        s = re.sub(r"\n?```\s*$", "", s)
+        s = s.strip()
+    # 2) 直接 try, 失败再提取首个 JSON 块
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    # 找首个 { 或 [ 起的最大 JSON 块 (greedy)
+    m = re.search(r"(\{.*\}|\[.*\])", s, re.DOTALL)
+    if m:
+        return json.loads(m.group(1))
+    # 没法救, 抛原始错
+    return json.loads(s)
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -457,7 +486,7 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
             options=LLMOptions(**rendered.options),
             project_id=asset.project_id,
         )
-        parsed = json.loads(response.text)
+        parsed = _parse_llm_json(response.text)
         outline = parsed.get("chapters", [])
         if not isinstance(outline, list) or len(outline) < 3:
             raise ValueError(f"LLM 返回大纲不合理: {outline!r}")
@@ -526,7 +555,7 @@ async def _stage_outline_book(asset_id: str, req: GenerateAssetRequest) -> dict:
             options=LLMOptions(**vol_rendered.options),
             project_id=asset.project_id,
         )
-        vol_parsed = json.loads(vol_resp.text)
+        vol_parsed = _parse_llm_json(vol_resp.text)
         volumes = vol_parsed.get("volumes") or []
         if not isinstance(volumes, list) or len(volumes) < 2:
             raise ValueError(f"LLM 卷大纲不合理: {volumes!r}")
@@ -570,7 +599,7 @@ async def _stage_outline_book(asset_id: str, req: GenerateAssetRequest) -> dict:
                 options=LLMOptions(**ch_rendered.options),
                 project_id=asset.project_id,
             )
-            ch_parsed = json.loads(ch_resp.text)
+            ch_parsed = _parse_llm_json(ch_resp.text)
             chapters = ch_parsed.get("chapters") or []
             if not isinstance(chapters, list) or len(chapters) < 3:
                 raise ValueError(f"卷 {vol_idx+1} 章大纲不合理: {chapters!r}")
@@ -934,7 +963,7 @@ async def _stage_outline_knowledge_graph(
             options=LLMOptions(**rendered.options),
             project_id=asset.project_id,
         )
-        parsed_dict = json.loads(resp.text)
+        parsed_dict = _parse_llm_json(resp.text)
         parsed = KGOutlineLLMOutput.model_validate(parsed_dict)
         nodes = parsed.nodes
 
@@ -1061,7 +1090,7 @@ async def _stage_content_knowledge_graph(
                 options=LLMOptions(**rendered.options),
                 project_id=asset.project_id,
             )
-            parsed = KGContentLLMOutput.model_validate(json.loads(resp.text))
+            parsed = KGContentLLMOutput.model_validate(_parse_llm_json(resp.text))
 
             # 过滤 edge: source / target 必须 ∈ nodes
             node_ids = {n.id for n in layout.nodes}
@@ -1185,6 +1214,10 @@ async def _stage_assess_knowledge_graph(
         similarity=raw_metrics["similarity"],
         consistency_score=raw_metrics["consistency_score"],
     )
+    # v1.8 T112 · KG pipeline 跑完后必须 mark draft, 否则 asset 永远 generating
+    # (通用 assess 是为 weekly_report 等写的, KG 走自己的 assess 函数, 漏了 status)
+    asset.status = "draft"
+    asset.current_version = 1
     asset.updated_at = _now()
     _persist_asset(asset_id)
 
