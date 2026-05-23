@@ -55,6 +55,15 @@ interface NodePosition {
 /** v1.6 fix · 稳定空对象常量 (避免 selector 返回新 {} 触发 zustand subscribe 死循环). */
 const _EMPTY_STORED: Record<string, NodePosition> = Object.freeze({})
 
+/** v1.8 T114 · MiniMap 节点色 (与 thumbnail.py 同色板); cluster 用灰. */
+const _MINIMAP_COLOR_BY_TYPE: Record<string, string> = {
+  person: '#ca8a04',    // warning-dark (黄)
+  event: '#2563eb',     // info-dark (蓝)
+  concept: '#16a34a',   // success-dark (绿)
+  artifact: '#dc2626',  // danger-dark (红)
+  cluster: '#94a3b8',   // tertiary 灰 (supernode)
+}
+
 interface GraphCanvasProps {
   layout: KnowledgeGraphLayout
   onNodeClick?: (node: KGNode) => void
@@ -306,7 +315,15 @@ export function GraphCanvas({
       >
         <Background />
         <Controls />
-        <MiniMap pannable zoomable />
+        {/* v1.8 T114 · MiniMap 自定义 nodeColor (自定义 Node 用 Tailwind class 不是
+            inline style, MiniMap 取不到 bgColor → 全白看不见节点). 按 type 上色. */}
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor={(n) => _MINIMAP_COLOR_BY_TYPE[n.type as string] ?? '#94a3b8'}
+          nodeStrokeWidth={2}
+          maskColor="rgba(250, 250, 249, 0.7)"
+        />
       </ReactFlow>
     </div>
   )
