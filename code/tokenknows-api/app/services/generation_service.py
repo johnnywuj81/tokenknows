@@ -163,6 +163,25 @@ def _bootstrap_from_db() -> None:
         record = PublishRecord.model_validate(raw)
         _publish_records[record.id] = record
 
+    # v1.6 · 从 KG chapters 重建 entity_registry (内存 store, 启动时丢失)
+    try:
+        from app.services.knowledge_graph import entity_registry as _ereg
+        _ereg.clear_for_test()
+        for asset_id, chapters in _chapters.items():
+            asset = _assets.get(asset_id)
+            if asset is None or asset.type != "knowledge_graph":
+                continue
+            for ch in chapters:
+                nodes = (ch.layout or {}).get("nodes") or []
+                if nodes:
+                    _ereg.register_asset_nodes(
+                        project_id=asset.project_id,
+                        asset_id=asset_id, chapter_id=ch.id,
+                        nodes=nodes,
+                    )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("entity_registry_rebuild_failed", exc=str(exc))
+
     stats = db.stats()
     logger.info(
         "persistence_loaded",
@@ -182,6 +201,8 @@ _TITLE_TEMPLATES: dict[AssetType, str] = {
     # v0.2 升级
     "book": "技术手册 · 范围 = {window}",
     "agent_skill": "Skill 草稿 · {window}",
+    # v1.2 升级 · 实体关系图谱
+    "knowledge_graph": "知识图谱 · 范围 = {window}",
 }
 
 # 每类文档的章节大纲 (替代 outline LLM 调用)

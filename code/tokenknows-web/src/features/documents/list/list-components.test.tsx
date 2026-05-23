@@ -41,14 +41,17 @@ describe('DocumentFilters', () => {
     expect(screen.getByText('复盘')).toBeInTheDocument()
   })
 
-  it('6 type tabs all rendered (含 v0.2 书籍)', () => {
+  it('8 type tabs all rendered (含 v0.2 书籍/Skill + v1.2 知识图谱)', () => {
     render(<DocumentFilters
       type="weekly_report" status="all"
       onTypeChange={() => {}} onStatusChange={() => {}}
     />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.length).toBe(6)
+    // 全部 + weekly_report + tech_design + adr + incident + book + agent_skill + knowledge_graph
+    expect(tabs.length).toBe(8)
     expect(screen.getByText('书籍')).toBeInTheDocument()
+    expect(screen.getByText('Skill')).toBeInTheDocument()
+    expect(screen.getByText('知识图谱')).toBeInTheDocument()
   })
 })
 

@@ -32,6 +32,13 @@ interface PositionState {
   clearAsset: (assetId: string) => void
 }
 
+/**
+ * v1.6 fix · 稳定空对象引用. zustand selector 每次返回新 `{}` 字面量
+ * 会触发 React 浅比较失败 → 无限 rerender, React Flow 死循环.
+ * 用 module-level 常量保持引用稳定.
+ */
+const _EMPTY_POSITIONS: Record<string, NodePosition> = Object.freeze({})
+
 export const usePositionStore = create<PositionState>()(
   persist(
     (set, get) => ({
@@ -53,7 +60,7 @@ export const usePositionStore = create<PositionState>()(
             [assetId]: { ...positions },
           },
         })),
-      getPositions: (assetId) => get().positions[assetId] || {},
+      getPositions: (assetId) => get().positions[assetId] ?? _EMPTY_POSITIONS,
       clearAsset: (assetId) =>
         set((state) => {
           const next = { ...state.positions }

@@ -112,7 +112,7 @@ describe('api interceptor · error normalization', () => {
       expect(err).toMatchObject({
         code: 'BAD_REQUEST',
         status: 400,
-        message: '请求参数有误',
+        message: '请求参数有误,请检查输入',  // T105 polished
       })
     }
   })
@@ -122,7 +122,10 @@ describe('api interceptor · error normalization', () => {
     try {
       await api.get('/test')
     } catch (err) {
-      expect(err).toMatchObject({ code: 'NOT_FOUND', message: '资源不存在' })
+      expect(err).toMatchObject({
+        code: 'NOT_FOUND',
+        message: '资源不存在或已被删除',  // T105 polished
+      })
     }
   })
 

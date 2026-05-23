@@ -92,6 +92,88 @@ def test_resolve_provider_override_wins() -> None:
     assert model == "claude-custom"
 
 
+# ─── T106 · model_override → provider 推断 ──────────────────────────
+
+
+def test_infer_provider_from_model_claude() -> None:
+    from app.llm_gateway.router import _infer_provider_from_model
+    assert _infer_provider_from_model("claude-sonnet-4-5-20250929") == "anthropic"
+    assert _infer_provider_from_model("claude-haiku-4-5") == "anthropic"
+
+
+def test_infer_provider_from_model_openai() -> None:
+    from app.llm_gateway.router import _infer_provider_from_model
+    assert _infer_provider_from_model("gpt-4o") == "openai"
+    assert _infer_provider_from_model("gpt-4o-mini") == "openai"
+    assert _infer_provider_from_model("o1-mini") == "openai"
+    assert _infer_provider_from_model("o3") == "openai"
+
+
+def test_infer_provider_from_model_minimax() -> None:
+    from app.llm_gateway.router import _infer_provider_from_model
+    assert _infer_provider_from_model("abab6.5s-chat") == "minimax"
+
+
+def test_infer_provider_from_model_ollama() -> None:
+    from app.llm_gateway.router import _infer_provider_from_model
+    assert _infer_provider_from_model("qwen2.5:3b") == "ollama"
+    assert _infer_provider_from_model("qwen2.5-32b") == "ollama"
+    assert _infer_provider_from_model("llama3:8b") == "ollama"
+    assert _infer_provider_from_model("gpt-oss:20b") == "ollama"
+
+
+def test_infer_provider_from_model_unknown_returns_none() -> None:
+    from app.llm_gateway.router import _infer_provider_from_model
+    assert _infer_provider_from_model("acme-secret-model") is None
+    assert _infer_provider_from_model("") is None
+
+
+def test_infer_provider_case_insensitive() -> None:
+    from app.llm_gateway.router import _infer_provider_from_model
+    assert _infer_provider_from_model("CLAUDE-3-OPUS") == "anthropic"
+    assert _infer_provider_from_model(" GPT-4 ") == "openai"
+
+
+def test_resolve_only_model_override_infers_provider() -> None:
+    """T106 · 前端只传 model_override='gpt-4o' 时按 model 推断 provider=openai.
+
+    避免与 task 默认 provider (可能是 anthropic/ollama) 错配.
+    """
+    router = LLMRouter()
+    provider, model = router._resolve_provider_model(
+        "weekly_report",
+        model_override="gpt-4o",  # 用户选 OpenAI 模型但没显式传 provider
+    )
+    assert provider == "openai"  # 推断, 不是 task 默认
+    assert model == "gpt-4o"
+
+
+def test_resolve_unknown_model_override_falls_back_to_task_default() -> None:
+    """T106 · model_override 推断失败 (acme-x) → 回退 task 默认 provider."""
+    router = LLMRouter()
+    task_default = router.settings.task_provider("weekly_report")
+    provider, model = router._resolve_provider_model(
+        "weekly_report",
+        model_override="acme-x",
+    )
+    # 应回退到 settings 中 weekly_report 的默认 provider (受 env 控制)
+    assert provider == task_default
+    assert model == "acme-x"
+
+
+def test_resolve_explicit_provider_override_beats_inference() -> None:
+    """T106 · 显式 provider_override 优先级仍最高 (不被 prefix 推断覆盖)."""
+    router = LLMRouter()
+    # model name 看着是 anthropic 但用户显式指定 openai (不合理但合规)
+    provider, model = router._resolve_provider_model(
+        "weekly_report",
+        model_override="claude-sonnet-fake",
+        provider_override="openai",
+    )
+    assert provider == "openai"
+    assert model == "claude-sonnet-fake"
+
+
 # ─── generate · 门禁拒绝 ────────────────────────────────────────────
 
 

@@ -66,6 +66,11 @@ const TYPES: { value: AssetType; label: string; description: string }[] = [
     label: 'Agent 专家技能',
     description: 'v0.2 · 从已批准章节蒸馏可复用 skill (建议改用 /skills 页面)',
   },
+  {
+    value: 'knowledge_graph',
+    label: '知识图谱',
+    description: 'v1.2 · 实体关系图谱; 4 类节点 + 6 类边, 跨文档实体合并',
+  },
 ]
 
 const WINDOWS = [
@@ -76,11 +81,13 @@ const WINDOWS = [
   { value: 'last_30_days', label: '最近 30 天' },
 ]
 
-const MODELS = [
+// T106 · 每个 model 显式标 provider, 避免 anthropic+gpt-4o 错配
+const MODELS: { value: string; label: string; provider?: string }[] = [
   { value: 'auto', label: '自动选择(推荐)' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 · 云端' },
-  { value: 'gpt-4o', label: 'GPT-4o · 云端' },
-  { value: 'qwen2.5-32b', label: 'Qwen2.5-32B · 本地' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 · 云端', provider: 'anthropic' },
+  { value: 'gpt-4o', label: 'GPT-4o · 云端', provider: 'openai' },
+  { value: 'abab6.5s-chat', label: 'MiniMax abab6.5s · 云端', provider: 'minimax' },
+  { value: 'qwen2.5:3b', label: 'Qwen2.5 3B · Ollama 本地', provider: 'ollama' },
 ]
 
 export function GenerateDocDialog({
@@ -95,12 +102,15 @@ export function GenerateDocDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    // T106 · 找到对应 provider, 一并传给后端 (避免 anthropic+gpt-4o 错配)
+    const selected = MODELS.find((m) => m.value === model)
     generate.mutate(
       {
         projectId,
         type,
         time_window: timeWindow,
         model_override: model === 'auto' ? undefined : model,
+        provider_override: model === 'auto' ? undefined : selected?.provider,
       },
       {
         onSuccess: () => {
@@ -111,6 +121,7 @@ export function GenerateDocDialog({
   }
 
   const errorMessage = isApiError(generate.error) ? generate.error.message : null
+  const errorStatus = isApiError(generate.error) ? generate.error.status : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -186,8 +197,17 @@ export function GenerateDocDialog({
             <div
               className="rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-body-sm text-danger"
               role="alert"
+              data-testid="generate-error"
             >
-              {errorMessage}
+              <div className="flex items-start justify-between gap-2">
+                <strong className="font-ui">⚠️ 生成失败</strong>
+                {errorStatus ? (
+                  <span className="font-mono text-caption text-text-muted">
+                    HTTP {errorStatus}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-caption">{errorMessage}</p>
             </div>
           ) : null}
 

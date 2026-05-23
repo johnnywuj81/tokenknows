@@ -59,6 +59,39 @@ FALLBACK_CHAIN: dict[str, list[tuple[str, str]]] = {
 }
 
 
+# T106 · model name prefix → provider 推断表 (前端只传 model name 时兜底)
+# 顺序敏感: 更具体的 prefix (e.g. 'gpt-oss') 要排在更泛的 ('gpt') 之前
+_MODEL_PREFIX_TO_PROVIDER: list[tuple[str, str]] = [
+    ("claude", "anthropic"),
+    ("gpt-oss", "ollama"),  # 必须先于 'gpt' 匹配
+    ("gpt", "openai"),
+    ("o1", "openai"),
+    ("o3", "openai"),
+    ("abab", "minimax"),
+    ("minimax", "ollama"),  # 'minimax-m2:cloud' 通过 ollama litellm 适配
+    ("qwen", "ollama"),
+    ("llama", "ollama"),
+    ("deepseek", "ollama"),
+]
+
+
+def _infer_provider_from_model(model: str) -> str | None:
+    """根据 model name 前缀推断 provider.
+
+    e.g. 'claude-sonnet-4-6' → 'anthropic'
+         'gpt-4o' / 'o1-mini' → 'openai'
+         'abab6.5s-chat' → 'minimax'
+         'qwen2.5-32b' / 'minimax-m2:cloud' → 'ollama'
+
+    未匹配返回 None (调用方 fallback 到 task 默认 provider).
+    """
+    name = model.lower().strip()
+    for prefix, provider in _MODEL_PREFIX_TO_PROVIDER:
+        if name.startswith(prefix):
+            return provider
+    return None
+
+
 class LLMRouter:
     """LLM 调用编排器 - 业务代码通过此类访问 LLM."""
 
@@ -98,9 +131,20 @@ class LLMRouter:
     ) -> tuple[str, str]:
         """决定本次用哪个 provider + model.
 
-        优先级: 用户 override > task 默认 (settings).
+        优先级:
+            1. provider_override + model_override 都给 → 直接用
+            2. 只给 model_override (前端旧版 dialog) → 按 model name 前缀推断 provider,
+               避免 'anthropic+gpt-4o' 这种错配 (T106)
+            3. 都不给 → task 默认 (settings.task_provider/task_model)
         """
-        provider = provider_override or self.settings.task_provider(task)
+        # T106: 显式 provider_override 优先级最高
+        if provider_override:
+            provider = provider_override
+        elif model_override:
+            # 按 model name 前缀推断 provider (鲁棒兜底)
+            provider = _infer_provider_from_model(model_override) or self.settings.task_provider(task)
+        else:
+            provider = self.settings.task_provider(task)
         model = model_override or self.settings.task_model(task)
         return provider, model
 

@@ -52,6 +52,9 @@ interface NodePosition {
   y: number
 }
 
+/** v1.6 fix · 稳定空对象常量 (避免 selector 返回新 {} 触发 zustand subscribe 死循环). */
+const _EMPTY_STORED: Record<string, NodePosition> = Object.freeze({})
+
 interface GraphCanvasProps {
   layout: KnowledgeGraphLayout
   onNodeClick?: (node: KGNode) => void
@@ -123,8 +126,9 @@ export function GraphCanvas({
   chapterId,
 }: GraphCanvasProps) {
   // v1.2.1 T90: 拖动位置持久化 (zustand persist 到 localStorage)
+  // v1.6 fix: selector 不能返回新 {}, 用 stable _EMPTY_STORED 避免死循环
   const storedPositions = usePositionStore((s) =>
-    assetId ? s.getPositions(assetId) : {},
+    assetId ? s.getPositions(assetId) : _EMPTY_STORED,
   )
   const setPosition = usePositionStore((s) => s.setPosition)
   const hydrateAsset = usePositionStore((s) => s.hydrateAsset)

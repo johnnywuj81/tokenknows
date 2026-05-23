@@ -85,7 +85,7 @@ export default function DocumentListPage() {
           </p>
           <h1 className="font-content text-h1 text-text-primary">项目文档</h1>
           <p className="text-body text-text-muted">
-            自动生成的周报 / 技术方案 / ADR / 复盘 / 书籍。点击卡片进入编辑。
+            自动生成的周报 / 技术方案 / ADR / 复盘 / 书籍 / Skill / 知识图谱。点击卡片进入编辑。
           </p>
         </div>
         <Button

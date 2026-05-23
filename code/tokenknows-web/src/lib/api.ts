@@ -92,18 +92,19 @@ function mapStatusToCode(status: number): ErrorCode {
 
 function defaultMessage(code: ErrorCode): string {
   switch (code) {
-    case 'BAD_REQUEST': return '请求参数有误'
+    case 'BAD_REQUEST': return '请求参数有误,请检查输入'
     case 'UNAUTHORIZED': return '请重新登录'
     case 'FORBIDDEN': return '无权访问该资源'
-    case 'NOT_FOUND': return '资源不存在'
+    case 'NOT_FOUND': return '资源不存在或已被删除'
     case 'CONFLICT': return '资源冲突,请刷新后重试'
-    case 'VALIDATION_ERROR': return '数据校验失败'
+    case 'VALIDATION_ERROR': return '数据校验失败,请检查输入格式'
     case 'RATE_LIMITED': return '请求过于频繁,请稍后再试'
-    case 'SERVER_ERROR': return '服务暂不可用'
-    case 'NETWORK_ERROR': return '网络异常'
+    // T105: 500 加 actionable hint (用户能自己排查 backend log)
+    case 'SERVER_ERROR': return '服务端异常,请联系管理员或查看 backend 日志'
+    case 'NETWORK_ERROR': return '无法连接到后端服务,请检查 backend 是否运行'
     case 'EGRESS_DENIED': return '云端模型出域已被禁用,已自动切换到本地模型'
     case 'LICENSE_EXPIRED': return '凭证已过期,实例进入只读模式'
-    default: return '未知错误'
+    default: return '未知错误,请刷新或联系管理员'
   }
 }
 

@@ -9,7 +9,7 @@
  */
 
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox, BarChart3, Globe } from 'lucide-react'
+import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox, BarChart3, Globe, Network } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -29,7 +29,8 @@ export function AppLayout() {
         { to: `/projects/${currentProjectId}/skills`, icon: Sparkles, label: 'Skills' },
         { to: `/projects/${currentProjectId}/skills/review-inbox`, icon: Inbox, label: '审批收件箱' },
         { to: `/projects/${currentProjectId}/skills/governance`, icon: BarChart3, label: 'Skill 治理' },
-        { to: `/skills/marketplace`, icon: Globe, label: '🌐 市场' },
+        { to: `/skills/marketplace`, icon: Globe, label: 'Skill 市场' },
+        { to: `/global-entities`, icon: Network, label: '全局实体' },
         { to: `/projects/${currentProjectId}/datasources`, icon: Plug, label: 'IM 接入' },
         { to: `/projects/${currentProjectId}/settings`, icon: Settings, label: '项目设置' },
       ]

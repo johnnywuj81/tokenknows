@@ -14,6 +14,8 @@ export interface GeneratePayload {
   time_window?: string
   source_filter?: Record<string, unknown>
   model_override?: string
+  /** T106 · 显式 provider, 后端优先用 (rather than guess from model name). */
+  provider_override?: string
 }
 
 async function generateAssetRequest(payload: GeneratePayload): Promise<Asset> {
@@ -22,6 +24,7 @@ async function generateAssetRequest(payload: GeneratePayload): Promise<Asset> {
     time_window: payload.time_window,
     source_filter: payload.source_filter,
     model_override: payload.model_override,
+    provider_override: payload.provider_override,
   })
   return data
 }
