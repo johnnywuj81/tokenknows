@@ -13,3 +13,8 @@ JSON schema: {"chapters": ["章节1", "章节2", ...]}
 为「{{ type_label }}」文档生成章节大纲。
 时间范围: {{ time_window }}
 参考标准结构 (你可微调以贴合本次主题): {{ fallback_joined }}
+{%- if events_block is defined and events_block %}
+
+近期真实事件 (用于让大纲贴合具体主题, 不要拘泥模板):
+{{ events_block }}
+{%- endif %}

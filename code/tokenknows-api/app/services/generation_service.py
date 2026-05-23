@@ -309,6 +309,53 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ── T126 · events grounding helpers ─────────────────────────────────
+
+
+# time_window 字面值 → 滚动窗口天数. 都是 from-only (to_iso=None ⇒ 直到 now).
+# this_week / last_week 用滚动 7 天近似 (MVP, 不区分自然周边界).
+_TIME_WINDOW_DAYS: dict[str, int] = {
+    "this_week": 7,
+    "last_week": 7,
+    "last_7_days": 7,
+    "last_14_days": 14,
+    "last_30_days": 30,
+}
+
+
+def _time_window_from_iso(time_window: str | None) -> str:
+    """time_window 字面值 → from_iso. 未识别值默认 30 天 (容错优先)."""
+    days = _TIME_WINDOW_DAYS.get((time_window or "").strip(), 30)
+    return (_now() - timedelta(days=days)).isoformat()
+
+
+# 单 prompt 内塞的事件数上限 (避免 token 爆掉; 与 KG branch _KG_MAX_EVENTS_FOR_PROMPT 一致).
+_MAX_EVENTS_FOR_PROMPT = 25
+# 单个事件 content 截断长度 (~中文 200 字, 留头不留尾).
+_MAX_EVENT_CONTENT_CHARS = 500
+
+
+def _format_events_block(events: list[dict]) -> str:
+    """格式化事件列表为 markdown 块, 给 LLM 当锚定证据.
+
+    输入: events 是 Event.model_dump(mode='json') 列表 (dict 形态).
+    输出: 形如 "- [作者] 标题: 内容片段" 的多行 markdown.
+    """
+    if not events:
+        return ""
+    short = events[:_MAX_EVENTS_FOR_PROMPT]
+    lines: list[str] = []
+    for idx, e in enumerate(short, 1):
+        author = (e.get("author") or {}).get("name") or "?"
+        title = (e.get("title") or "").strip() or "(无标题)"
+        content = (e.get("content") or "").strip()
+        if len(content) > _MAX_EVENT_CONTENT_CHARS:
+            content = content[:_MAX_EVENT_CONTENT_CHARS] + "…"
+        # 单事件用 1 行 + 缩进的 content 子段, LLM 读起来分界清楚
+        lines.append(f"[{idx}] {author} · {title}\n    {content}")
+    return "\n\n".join(lines)
+
+
 def _initial_progress(asset_id: str) -> GenerationProgress:
     now = _now()
     stage_names: list[StageName] = ["collect", "outline", "content", "evidence", "assess"]
@@ -426,16 +473,49 @@ async def _run_stage(
 
 
 async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
-    """阶段 1 · 按时间窗 + filter 从事件库选 TOP-N 候选.
+    """阶段 1 · 按时间窗从事件库选 TOP-N 候选.
 
-    MVP 占位: 假装拿到 50 个候选 trust_score 平均 0.72.
-    生产: 查 Postgres events + value_segments, ORDER BY trust_score DESC LIMIT 50.
+    T126 改: 真查 db.list_events(project_id, from_iso=time_window 推算),
+    把事件列表(dict)塞 stage metadata, 给后续 outline/content stage 用作
+    LLM grounding (旧版只返 candidates_count 占位, content 完全脱离真实事件).
+
+    KG 类型走专用 outline/content 分支自己读 events, 不依赖本 stage; 但
+    本 stage 仍提供统一的事件 + trust 度量 (KG outline 仍可读 metadata).
     """
-    await asyncio.sleep(0.8)
+    asset = _assets[asset_id]
+    db = get_db()
+    from_iso = _time_window_from_iso(req.time_window)
+    try:
+        raw_events, _ = db.list_events(
+            project_id=asset.project_id,
+            from_iso=from_iso,
+            limit=50,
+        )
+    except Exception as exc:
+        # 持久层故障不应阻断流水线, 退化到旧占位行为
+        logger.warning("collect_stage_db_failed", asset_id=asset_id, error=str(exc))
+        raw_events = []
+
+    # raw_events 已是 dict, db.list_events 内部按 occurred_at desc; 这里追加
+    # trust_score desc 作主排序 (稳定排序保持 occurred_at 次序), 给后续 stage
+    # 用 prefix 截断 (_MAX_EVENTS_FOR_PROMPT) 时优先保留可信度高的事件.
+    events = sorted(
+        raw_events,
+        key=lambda e: -(e.get("trust_score") or 0.5),
+    )
+    if not events:
+        avg = 0.0
+    else:
+        scores = [e.get("trust_score") or 0.5 for e in events]
+        avg = round(sum(scores) / len(scores), 3)
+
     return {
-        "candidates_count": 50,
-        "trust_score_avg": 0.72,
+        "candidates_count": len(events),
+        "trust_score_avg": avg,
         "time_window": req.time_window,
+        # events 列表给后续 stage 用 (KG outline / content grounding).
+        # 用 dict 而非 Event Pydantic, 与 KG 分支命名一致, 也好序列化进 SQLite.
+        "events": events,
     }
 
 
@@ -468,11 +548,20 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
 
     # A1.2: 抽 prompt 到 app/prompts/outline/_default.md (4 类共享模板).
     # 字节级回归测试见 tests/test_prompts_byte_parity.py
+    # T126: 从 collect stage 读 events, 格式化进 prompt 让 LLM 贴近真实主题.
+    progress = _progress[asset_id]
+    collect_idx = _stage_index(progress, "collect")
+    collect_events: list[dict] = (
+        (progress.stages[collect_idx].metadata or {}).get("events") or []
+    )
+    events_block = _format_events_block(collect_events)
+
     tpl = PromptTemplate.load("outline/_default")
     rendered = tpl.render({
         "type_label": type_label,
         "time_window": req.time_window,
         "fallback_joined": " / ".join(fallback),
+        "events_block": events_block,
     })
 
     router = await get_router()
@@ -732,6 +821,14 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
         *(select_one(t) for t in outline)
     )
 
+    # T126 · 从 collect stage 读 events 共享给所有章节 (一次格式化, 多章共用,
+    # 让每章节 LLM 都见到真实事件而不是只见章节标题).
+    collect_idx = _stage_index(progress, "collect")
+    collect_events: list[dict] = (
+        (progress.stages[collect_idx].metadata or {}).get("events") or []
+    )
+    events_block = _format_events_block(collect_events)
+
     # 并行调 LLM 生章节
     async def gen_one(
         idx: int, title: str, picked: list
@@ -740,6 +837,7 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
         result = await _call_chapter_llm(
             asset.type, title, req.time_window, asset.project_id,
             provider, model, skill_suffix=skill_suffix,
+            events_block=events_block,
         )
         # 推增量 SSE
         await _publish_event(
@@ -812,12 +910,16 @@ async def _call_chapter_llm(
     provider: str,
     model: str,
     skill_suffix: str = "",
+    events_block: str = "",
 ) -> dict[str, Any]:
     """单章节 LLM 调用 · 失败回退到 placeholder content.
 
     Args:
         skill_suffix: v0.2 注入的项目专家技能段 (render_skills_for_prompt 输出);
                       为空字符串时不修改 system_prompt.
+        events_block: T126 真实事件块 (_format_events_block 输出); 空字符串
+                      时 prompt 退化到原行为 (仅 title + time_window). 非空
+                      时 LLM 据此 grounding 写出贴主题的章节正文.
 
     返回 {content, usage, fallback_used, latency_ms}.
     """
@@ -836,6 +938,7 @@ async def _call_chapter_llm(
         "type_label": type_label,
         "time_window": time_window,
         "title": title,
+        "events_block": events_block,
     })
 
     # v0.2 · skill 注入 system_prompt 末尾

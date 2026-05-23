@@ -10,5 +10,10 @@ timeout_seconds: 90
 文档类型: {{ type_label }}
 时间范围: {{ time_window }}
 当前章节标题: {{ title }}
+{%- if events_block is defined and events_block %}
+
+近期真实事件 (用于让本章节正文贴合具体事实, 优先复述这些事件中与章节标题相关的内容; 凡引用具体事件请加 [N] 角标, N 从 1 起):
+{{ events_block }}
+{%- endif %}
 
 请生成本章节的 markdown 草稿 (200-400 字, 含 2-3 个 [N] 引用占位).

@@ -107,12 +107,34 @@ async def test_publish_event_no_subscriber_no_op() -> None:
 
 @pytest.mark.asyncio
 async def test_stage_collect_returns_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
-    # 跳过 0.8s sleep 加速
+    """_stage_collect 真查 events (T126): mock db.list_events, 验证 metadata
+    含 candidates_count / trust_score_avg / events 列表."""
     monkeypatch.setattr(asyncio, "sleep", AsyncMock())
-    req = GenerateAssetRequest(type="weekly_report", time_window="2026-W21")
+    gen._assets["a1"] = Asset(
+        id="a1", project_id="p1", type="weekly_report", title="t",
+        status="generating", current_version=0, template_id="t",
+        created_by="anon", approval_state="pending",
+        redaction_state="any_unresolved",
+        created_at=_now(), updated_at=_now(),
+    )
+    fake_events = [
+        {"id": "e1", "title": "ev1", "content": "c1", "trust_score": 0.9},
+        {"id": "e2", "title": "ev2", "content": "c2", "trust_score": 0.5},
+    ]
+
+    class _FakeDb:
+        def list_events(self, project_id: str, from_iso: str, limit: int) -> tuple[list[dict], int]:
+            assert project_id == "p1"
+            return fake_events, len(fake_events)
+
+    monkeypatch.setattr(gen, "get_db", lambda: _FakeDb())
+    req = GenerateAssetRequest(type="weekly_report", time_window="this_week")
     metadata = await gen._stage_collect("a1", req)
-    assert "candidates_count" in metadata
-    assert metadata["time_window"] == "2026-W21"
+    assert metadata["candidates_count"] == 2
+    assert metadata["time_window"] == "this_week"
+    assert metadata["trust_score_avg"] == 0.7  # (0.9 + 0.5) / 2
+    # 排序后 trust 高的在前
+    assert metadata["events"][0]["id"] == "e1"
 
 
 # ─── _run_stage 通用执行器 ─────────────────────────────────────────

@@ -163,6 +163,64 @@ def test_content_default_options() -> None:
     }
 
 
+# ── T126 · events_block 条件渲染 ──────────────────────────────
+
+
+def test_outline_default_events_block_omitted_when_empty() -> None:
+    """传 events_block='' 时, 渲染结果与不传相同 (即字节级与旧版一致)."""
+    tpl = PromptTemplate.load("outline/_default")
+    base_vars = {
+        "type_label": "ADR 架构决策记录",
+        "time_window": "last_week",
+        "fallback_joined": "上下文 / 决策内容 / 备选方案 / 后果 / 状态",
+    }
+    without = tpl.render(base_vars)
+    with_empty = tpl.render({**base_vars, "events_block": ""})
+    assert without.user == with_empty.user
+
+
+def test_outline_default_events_block_injected_when_present() -> None:
+    """events_block 非空时, prompt 包含 '近期真实事件' 段 + 内容."""
+    tpl = PromptTemplate.load("outline/_default")
+    events_md = "[1] john · OAuth 失败\n    用户报 OAuth 403 但 api.anthropic.com 200, 推断 claude.ai 域被卡."
+    rendered = tpl.render({
+        "type_label": "ADR 架构决策记录",
+        "time_window": "last_week",
+        "fallback_joined": "上下文 / 决策内容 / 备选方案 / 后果 / 状态",
+        "events_block": events_md,
+    })
+    assert "近期真实事件" in rendered.user
+    assert "OAuth 失败" in rendered.user
+
+
+def test_content_default_events_block_omitted_when_empty() -> None:
+    """同上, content 模板 events_block='' 字节级等同旧版."""
+    tpl = PromptTemplate.load("content/_default")
+    base_vars = {
+        "type_label": "ADR 架构决策记录",
+        "time_window": "last_week",
+        "title": "决策内容",
+    }
+    without = tpl.render(base_vars)
+    with_empty = tpl.render({**base_vars, "events_block": ""})
+    assert without.user == with_empty.user
+
+
+def test_content_default_events_block_injected_when_present() -> None:
+    """events_block 非空时, content prompt 见到事件 + 提示 LLM 加 [N] 角标."""
+    tpl = PromptTemplate.load("content/_default")
+    events_md = "[1] john · 选 API key\n    OAuth 403, key 直接调 api.anthropic.com 200, 选 API key 路径."
+    rendered = tpl.render({
+        "type_label": "ADR 架构决策记录",
+        "time_window": "last_week",
+        "title": "决策内容",
+        "events_block": events_md,
+    })
+    assert "近期真实事件" in rendered.user
+    assert "选 API key" in rendered.user
+    assert "[N] 角标" in rendered.user
+
+
 # ── assess/_default 字节级回归 ─────────────────────────────────
 
 
