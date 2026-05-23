@@ -220,6 +220,9 @@ _OUTLINE_TEMPLATES: dict[AssetType, list[str]] = {
         "好例子 / 坏例子",
         "相关 skill",
     ],
+    # v1.2 升级 · knowledge_graph 单 Chapter 承载图; outline 实际产 nodes 而非 titles,
+    # 这里 fallback 仅一个 "图谱" 标题占位 (chapter.content 写节点 ID 索引)
+    "knowledge_graph": ["实体关系图谱"],
 }
 
 
@@ -365,9 +368,12 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
     失败回退到 _OUTLINE_TEMPLATES 保证 demo 不挂.
 
     v0.2 · type=book 走两步路径: 先生成 3-5 卷, 再并行生成每卷的章.
+    v1.2 · type=knowledge_graph 走实体抽取路径 (chapter.layout 承载图 JSON).
     """
     if req.type == "book":
         return await _stage_outline_book(asset_id, req)
+    if req.type == "knowledge_graph":
+        return await _stage_outline_knowledge_graph(asset_id, req)
 
     asset = _assets[asset_id]
     type_label = {
@@ -377,6 +383,7 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
         "incident": "问题复盘报告",
         "book": "技术书籍",
         "agent_skill": "Agent 专家技能",
+        "knowledge_graph": "知识图谱",  # 实际不会走到此路径, 但保留 dict 完整
     }[req.type]
     fallback = _OUTLINE_TEMPLATES[req.type]
 
@@ -610,9 +617,12 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
     失败的章节回退到 _placeholder_content 保证 demo 不挂.
 
     titles 优先从 outline 阶段产出读 (LLM 真生成的标题), 没有则 fallback 模板.
+    v1.2 · type=knowledge_graph 走边关系抽取 + 节点 summary 路径.
     """
     if req.type == "book":
         return await _stage_content_book(asset_id, req)
+    if req.type == "knowledge_graph":
+        return await _stage_content_knowledge_graph(asset_id, req)
 
     from app.services import skill_service  # avoid circular import at module load
 
@@ -788,6 +798,333 @@ async def _call_chapter_llm(
             "fallback_used": True,
             "latency_ms": 0,
         }
+
+
+# ─── v1.2 · Knowledge Graph 3 个 stage 分支 (T83) ─────────────
+
+
+_KG_MAX_NODES = 30
+"""outline stage 节点数上限, 超出按 trust_score 截断 (≤30 让 React Flow 流畅)."""
+
+_KG_MAX_EVENTS_FOR_PROMPT = 25
+"""塞进 LLM prompt 的最多 events (按 trust_score 降序; 控制 token)."""
+
+
+async def _stage_outline_knowledge_graph(
+    asset_id: str, req: GenerateAssetRequest
+) -> dict:
+    """v1.2 · knowledge_graph 节点骨架抽取.
+
+    流程:
+    1. 拉 top-N events (复用 collect stage 结果, 不重新查)
+    2. 提取 contributors 列表 (im_user_id + name) 作为锚定 person 节点的依据
+    3. LLM JSON mode → KGOutlineLLMOutput (含 nodes)
+    4. 截断到 _KG_MAX_NODES (按 trust_score)
+    5. 创建一个 fake "图谱" Chapter (order_index=0, content=节点 ID 索引锚点行,
+       layout 暂留 nodes; edges 留 content stage 填)
+    """
+    from app.services.knowledge_graph.assess import dedup_nodes
+    from app.schemas.knowledge_graph import (
+        KGOutlineLLMOutput,
+        KnowledgeGraphLayout,
+    )
+
+    asset = _assets[asset_id]
+    progress = _progress[asset_id]
+    settings = get_settings()
+    router = await get_router()
+
+    # 从 collect stage metadata 取 events; fallback 空
+    collect_idx = _stage_index(progress, "collect")
+    events: list[dict] = (
+        (progress.stages[collect_idx].metadata or {}).get("events") or []
+    )
+
+    # 提 contributors (按 im_user_id 去重)
+    contributors_by_uid: dict[str, dict] = {}
+    for e in events:
+        author = e.get("author") or {}
+        uid = author.get("im_user_id") or author.get("email")
+        if uid and uid not in contributors_by_uid:
+            contributors_by_uid[uid] = {
+                "im_user_id": uid,
+                "name": author.get("name") or uid,
+            }
+
+    contributors_block = "\n".join(
+        f"- im_user_id={c['im_user_id']}, name={c['name']}"
+        for c in contributors_by_uid.values()
+    ) or "(无 contributors, 仅生成 event/concept/artifact 节点)"
+
+    # 截 events 到 _KG_MAX_EVENTS_FOR_PROMPT (假设已按 trust 排序)
+    short_events = events[:_KG_MAX_EVENTS_FOR_PROMPT]
+    events_block = "\n".join(
+        f"- evt_id={e.get('id', '')}, type={e.get('type', '')}, "
+        f"title={(e.get('payload', {}) or {}).get('title') or e.get('source_ref', '')[:80]}, "
+        f"trust={e.get('trust_score', 0.5):.2f}"
+        for e in short_events
+    ) or "(无候选 events)"
+
+    layout = KnowledgeGraphLayout()
+    try:
+        tpl = PromptTemplate.load("outline/knowledge_graph")
+        rendered = tpl.render({
+            "project_id": asset.project_id,
+            "time_window": req.time_window or "近 30 天",
+            "contributors_block": contributors_block,
+            "events_count": len(short_events),
+            "events_block": events_block,
+        })
+        resp = await router.generate(
+            task="knowledge_graph",
+            messages=[
+                LLMMessage(role="system", content=rendered.system),
+                LLMMessage(role="user", content=rendered.user),
+            ],
+            options=LLMOptions(**rendered.options),
+            project_id=asset.project_id,
+        )
+        parsed_dict = json.loads(resp.text)
+        parsed = KGOutlineLLMOutput.model_validate(parsed_dict)
+        nodes = parsed.nodes
+
+        # 截断到 _KG_MAX_NODES (按 trust_score 降序)
+        if len(nodes) > _KG_MAX_NODES:
+            nodes = sorted(
+                nodes, key=lambda n: n.trust_score, reverse=True
+            )[:_KG_MAX_NODES]
+
+        # 部分 dedup 已可做 (assess 阶段会再跑一次完整版)
+        nodes, _, _ = dedup_nodes(nodes, [])
+        layout.nodes = nodes
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "kg_outline_llm_failed", asset_id=asset_id, error=str(e)
+        )
+        layout.parse_error = f"outline_stage: {type(e).__name__}: {e}"
+        # 兜底: 仅创建 contributors 的 person 节点 (零 LLM 兜底也能跑)
+        from app.schemas.knowledge_graph import KGNode
+        layout.nodes = [
+            KGNode(
+                id=f"n_{i}",
+                type="person",
+                label=c["name"],
+                properties={"im_user_id": c["im_user_id"]},
+                trust_score=0.5,
+            )
+            for i, c in enumerate(contributors_by_uid.values())
+        ]
+
+    # 创建 fake "图谱" Chapter, content=节点 ID 索引 (供 EvidenceDrawer 锚点)
+    content_lines: list[str] = ["# 实体关系图谱\n"]
+    for node in layout.nodes:
+        # span_anchor 用当前 char_offset
+        char_offset = sum(len(line) + 1 for line in content_lines)
+        # 在 layout.nodes 中 in-place 更新 span_anchor
+        idx = next(i for i, n in enumerate(layout.nodes) if n.id == node.id)
+        from app.schemas.knowledge_graph import KGSpanAnchor
+        layout.nodes[idx] = node.model_copy(update={
+            "span_anchor": KGSpanAnchor(char_offset=char_offset),
+        })
+        content_lines.append(
+            f"<!-- node:{node.id} type={node.type} -->"
+        )
+        content_lines.append(f"- **{node.label}** [`{node.type}`]")
+        content_lines.append("")
+
+    full_content = "\n".join(content_lines)
+    titles = ["实体关系图谱"]
+    # 返回 outline stage 标准结构, layout 通过 metadata 透传给 content stage
+    return {
+        "titles": titles,
+        "chapter_count": 1,
+        "method": "llm" if layout.parse_error is None else "fallback_contributors_only",
+        "node_count": len(layout.nodes),
+        # 临时存图; content stage 会读出来 + 加 edges
+        "_kg_layout": layout.model_dump(mode="json"),
+        "_kg_content": full_content,
+    }
+
+
+async def _stage_content_knowledge_graph(
+    asset_id: str, req: GenerateAssetRequest
+) -> dict:
+    """v1.2 · knowledge_graph 边关系抽取 + node_summaries.
+
+    流程:
+    1. 从 outline stage metadata 取 layout (nodes) + content
+    2. LLM JSON mode → KGContentLLMOutput (edges + node_summaries)
+    3. 校验 edge.source/target ∈ nodes; 否则丢弃
+    4. merge node_summaries 回 nodes
+    5. 创建单 Chapter (order_index=0, content=节点索引, layout=完整图)
+    """
+    from app.schemas.knowledge_graph import (
+        KGContentLLMOutput,
+        KnowledgeGraphLayout,
+    )
+
+    asset = _assets[asset_id]
+    progress = _progress[asset_id]
+    router = await get_router()
+
+    # 从 outline metadata 取
+    outline_idx = _stage_index(progress, "outline")
+    outline_meta = progress.stages[outline_idx].metadata or {}
+    layout_dict = outline_meta.get("_kg_layout") or {}
+    content_md = outline_meta.get("_kg_content") or "# 实体关系图谱\n"
+    layout = KnowledgeGraphLayout.model_validate(
+        layout_dict
+    ) if layout_dict else KnowledgeGraphLayout()
+
+    # 从 collect 取 events 给 prompt
+    collect_idx = _stage_index(progress, "collect")
+    events: list[dict] = (
+        (progress.stages[collect_idx].metadata or {}).get("events") or []
+    )
+    events_short = events[:_KG_MAX_EVENTS_FOR_PROMPT]
+    events_block = "\n".join(
+        f"- evt_id={e.get('id', '')}: {(e.get('payload', {}) or {}).get('title') or e.get('source_ref', '')[:100]}"
+        for e in events_short
+    ) or "(无 events)"
+
+    nodes_block = "\n".join(
+        f"- {n.id} ({n.type}): {n.label}" for n in layout.nodes
+    ) or "(无 nodes)"
+
+    edges_added = 0
+    if layout.nodes:
+        try:
+            tpl = PromptTemplate.load("content/knowledge_graph")
+            rendered = tpl.render({
+                "project_id": asset.project_id,
+                "nodes_count": len(layout.nodes),
+                "nodes_block": nodes_block,
+                "events_count": len(events_short),
+                "events_block": events_block,
+            })
+            resp = await router.generate(
+                task="knowledge_graph",
+                messages=[
+                    LLMMessage(role="system", content=rendered.system),
+                    LLMMessage(role="user", content=rendered.user),
+                ],
+                options=LLMOptions(**rendered.options),
+                project_id=asset.project_id,
+            )
+            parsed = KGContentLLMOutput.model_validate(json.loads(resp.text))
+
+            # 过滤 edge: source / target 必须 ∈ nodes
+            node_ids = {n.id for n in layout.nodes}
+            valid_edges = [
+                e for e in parsed.edges
+                if e.source in node_ids and e.target in node_ids
+            ]
+            layout.edges = valid_edges
+            edges_added = len(valid_edges)
+
+            # merge node_summaries
+            summary_map = {s.node_id: s.summary for s in parsed.node_summaries}
+            for i, n in enumerate(layout.nodes):
+                if n.id in summary_map:
+                    layout.nodes[i] = n.model_copy(
+                        update={"summary": summary_map[n.id]}
+                    )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "kg_content_llm_failed", asset_id=asset_id, error=str(e)
+            )
+            layout.parse_error = (layout.parse_error or "") + (
+                f" | content_stage: {type(e).__name__}: {e}"
+            )
+
+    # 创建 Chapter (单一, order_index=0, content + layout)
+    chapter_id = f"ch-{asset_id}-kg"
+    now_iso = _now()
+    chapter = Chapter(
+        id=chapter_id,
+        asset_id=asset_id,
+        order_index=0,
+        title="实体关系图谱",
+        content=content_md,
+        layout=layout.model_dump(mode="json"),
+        approval_state="pending",
+    )
+    _chapters[asset_id] = [chapter]
+    return {
+        "chapters_created": 1,
+        "edges_added": edges_added,
+        "node_count": len(layout.nodes),
+        "method": "llm" if layout.parse_error is None else "fallback",
+    }
+
+
+async def _stage_assess_knowledge_graph(
+    asset_id: str, req: GenerateAssetRequest
+) -> dict:
+    """v1.2 · knowledge_graph 专属 assess:
+    dedup + bidirect_contradicts + isolated 告警 + AssetMetrics 计算.
+    """
+    from app.schemas.knowledge_graph import KnowledgeGraphLayout
+    from app.services.knowledge_graph.assess import (
+        bidirect_contradicts,
+        compute_assess_metrics,
+        dedup_nodes,
+        find_isolated_nodes,
+    )
+
+    asset = _assets[asset_id]
+    chapters = _chapters.get(asset_id, [])
+    if not chapters:
+        logger.warning("kg_assess_no_chapters", asset_id=asset_id)
+        return {"error": "no_chapters"}
+
+    chapter = chapters[0]
+    layout = KnowledgeGraphLayout.model_validate(chapter.layout or {})
+
+    # 1. dedup (assess 全量 dedup, 即便 outline 已 dedup 过, 这里多一道防线)
+    new_nodes, new_edges, merged_count = dedup_nodes(
+        layout.nodes, layout.edges
+    )
+    # 2. bidirect contradicts
+    new_edges = bidirect_contradicts(new_edges)
+    # 3. isolated
+    isolated_ids = find_isolated_nodes(new_nodes, new_edges)
+    # 4. metrics
+    raw_metrics = compute_assess_metrics(
+        new_nodes, new_edges, isolated_ids, merged_count
+    )
+
+    # 写回 layout
+    layout.nodes = new_nodes
+    layout.edges = new_edges
+    chapter.layout = layout.model_dump(mode="json")
+
+    # AssetMetrics
+    asset.metrics = AssetMetrics(
+        coverage=raw_metrics["coverage"],
+        citation_density=raw_metrics["citation_density"],
+        slop_score=raw_metrics["slop_score"],
+        similarity=raw_metrics["similarity"],
+        consistency_score=raw_metrics["consistency_score"],
+    )
+    asset.updated_at = _now()
+    _persist_asset(asset_id)
+
+    logger.info(
+        "kg_assess_done",
+        asset_id=asset_id,
+        nodes=len(new_nodes),
+        edges=len(new_edges),
+        merged=merged_count,
+        isolated=len(isolated_ids),
+    )
+    return {
+        "node_count": len(new_nodes),
+        "edge_count": len(new_edges),
+        "merged_count": merged_count,
+        "isolated_count": len(isolated_ids),
+        "metrics": raw_metrics,
+    }
 
 
 # ─── v0.2 · Book sequential content + rolling summary ────────────
@@ -1502,7 +1839,13 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
       - LLM 评 slop 失败 → 启发式 (短句比例 + 模板词频)
       - embedding 失败 (evidence stage 没记录 cosine) → 用 trust_score 均值代替
       - similarity embedding 失败 → 0.0 + method="embedding_unavailable"
+
+    v1.2 · type=knowledge_graph 走专属 assess (dedup + 双向化 + 图指标),
+    不复用 markdown-based 的 4 指标计算.
     """
+    if req.type == "knowledge_graph":
+        return await _stage_assess_knowledge_graph(asset_id, req)
+
     asset = _assets[asset_id]
     chapters = _chapters.get(asset_id, [])
     progress = _progress[asset_id]
