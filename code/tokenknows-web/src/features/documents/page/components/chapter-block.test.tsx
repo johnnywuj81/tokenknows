@@ -48,7 +48,7 @@ describe('ChapterBlock', () => {
 
   it('renders generated_by provider/model when present', () => {
     render(withQuery(<ChapterBlock chapter={mkChapter({
-      generated_by: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929' },
+      generated_by: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
     })} />))
     expect(screen.getByText(/anthropic · claude/)).toBeInTheDocument()
   })

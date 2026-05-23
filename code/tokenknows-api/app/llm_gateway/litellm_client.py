@@ -26,7 +26,7 @@ litellm.set_verbose = False
 
 # ─── provider → LiteLLM 调用规则 ─────────────────────────────────
 #
-# Anthropic: 模型名直接 "claude-sonnet-4-5-20250929" (无前缀)
+# Anthropic: 模型名直接 "claude-sonnet-4-6" (无前缀)
 # OpenAI:    "gpt-4o" (无前缀, LiteLLM 默认)
 # MiniMax:   走 openai-compatible (api.minimaxi.com/v1)
 #            LiteLLM 模型名: "openai/abab6.5s-chat" + api_base
@@ -50,7 +50,7 @@ def _build_litellm_kwargs(
         base_kwargs["stream"] = True
 
     if provider == "anthropic":
-        base_kwargs["model"] = model  # e.g. claude-sonnet-4-5-20250929
+        base_kwargs["model"] = model  # e.g. claude-sonnet-4-6
         base_kwargs["api_key"] = settings.anthropic_api_key
 
     elif provider == "openai":

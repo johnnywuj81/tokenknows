@@ -230,7 +230,7 @@ category: writing
 1. 一句话讲清做了什么
 2. 写出 PR number + author""",
         "provider": "anthropic",
-        "model_used": "claude-sonnet-4-5",
+        "model_used": "claude-sonnet-4-6",
         "usage": {},
         "fallback_used": False,
     })()

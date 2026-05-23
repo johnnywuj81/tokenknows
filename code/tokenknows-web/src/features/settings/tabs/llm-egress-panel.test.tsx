@@ -54,7 +54,7 @@ describe('LlmEgressPanel', () => {
     const mockPreview = {
       will_send: true,
       provider: 'anthropic',
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       estimated_input_tokens: 1000,
       estimated_output_tokens: 500,
       egress_check: { instance: true, project: true, task: true, all_pass: true },

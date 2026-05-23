@@ -72,30 +72,30 @@ class Settings(BaseSettings):
         default="anthropic", alias="TASK_WEEKLY_REPORT_PROVIDER"
     )
     task_weekly_report_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_WEEKLY_REPORT_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_WEEKLY_REPORT_MODEL"
     )
 
     task_tech_design_provider: str = Field(
         default="anthropic", alias="TASK_TECH_DESIGN_PROVIDER"
     )
     task_tech_design_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_TECH_DESIGN_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_TECH_DESIGN_MODEL"
     )
 
     task_adr_provider: str = Field(default="anthropic", alias="TASK_ADR_PROVIDER")
     task_adr_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_ADR_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_ADR_MODEL"
     )
 
     task_incident_provider: str = Field(default="anthropic", alias="TASK_INCIDENT_PROVIDER")
     task_incident_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_INCIDENT_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_INCIDENT_MODEL"
     )
 
     # v0.2 · book 长文档生成 (上下文长 → 用 Sonnet 高级模型)
     task_book_provider: str = Field(default="anthropic", alias="TASK_BOOK_PROVIDER")
     task_book_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_BOOK_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_BOOK_MODEL"
     )
 
     # v0.2 · agent_skill 蒸馏 (输出短 + 高结构, 用 Sonnet 保质量)
@@ -103,7 +103,7 @@ class Settings(BaseSettings):
         default="anthropic", alias="TASK_AGENT_SKILL_PROVIDER"
     )
     task_agent_skill_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_AGENT_SKILL_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_AGENT_SKILL_MODEL"
     )
 
     # v1.2 · knowledge_graph (实体关系抽取, 严格 JSON 输出; 用 Sonnet 保结构准确)
@@ -111,7 +111,7 @@ class Settings(BaseSettings):
         default="anthropic", alias="TASK_KNOWLEDGE_GRAPH_PROVIDER"
     )
     task_knowledge_graph_model: str = Field(
-        default="claude-sonnet-4-5-20250929", alias="TASK_KNOWLEDGE_GRAPH_MODEL"
+        default="claude-sonnet-4-6", alias="TASK_KNOWLEDGE_GRAPH_MODEL"
     )
 
     task_redaction_llm_provider: str = Field(

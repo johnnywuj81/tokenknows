@@ -34,7 +34,7 @@ OpenAPI docs: <http://localhost:8000/docs>
 
 | Provider | 用途 | 默认模型 | 价格 (in/out per 1M tokens) |
 |---|---|---|---|
-| Anthropic | 主力文档生成 (T06/T08) | claude-sonnet-4-5 | $3 / $15 |
+| Anthropic | 主力文档生成 (T06/T08) | claude-sonnet-4-6 | $3 / $15 |
 | OpenAI | 备用 + Embedding | gpt-4o / text-embedding-3-small | $2.5 / $10 + $0.02 |
 | MiniMax | 价值识别 + 脱敏 LLM 层 (轻量) | abab6.5s-chat | ~¥0.01 |
 

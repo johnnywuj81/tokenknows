@@ -92,7 +92,7 @@ export function LlmEgressPanel({ projectId }: LlmEgressPanelProps) {
       <section className="rounded-md border border-border-subtle bg-bg-card p-4 space-y-3">
         <h3 className="font-content text-h3 text-text-primary">允许的 provider / 模型</h3>
         <ul className="space-y-1.5">
-          <ProviderRow name="anthropic" models={['claude-sonnet-4-5-20250929', 'claude-haiku-4-5']} status="reachable_no_vpn" />
+          <ProviderRow name="anthropic" models={['claude-sonnet-4-6', 'claude-haiku-4-5']} status="reachable_no_vpn" />
           <ProviderRow name="openai" models={['gpt-4o', 'gpt-4o-mini']} status="reachable_no_vpn" />
           <ProviderRow name="minimax" models={['abab6.5s-chat']} status="key_invalid" />
           <ProviderRow name="ollama" models={['minimax-m2:cloud', 'gpt-oss:20b']} status="active" />

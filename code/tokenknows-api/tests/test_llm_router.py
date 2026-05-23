@@ -97,7 +97,7 @@ def test_resolve_provider_override_wins() -> None:
 
 def test_infer_provider_from_model_claude() -> None:
     from app.llm_gateway.router import _infer_provider_from_model
-    assert _infer_provider_from_model("claude-sonnet-4-5-20250929") == "anthropic"
+    assert _infer_provider_from_model("claude-sonnet-4-6") == "anthropic"
     assert _infer_provider_from_model("claude-haiku-4-5") == "anthropic"
 
 

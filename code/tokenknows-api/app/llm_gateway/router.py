@@ -43,7 +43,7 @@ FALLBACK_CHAIN: dict[str, list[tuple[str, str]]] = {
         ("ollama", "minimax-m2:cloud"),
     ],
     "openai": [
-        ("anthropic", "claude-sonnet-4-5-20250929"),
+        ("anthropic", "claude-sonnet-4-6"),
         ("minimax", "abab6.5s-chat"),
         ("ollama", "minimax-m2:cloud"),
     ],

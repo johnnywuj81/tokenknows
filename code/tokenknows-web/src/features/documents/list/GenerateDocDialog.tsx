@@ -84,7 +84,7 @@ const WINDOWS = [
 // T106 · 每个 model 显式标 provider, 避免 anthropic+gpt-4o 错配
 const MODELS: { value: string; label: string; provider?: string }[] = [
   { value: 'auto', label: '自动选择(推荐)' },
-  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 · 云端', provider: 'anthropic' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 · 云端', provider: 'anthropic' },
   { value: 'gpt-4o', label: 'GPT-4o · 云端', provider: 'openai' },
   { value: 'abab6.5s-chat', label: 'MiniMax abab6.5s · 云端', provider: 'minimax' },
   { value: 'qwen2.5:3b', label: 'Qwen2.5 3B · Ollama 本地', provider: 'ollama' },

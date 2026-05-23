@@ -76,3 +76,5 @@ actions-runner/
 
 # Repo-root data dir (demo seed scripts)
 /data/
+
+code/tokenknows-web/data/

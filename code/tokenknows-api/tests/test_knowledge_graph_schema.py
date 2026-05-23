@@ -237,7 +237,7 @@ def test_settings_task_provider_knowledge_graph():
     s = get_settings()
     p = s.task_provider("knowledge_graph")
     m = s.task_model("knowledge_graph")
-    # 默认 anthropic / claude-sonnet-4-5; 用户可 env override
+    # 默认 anthropic / claude-sonnet-4-6; 用户可 env override
     assert isinstance(p, str) and len(p) > 0
     assert isinstance(m, str) and len(m) > 0
 
