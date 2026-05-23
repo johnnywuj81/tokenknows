@@ -518,6 +518,21 @@ export interface ConsentRecord {
   note: string | null
 }
 
+/** v0.6.0 · Reviewer 审批阶段 (T56) */
+export type ReviewState =
+  | 'not_submitted'
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+
+/** v0.6.0 · 单条审批记录 */
+export interface ReviewRecord {
+  reviewer_id: string
+  action: 'submit' | 'approve' | 'reject'
+  timestamp: string
+  note: string | null
+}
+
 export interface SkillMetrics {
   /** 被注入到 prompt 的累计次数 */
   usage_count: number
@@ -560,8 +575,38 @@ export interface Skill {
   consent_signed_by: ConsentRecord[]
   consent_rejected_by: ConsentRecord | null
   consent_expires_at: string | null
+  // v0.6.0 · Reviewer 审批 (T56)
+  review_state: ReviewState
+  review_history: ReviewRecord[]
+  last_reviewer_id: string | null
+  last_reviewed_at: string | null
   created_at: string
   updated_at: string
+}
+
+// v0.6.0 · Review endpoints (T57)
+export interface SkillSubmitForReviewRequest {
+  user_id: string
+  note?: string
+}
+
+export interface SkillReviewApproveRequest {
+  reviewer_id: string
+  note?: string
+}
+
+export interface SkillReviewRejectRequest {
+  reviewer_id: string
+  reason: string
+}
+
+export interface SkillReviewActionResponse {
+  skill_id: string
+  status: SkillStatus
+  review_state: ReviewState
+  last_action: 'submit' | 'approve' | 'reject'
+  last_reviewer_id: string | null
+  last_reviewed_at: string | null
 }
 
 // v0.5.1 · Consent endpoints (T50)
@@ -596,6 +641,10 @@ export type NotificationType =
   | 'consent_signed'
   | 'consent_rejected'
   | 'consent_expired'
+  // v0.6.0 review
+  | 'skill_review_request'
+  | 'skill_review_approved'
+  | 'skill_review_rejected'
 
 export interface WebNotification {
   id: string

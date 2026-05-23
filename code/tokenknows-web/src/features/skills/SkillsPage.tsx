@@ -22,6 +22,7 @@ import { Card } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Skill, SkillStatus } from '@/types/api'
 import { ConsentPending } from './components/ConsentPending'
+import { ReviewActions } from './components/ReviewActions'
 import {
   useDeleteSkill,
   useEvolveSkill,
@@ -177,6 +178,9 @@ function SkillDetail({
     <Card className="flex flex-col gap-4 p-5">
       {/* v0.5.1 T51 · pending_contributor_consent 时显示 banner */}
       <ConsentPending skill={skill} />
+
+      {/* v0.6.0 T58 · Reviewer 审批操作区 */}
+      <ReviewActions skill={skill} />
 
       <div className="flex items-start justify-between gap-4">
         <div>

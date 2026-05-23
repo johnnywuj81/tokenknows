@@ -20,7 +20,11 @@ import type {
   ConsentSignResponse,
   Skill,
   SkillDistillRequest,
+  SkillReviewActionResponse,
+  SkillReviewApproveRequest,
+  SkillReviewRejectRequest,
   SkillStatus,
+  SkillSubmitForReviewRequest,
   SkillUpdateRequest,
 } from '@/types/api'
 
@@ -169,6 +173,85 @@ export function useRejectConsent(projectId: string) {
     }: { skillId: string; body: ConsentRejectRequest }) => {
       const res = await api.post<ConsentRejectResponse>(
         `/skills/${skillId}/consent/reject`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
+      qc.invalidateQueries({ queryKey: skillKey.detail(data.skill_id) })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+// ─── v0.6.0 · Reviewer 审批流 (T57) ────────────────────────────
+
+
+export function usePendingReviewSkills(projectId: string) {
+  return useQuery({
+    queryKey: ['skills', projectId, 'pending-review'] as const,
+    queryFn: async (): Promise<Skill[]> => {
+      const res = await api.get<Skill[]>(
+        `/projects/${projectId}/skills/pending-review`,
+      )
+      return res.data
+    },
+    enabled: Boolean(projectId),
+  })
+}
+
+export function useSubmitSkillForReview(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      skillId,
+      body,
+    }: { skillId: string; body: SkillSubmitForReviewRequest }) => {
+      const res = await api.post<SkillReviewActionResponse>(
+        `/skills/${skillId}/submit-for-review`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
+      qc.invalidateQueries({ queryKey: skillKey.detail(data.skill_id) })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+export function useApproveSkillReview(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      skillId,
+      body,
+    }: { skillId: string; body: SkillReviewApproveRequest }) => {
+      const res = await api.post<SkillReviewActionResponse>(
+        `/skills/${skillId}/review/approve`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
+      qc.invalidateQueries({ queryKey: skillKey.detail(data.skill_id) })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+export function useRejectSkillReview(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      skillId,
+      body,
+    }: { skillId: string; body: SkillReviewRejectRequest }) => {
+      const res = await api.post<SkillReviewActionResponse>(
+        `/skills/${skillId}/review/reject`,
         body,
       )
       return res.data

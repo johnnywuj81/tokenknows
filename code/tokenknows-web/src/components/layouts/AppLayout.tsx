@@ -9,7 +9,7 @@
  */
 
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield } from 'lucide-react'
+import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -27,6 +27,7 @@ export function AppLayout() {
         { to: `/projects/${currentProjectId}`, icon: LayoutDashboard, label: '工作台' },
         { to: `/projects/${currentProjectId}/documents`, icon: FileText, label: '文档' },
         { to: `/projects/${currentProjectId}/skills`, icon: Sparkles, label: 'Skills' },
+        { to: `/projects/${currentProjectId}/skills/review-inbox`, icon: Inbox, label: '审批收件箱' },
         { to: `/projects/${currentProjectId}/datasources`, icon: Plug, label: 'IM 接入' },
         { to: `/projects/${currentProjectId}/settings`, icon: Settings, label: '项目设置' },
       ]
