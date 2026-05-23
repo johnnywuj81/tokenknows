@@ -314,7 +314,29 @@ def process_event_payload(
         is_signal=classify_message(normalized).is_signal,
         new=inserted,
     )
-    return {"ok": True, "stored": inserted}
+
+    # v0.5.0 T46 · @ 机器人按需触发钩子 (与 SignalGate 并列, 不阻塞主路径)
+    mention_result: dict | None = None
+    try:
+        from app.config.settings import get_settings
+        from app.services.auto_trigger.mention_dispatcher import (
+            dispatch_mention, normalize_im_mention,
+        )
+
+        bot_open_id = get_settings().feishu_bot_open_id
+        mention_event = normalize_im_mention(normalized, bot_open_id)
+        if mention_event is not None:
+            result = dispatch_mention(mention_event, conn.id)
+            mention_result = result.to_log_dict()
+            # T47 在此处会发 thread 回执; v0.5.0 T46 阶段仅返回信息给 webhook caller
+    except Exception as e:
+        logger.error("feishu_mention_hook_failed", error=str(e), exc_info=True)
+        # 不阻塞 webhook 200 响应
+
+    response: dict[str, Any] = {"ok": True, "stored": inserted}
+    if mention_result is not None:
+        response["mention"] = mention_result
+    return response
 
 
 def handle_webhook(

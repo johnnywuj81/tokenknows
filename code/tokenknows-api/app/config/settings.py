@@ -152,6 +152,19 @@ class Settings(BaseSettings):
         alias="FEISHU_API_BASE",
     )
 
+    # ─── v0.5.0 · @ 机器人按需触发 (T46) ─────────────────────────
+    # bot 在飞书的 open_id (用于 normalize_im_mention 判断 "@bot");
+    # 启动时由 OAuth/启动脚本写入; 未配置时 mention dispatcher 静默跳过 (fail-soft).
+    feishu_bot_open_id: str | None = Field(
+        default=None, alias="FEISHU_BOT_OPEN_ID",
+    )
+    dingtalk_bot_userid: str | None = Field(
+        default=None, alias="DINGTALK_BOT_USERID",
+    )
+    wework_bot_userid: str | None = Field(
+        default=None, alias="WEWORK_BOT_USERID",
+    )
+
     # ─── 服务运行 ────────────────────────────────────────────────
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")

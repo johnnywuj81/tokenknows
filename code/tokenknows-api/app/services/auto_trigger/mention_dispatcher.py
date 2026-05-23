@@ -1,13 +1,14 @@
 """@ 机器人按需触发 · v0.5.0 (T45-T47).
 
 本文件 v0.5.0 分 3 个 task 渐进填充:
-- T45 (本提交): 命令解析 + 限频 + Schema helper (纯函数, 无 IO)
-- T46: IM webhook 接入 + dispatch_mention 主流程
+- T45 (已合): 命令解析 + 限频 + Schema helper (纯函数, 无 IO)
+- T46 (本提交): IM webhook 接入 + dispatch_mention 主流程 + project resolution
 - T47: 群内 thread 回执
 
 设计依据:
 - Proposal_OnDemand_and_ContributorConsent_v0.5.md §2.1-2.3 (OD-1/OD-3/OD-4)
 - engineering_handoff/tasks/T45-mention-command-parser.md
+- engineering_handoff/tasks/T46-mention-dispatcher.md
 """
 
 from __future__ import annotations
@@ -257,12 +258,271 @@ def reset_rate_limit_state() -> None:
         _group_recent_fires.clear()
 
 
+# ─── T46 · GroupMentionEvent 归一化 + dispatch ─────────────
+
+
+_MAX_COMMAND_LEN = 200
+"""命令文本上限 (来自 review LOW); /skill yesterday 16 字符, 200 是安全余量."""
+
+
+_VIRTUAL_RULE_LOCK = threading.Lock()
+
+
+def _ensure_virtual_mention_rule(subcommand: Subcommand):
+    """幂等 upsert mention virtual rule (实例级). 让 trigger_executions.FK 有合法引用.
+
+    3 个 subcommand 对应 3 条实例级规则; UI 列表会显示为 "@ 机器人按需 · /xxx".
+    重复调用走 ON CONFLICT(id) UPDATE 路径, 不会重复插入.
+
+    返回 TriggerRule Pydantic 对象, 供 schedule_execution 使用.
+    """
+    from app.persistence import get_db
+    from app.schemas.auto_trigger import TriggerRule
+
+    rule_id = f"rule-virtual-mention-{subcommand}"
+    now = datetime.now(timezone.utc)
+    rule = TriggerRule(
+        id=rule_id,
+        project_id=None,  # 实例级 (跨项目)
+        name=f"@ 机器人按需 · /{subcommand}",
+        description="T46 v0.5.0 · 用户 @ 机器人触发, 不由调度器主动评估",
+        mode="mention",
+        asset_type=SUBCOMMAND_TO_ASSET_TYPE[subcommand],
+        enabled=True,
+        priority=10,
+        cooldown_seconds=60,  # mention 路径不查 cooldown; schema 最小值 60
+        daily_cap=100,
+        created_by="system",
+        created_at=now,
+        updated_at=now,
+    )
+    with _VIRTUAL_RULE_LOCK:
+        get_db().upsert_trigger_rule(
+            rule_id=rule.id,
+            project_id=rule.project_id,
+            name=rule.name,
+            mode=rule.mode,
+            asset_type=rule.asset_type,
+            enabled=rule.enabled,
+            priority=rule.priority,
+            updated_at=now.isoformat(),
+            json_str=rule.model_dump_json(),
+        )
+    return rule
+
+
+@dataclass(frozen=True)
+class GroupMentionEvent:
+    """从 IM 群消息事件归一化的 mention. 跨 3 家 IM 统一 (复用 v0.3 IMNormalizedMessage.mentions)."""
+    platform: str             # 'feishu' / 'dingtalk' / 'wework'
+    chat_id: str              # platform_chat_id
+    user_id: str              # 触发者 user_id (open_id / userid)
+    message_id: str           # platform_msg_id (审计 + 回执 thread parent)
+    command_text: str         # 已剥离 @ 部分的 plain command (e.g. "/digest 2h")
+    raw_mentions: tuple[str, ...] = ()
+    """调试: 全部被 @ 的 user_id (含 bot 自己 + 其他被 @ 的人)."""
+
+
+class DispatchResult:
+    """dispatch_mention 结果. 由 webhook handler 转成群内回执."""
+
+    def __init__(
+        self,
+        *,
+        ok: bool,
+        execution_id: str | None = None,
+        error: str | None = None,
+        reason: str | None = None,
+        hint: str | None = None,
+    ) -> None:
+        self.ok = ok
+        self.execution_id = execution_id
+        self.error = error
+        self.reason = reason
+        self.hint = hint
+
+    def to_log_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok, "execution_id": self.execution_id,
+            "error": self.error, "reason": self.reason,
+        }
+
+
+def _strip_at_prefix(text: str) -> str:
+    """剥离 IM 平台的 @ 提及前缀, 留下 plain command.
+
+    飞书 content 通常已经是 plain text (含 "@_user_1 /digest 2h" 占位符);
+    钉钉 content 是 "@TokenKnows /digest 2h" 直接含 bot 名;
+    企微类似. 统一去掉首部任意 `@xxx` 段直到第一个 `/`.
+
+    若文本不含 /, 返回 strip 后整体 (parse_command 后续报错).
+    """
+    if not text:
+        return ""
+    # 截到第一个 / (subcommand 前缀)
+    idx = text.find("/")
+    if idx < 0:
+        return text.strip()
+    return text[idx:].strip()
+
+
+def normalize_im_mention(
+    msg: Any,  # IMNormalizedMessage (避免循环 import 用 Any)
+    bot_user_id: str | None,
+) -> GroupMentionEvent | None:
+    """从 IMNormalizedMessage 提取 mention 命令.
+
+    返回 None 表示不是 mention 触发 (msg 不含 bot mention / bot_user_id 未配置).
+
+    Args:
+        msg: v0.3 已归一化的消息 (有 mentions list[str])
+        bot_user_id: 当前平台 bot 的 user_id (settings.feishu_bot_open_id 等)
+                     None / 空串 → 静默跳过 (fail-soft, 防 env 未配置时崩溃)
+    """
+    if not bot_user_id:
+        return None
+    if not getattr(msg, "mentions", None):
+        return None
+    if bot_user_id not in msg.mentions:
+        return None
+    # 抽 sender
+    sender = getattr(msg, "sender", None)
+    if sender is None or not getattr(sender, "user_id", None):
+        return None  # 无 sender 不能限频 + 审计
+
+    content = getattr(msg, "content", "") or ""
+    if len(content) > _MAX_COMMAND_LEN:
+        # 命令过长直接拒, 后续 parse 也会拒
+        content = content[:_MAX_COMMAND_LEN]
+
+    command_text = _strip_at_prefix(content)
+
+    return GroupMentionEvent(
+        platform=getattr(msg, "platform", "unknown"),
+        chat_id=msg.platform_chat_id,
+        user_id=sender.user_id,
+        message_id=msg.platform_msg_id,
+        command_text=command_text,
+        raw_mentions=tuple(msg.mentions),
+    )
+
+
+def resolve_project_for_chat(connection_id: str) -> str | None:
+    """im_connection 反查 project_id (v0.3 schema 保证 NOT NULL).
+
+    传入 connection.id (由 webhook handler 已 resolve);
+    返回该 connection 绑定的 project_id, 不存在返 None.
+    """
+    # 延迟 import 避免循环
+    from app.persistence import get_db
+
+    raw = get_db().get_im_connection(connection_id)
+    if raw is None:
+        return None
+    return raw.get("project_id")
+
+
+def dispatch_mention(
+    event: GroupMentionEvent,
+    connection_id: str,
+) -> DispatchResult:
+    """主流程: parse → rate_limit → schedule_execution.
+
+    1. 解析命令 (ParseError → 返回 hint 帮助文本)
+    2. 限频检查 (RateLimitResult 拒绝 → 返回 reason)
+    3. resolve project_id (未绑定 → 错误)
+    4. 构造 TriggerSignal + 调 svc.schedule_execution (withdraw_window_min=0 立即 fire)
+
+    返回 DispatchResult 供 webhook handler 转群内回执.
+    不抛异常给 caller (webhook 必须 200, 错误转回执即可).
+    """
+    from app.config.logging import logger
+
+    # 1. parse
+    try:
+        parsed = parse_command(event.command_text)
+    except ParseError as e:
+        logger.info(
+            "mention_parse_error",
+            chat=event.chat_id, user=event.user_id, error=str(e),
+            raw=event.command_text[:200],
+        )
+        return DispatchResult(
+            ok=False, error="parse_error", reason=str(e),
+            hint="命令格式: @TokenKnows /<distill|digest|skill> <30m|2h|today|yesterday|7d>",
+        )
+
+    # 2. rate limit
+    rl = check_rate_limit(event.chat_id, event.user_id)
+    if not rl.allowed:
+        logger.warning(
+            "mention_rate_limited",
+            chat=event.chat_id, user=event.user_id, reason=rl.reason,
+        )
+        return DispatchResult(
+            ok=False, error="rate_limited", reason=rl.reason,
+            hint="过段时间再试 (单用户 5min 1 次 / 同群 1h 6 次)",
+        )
+
+    # 3. resolve project
+    project_id = resolve_project_for_chat(connection_id)
+    if project_id is None:
+        logger.warning("mention_no_project", connection_id=connection_id)
+        return DispatchResult(
+            ok=False, error="no_project",
+            reason="本群未绑定 TokenKnows 项目",
+            hint="请联系管理员在 TokenKnows 项目设置中绑定本 IM 连接",
+        )
+
+    # 4. 构造 signal + schedule
+    signal = build_signal_from_mention(
+        parsed, event.chat_id, event.user_id, event.message_id,
+    )
+
+    # 复用 v0.4 dispatcher 完整管线; mention 用 "virtual rule" 概念:
+    # - 实例级 (project_id=None), 3 个固定 id (一个 subcommand 一个)
+    # - 幂等 upsert (DB 主键冲突自动 update_at 刷新)
+    # - 让 trigger_executions 的 FK 有合法引用 + 审计能在 UI 看到 "mention 规则"
+    virtual_rule = _ensure_virtual_mention_rule(parsed.subcommand)
+    from app.services import auto_trigger_service as svc
+
+    try:
+        execution = svc.schedule_execution(
+            virtual_rule, project_id, signal,
+            withdraw_window_min=0,  # 立即 fire (用户主动触发, 撤回无意义; OD-5)
+        )
+    except Exception as e:
+        from app.config.logging import logger
+        logger.error(
+            "mention_schedule_failed",
+            chat=event.chat_id, user=event.user_id, error=str(e),
+        )
+        return DispatchResult(
+            ok=False, error="schedule_failed", reason=str(e),
+            hint="系统错误, 请稍后再试",
+        )
+
+    from app.config.logging import logger
+    logger.info(
+        "mention_dispatched",
+        chat=event.chat_id, user=event.user_id,
+        subcommand=parsed.subcommand, window=parsed.window,
+        project_id=project_id, execution_id=execution.id,
+    )
+    return DispatchResult(
+        ok=True, execution_id=execution.id,
+        reason=f"scheduled · {parsed.subcommand}/{parsed.window}",
+    )
+
+
 __all__ = [
     "Subcommand",
     "WindowPreset",
     "ParsedMention",
     "ParseError",
     "RateLimitResult",
+    "GroupMentionEvent",
+    "DispatchResult",
     "VALID_SUBCOMMANDS",
     "VALID_WINDOWS",
     "SUBCOMMAND_TO_ASSET_TYPE",
@@ -270,6 +530,9 @@ __all__ = [
     "window_to_timedelta",
     "build_signal_from_mention",
     "check_rate_limit",
+    "normalize_im_mention",
+    "resolve_project_for_chat",
+    "dispatch_mention",
     # 不导出 reset_rate_limit_state / _evict_empty_group_deques (内部 + test-only,
     # 但测试可显式 import; 避免 from module import * 暴露状态修改钩子)
 ]
