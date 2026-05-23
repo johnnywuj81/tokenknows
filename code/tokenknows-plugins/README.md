@@ -54,7 +54,7 @@ cd code/tokenknows-api
 ```bash
 export TOKENKNOWS_API_ROOT="$HOME/TokenKnows/code/tokenknows-api"  # 绝对路径
 export TOKENKNOWS_API_BASE="http://127.0.0.1:8001"
-export TOKENKNOWS_DEFAULT_PROJECT="demo-project"
+export TOKENKNOWS_DEFAULT_PROJECT="proj-demo-001"
 export TOKENKNOWS_API_TOKEN=""  # 公网部署后填 JWT
 ```
 

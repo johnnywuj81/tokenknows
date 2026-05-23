@@ -12,9 +12,9 @@ function isoOffset(daysFromNow: number, hour = 18): string {
 }
 
 // v1.8 修: asset_id 指向真存在的 demo asset, title 与 asset.title 匹配
-// 真 backend asset:
-//   demo-kg-001 → '2026 Q2 Gateway 故障复盘 (Demo · demo-project)' [knowledge_graph]
-//   demo-wr-001 → '2026 Q2 W21 周报 (Demo · demo-project)' [weekly_report]
+// 真 backend asset (T127 后统一 proj-demo-001):
+//   demo-kg-001 → '2026 Q2 Gateway 故障复盘 (Demo · proj-demo-001)' [knowledge_graph]
+//   demo-wr-001 → '2026 Q2 W21 周报 (Demo · proj-demo-001)' [weekly_report]
 export const fixtureTodos: TodoItem[] = [
   {
     id: 'todo-001',

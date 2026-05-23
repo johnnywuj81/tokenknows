@@ -11,7 +11,7 @@
     .venv/bin/python scripts/demo_knowledge_graph.py
 
 跑完后浏览器:
-    http://localhost:5173/projects/demo-project/documents/demo-kg-001
+    http://localhost:5173/projects/proj-demo-001/documents/demo-kg-001
 """
 
 from __future__ import annotations
@@ -32,9 +32,9 @@ from app.services.knowledge_graph.thumbnail import render_kg_svg
 from app.services.knowledge_graph.thumbnail_png import render_kg_png_b64
 
 
-# 单 project seed: asset id 全局唯一, 前端任意 project 都能 GET 到
-# (frontend MSW 默认 proj-demo-001 + 真 backend 抓 demo-kg-001 → 跨 project URL 仍工作)
-PROJECT_IDS = ["demo-project"]
+# 单 project seed · T127 合并后统一到 proj-demo-001
+# (web demo 项目, 前端 MSW + 真 backend 都用同一 id)
+PROJECT_IDS = ["proj-demo-001"]
 ASSET_ID = "demo-kg-001"
 CHAPTER_ID = "ch-demo-kg-001"
 
@@ -316,9 +316,8 @@ def main() -> None:
     generation_service._chapters.clear()
     entity_registry.clear_for_test()
 
-    # 2. Seed 到所有 demo project
-    #    - demo-project: 语义清晰的 ID, 路由直接访问
-    #    - proj-demo-001: MSW mock 默认 project, 前端 TodoList/工作台用
+    # 2. Seed 到 demo project (T127 合并后只剩 proj-demo-001)
+    #    proj-demo-001 是 web demo + MSW mock + MCP 默认项目, 单一来源
     seeded: list[tuple[str, str, str]] = []
     for i, pid in enumerate(PROJECT_IDS):
         # 第一个 project 用原 id (demo-kg-001), 后续加后缀避冲突

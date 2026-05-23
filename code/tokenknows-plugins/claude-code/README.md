@@ -51,7 +51,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 export TOKENKNOWS_API_ROOT="/path/to/tokenknows/code/tokenknows-api"   # tokenknows-api 仓绝对路径 (PYTHONPATH 用)
 export TOKENKNOWS_API_BASE="http://127.0.0.1:8001"                     # backend URL
-export TOKENKNOWS_DEFAULT_PROJECT="demo-project"                       # 默认 project_id
+export TOKENKNOWS_DEFAULT_PROJECT="proj-demo-001"                      # 默认 project_id (与 web demo 项目一致)
 export TOKENKNOWS_API_TOKEN=""                                         # JWT bearer (本地默认空)
 
 # 用 --plugin-dir 加载本 plugin
@@ -98,14 +98,14 @@ Claude 自动调用 distill skill, 走 ADR 流程
 |---|---|---|
 | `TOKENKNOWS_API_BASE` | `http://127.0.0.1:8001` | backend URL |
 | `TOKENKNOWS_API_ROOT` | (无) | tokenknows-api 仓的绝对路径 (PYTHONPATH 用) |
-| `TOKENKNOWS_DEFAULT_PROJECT` | `demo-project` | 默认 project_id |
+| `TOKENKNOWS_DEFAULT_PROJECT` | `proj-demo-001` | 默认 project_id (web demo 项目) |
 | `TOKENKNOWS_API_TOKEN` | (无) | JWT bearer; 公网部署 backend 时必填 |
 
 ## 验证
 
 ```bash
 # 1. backend alive?
-curl http://127.0.0.1:8001/api/v1/projects/demo-project/assets
+curl http://127.0.0.1:8001/api/v1/projects/proj-demo-001/assets
 
 # 2. MCP server stdio 能 list tools?
 cd $TOKENKNOWS_API_ROOT

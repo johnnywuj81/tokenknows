@@ -35,7 +35,7 @@ Cowork plugin 与 Code 一样,**必须先 export 4 个变量到 host shell**:
 # macOS: 写到 ~/.zshrc 让 Cowork 启动时能读到
 export TOKENKNOWS_API_ROOT="/abs/path/to/tokenknows/code/tokenknows-api"
 export TOKENKNOWS_API_BASE="http://127.0.0.1:8001"
-export TOKENKNOWS_DEFAULT_PROJECT="demo-project"
+export TOKENKNOWS_DEFAULT_PROJECT="proj-demo-001"
 export TOKENKNOWS_API_TOKEN=""
 ```
 
@@ -45,7 +45,7 @@ export TOKENKNOWS_API_TOKEN=""
 # macOS · launchctl setenv (永久, 重启后仍生效)
 launchctl setenv TOKENKNOWS_API_ROOT "/abs/path/to/tokenknows/code/tokenknows-api"
 launchctl setenv TOKENKNOWS_API_BASE "http://127.0.0.1:8001"
-launchctl setenv TOKENKNOWS_DEFAULT_PROJECT "demo-project"
+launchctl setenv TOKENKNOWS_DEFAULT_PROJECT "proj-demo-001"
 ```
 
 或者在 macOS Login Items 跑一个脚本设这些 env。
