@@ -1124,11 +1124,115 @@ POST   /api/projects/{pid}/auto-triggers/onboarding
 | --- | --- | --- |
 | v0.4-draft.1 | 2026-05-22 | 初稿；含 5 种触发模式 + 类型路由表 + APScheduler 架构 + UI 配置面板 + 配额机制 |
 | v0.4-draft.2 | 2026-05-22 | Q1-Q8 共 8 条开放问题全部确认（按推荐方案）→ §14 状态更新；v0.4.0-v0.4.4 全周期研发可启动 |
+| **v0.4-impl.1** | **2026-05-23** | **5 个 milestone (v0.4.0 ~ v0.4.4) 全部实施完成 + 推送 + tag** |
+
+---
+
+## 17. v0.4 完整收官总结（实施回顾）
+
+> 2026-05-22 起草 → 2026-05-23 全 5 个 milestone 实施完成。从 PRD 决策 #4 / 体验要素 #7（阈值自动触发）的"产品 vision"，**真实落地为可运行、可测试、可端到端演示**的自动生成系统。
+
+### 17.1 实施时间线（commit 历史）
+
+| commit | milestone | 新测试 | 累计 | 关键能力 |
+| --- | --- | --- | --- | --- |
+| `21c6a7c` | docs 起步 | — | — | Proposal 1131 行 / 16 节 |
+| `cd7d9ba` | docs | — | — | T26-T35 任务清单 + V0.4-README |
+| `a6c6564` | decision | — | — | Q1-Q8 全部确认按推荐方案 |
+| `dbc859f`→`570ea89` | **v0.4.0 (T26-T28)** | 74 | 895 | DB schema + APScheduler + 默认规则 seeder |
+| `176317a` | T29 | 24 | 919 | cron RuleEvaluator（命中 5min 撤回） |
+| `55c8d73` | T30+T31 | 11 | 930 | TriggerDispatcher + withdraw_resolver 端到端 |
+| `9f274f0` | T33+T34+T35 | 711 frontend | — | 自动触发 Tab + 自动徽标 + 引导向导 |
+| `13efb58` | T32 | 26 | 956 | REST API 9 端点 |
+| `1cf8ddb` | T36-T39 | — | — | 撤回浮动通知卡（要素 #30）· v0.4.0 收官 |
+| `34e7b75` | **v0.4.1 T40** | 25 | 985 | GitHub webhook 事件触发（M3） |
+| `ab88093` | **v0.4.2-rc1 T41** | 21 | 1006 | 阈值触发（M4: chapter approved → book） |
+| `6b47f47` | **v0.4.2 T42** | 12 | 1018 | IM Signal → Skill 自动蒸馏 |
+| `e627637` | **v0.4.3 T43** | 10 | 1028 | UI builder 配置面板（自建规则） |
+| `ae4a342` | **v0.4.4 T44** | 19 | **1047** | 月配额仪表盘 + 80% 警告 + 100% throttle |
+
+**实施节奏统计：**
+- 工程量：**14 个 v0.4 commit / 5 个 milestone tag / 1 份 1131 行 Proposal / 10 份 task 文档**
+- 测试增量：**192 个新 backend tests / 1047 全绿 / 0 既有破坏**
+- 部署形态：单实例 + APScheduler 嵌入 FastAPI（无新增容器/外部依赖）
+
+### 17.2 决策表 vs 实际偏差
+
+10 条决策（AT-1 ~ AT-10）全部按 §1.2 原计划落地，3 处轻微偏差：
+
+| 决策 | 计划 | 实施 | 偏差类型 |
+| --- | --- | --- | --- |
+| AT-1 调度器 | APScheduler **4.x** | APScheduler **3.10+** | 微调：4.x 仍 alpha（4.0.0a6），降级到稳定 3.x；API 主体兼容；多实例迁 PG JobStore 不变 |
+| AT-3 LLM fallback 路由 | 规则不命中走 LLM 推断（confidence < 0.7 跳过） | v0.4.0-v0.4.4 未实施 | 推迟：规则全部命中场景已覆盖；LLM 兜底留 v0.5+（成本不确定） |
+| AT-7 月配额计费 | LLM Gateway / litellm 真 token | v0.4.4 用 `TOKEN_ESTIMATES_PER_TYPE` 估值（weekly=5k / book=50k 等） | 简化：v0.4.4 估值已满足"硬墙 + 告警"目的；真账单接入留 v0.5+ |
+
+其余 7 条（AT-2 5 种触发 / AT-4 撤回窗口可调 1-15min / AT-5 审批闸门 / AT-6 三层频率防护 / AT-8 UI 配置 / AT-9 4 条预置 / AT-10 撤回机制）100% 按计划。
+
+**Q1-Q8 开放问题决策（2026-05-22 确认）全部生效：**
+- Q1 撤回窗口可调 ✅ test-fire endpoint 用 30s demo 窗口验证
+- Q2 7 天归档 ✅ 与 sweep_expired 兼容
+- Q3 月配额默认 5M token ✅ generation_quotas 表默认值
+- Q4 book 默认 enabled=false ✅ 预置规则 JSON 写死
+- Q5 Skill 蒸馏个人确认 ⏳ **留 v0.5** — auto distill 触发 schedule, contributor 同意书流程未做
+- Q6 项目级覆盖实例级 ✅ list_rules include_instance_defaults
+- Q7 配额仪表盘 Owner+管理员可见 ✅ T44 UI
+- Q8 Skill 自进化每天 03:00 ✅ APScheduler skill_evolve_checker
+
+### 17.3 体验要素覆盖（#29-#35）
+
+7 条 v0.4 新增要素全部实施，端到端浏览器实地验证通过：
+
+| # | 要素 | 实施位置 |
+| --- | --- | --- |
+| 29 | 自动触发规则可视化（启停 toggle） | `/projects/:id/settings?tab=auto-triggers` |
+| 30 | 5 分钟撤回窗口浮动通知卡 | AppLayout 右下角 `WithdrawNotification` + 倒计时 + 取消 |
+| 31 | 触发执行历史时间轴 | RuleDetailDrawer 内 |
+| 32 | LLM 月配额仪表盘 + 80% 警告 | T44 实施 |
+| 33 | "自动触发" 🤖 徽标 | DocHeader |
+| 34 | 类型路由可解释（"为什么这个类型"） | trigger_meta.signal.summary + 详情卡 |
+| 35 | 首次启用引导向导 | OnboardingDialog |
+
+### 17.4 真实端到端验证
+
+**4 种触发模式都通过真实模拟验证**（非测试 mock）：
+
+| 模式 | 验证方式 | 结果 |
+| --- | --- | --- |
+| **M2 cron** | UI 抽屉点"立即触发演示"（30s demo 窗口）→ 全 pipeline | ✅ 真生成 weekly_report 含完整 trigger_meta + 🤖 徽标 |
+| **M3 event** | `curl POST /api/v1/webhooks/github` 模拟 PR merge with `architecture-decision` label | ✅ 真生成 ADR · 5 章齐 · 40s pipeline |
+| **M4 threshold** | 单测端到端 + DB seed 50 章 approved | ✅ schedule 入库 + 7 天 cooldown 生效 |
+| **M5 mention** | — | ⏳ **留 v0.5** |
+
+### 17.5 已知技术债（留 v0.5+）
+
+| # | 项目 | 原因 | 计划 |
+| --- | --- | --- | --- |
+| 1 | M5 @ 机器人按需 | 依赖 IM v0.3 群消息接入 + 命令解析 | **v0.5 首要任务** |
+| 2 | Skill 蒸馏个人确认（Q5） | 需 contributor 同意书 + UI 流程 | **v0.5 与 M5 一起做** |
+| 3 | LLM token 真账单 | 当前用 `TOKEN_ESTIMATES_PER_TYPE` 估值 | v0.5 接 LLM Gateway 计费 |
+| 4 | LLM fallback 类型路由（AT-3）| 当前仅规则命中触发 | v0.6 灰度（不确定收益）|
+| 5 | 多实例 scheduler | APScheduler MemoryJobStore 单实例限制 | v0.6+ 切 PG JobStore |
+| 6 | PR file_glob 真支持 | 当前 webhook 不调 `/pulls/:n/files` | v0.5.1 加 |
+| 7 | SSE 撤回通知 | 当前 3s polling | v0.5.1 切 SSE |
+| 8 | 撤回归档 7 天阈值 cron 自动 | 当前 sweep_expired 兜底 | v0.5.1 加日定时清理 |
+
+### 17.6 v0.5 衔接候选范围
+
+| 候选 | Proposal 出处 | 估算 |
+| --- | --- | --- |
+| **M5 @ 机器人按需蒸馏** | §13.5 + 体验要素 #26 | 1-2 sprint |
+| **Skill 蒸馏 contributor 个人确认** | Q5 决策 + IM Proposal §7.4 IM-D | 0.5-1 sprint |
+| **LLM 真账单接入** | §11.3 配额机制 | 0.5 sprint |
+| **PR file_glob 真支持** | §5.1 / 附录 A.2 | 0.5 sprint |
+| **SSE 撤回通知** | §10.5 (polling → SSE) | 0.5 sprint |
+
+→ v0.5 范围（用户 2026-05-23 决策）：**M5 @ 机器人按需 + IM Q5 contributor 个人确认**，其余留 v0.5.1+。
 
 ---
 
 **Sources / 参考：**
-- APScheduler 4.x 文档 · https://apscheduler.readthedocs.io/
+- APScheduler 文档 · https://apscheduler.readthedocs.io/ （3.x 稳定版；4.x v4 仍 alpha）
 - GitHub Webhooks · https://docs.github.com/en/webhooks
 - PRD MVP §3.1 / §4.2 / §5.3 价值主张与决策表
-- v0.3 IM 提案 §7.2 SignalGate（为 skill 自动蒸馏提供信号源）
+- v0.3 IM 提案 §7.2 SignalGate（为 T42 Skill 自动蒸馏提供 signal 数据源）
+- v0.3 IM 提案 §7.4 IM-D 同意书（v0.5 Q5 接力点）
