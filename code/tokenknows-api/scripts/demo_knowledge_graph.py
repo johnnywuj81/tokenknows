@@ -280,6 +280,23 @@ def _seed_one_project(project_id: str, asset_suffix: str = "") -> tuple[str, str
         created_at=now, updated_at=now,
     )
     generation_service._assets[wr_id] = wr
+    # v1.8 · 给 weekly_report 也造 chapters, 否则 DocumentPage 进去一片空白
+    # 5 段标准结构: 进展 / Bug / 决策 / 风险 / 计划
+    wr_sections = [
+        ("本周进展", "- 完成知识图谱 v1.2 MVP, 集成 React Flow + dagre 布局\n- LLM JSON 容错 (markdown 包裹) 修复, KG outline stage 通过率 100%\n- 实体跨文档合并 + global registry 上线 (v1.5)"),
+        ("Bug 与解决", "- 修 backend `_TITLE_TEMPLATES` 缺 knowledge_graph 导致 500\n- 修 KG pipeline 漏写 `asset.status='draft'` 导致 UI 永远转圈\n- 修 LlmEgressPanel hard-coded 'Key 无效' 误导文案"),
+        ("关键决策", "- 默认 LLM 升 claude-sonnet-4-6 (从 sonnet-4-5)\n- PNG 缩略图用 Pillow 纯 Python (cairosvg 依赖 cairo 系统库, 暂留 v1.9+)\n- merge undo 留 v1.7 (复杂度高)"),
+        ("风险与阻塞", "- LLM CircuitBreaker 偶发雪崩, threshold 偏严 (3 次), 考虑放宽到 5\n- entity_registry 仍内存 store, 重启后从 chapters 重建 (v1.7 持久化)"),
+        ("下周计划", "- T112+ Playwright 真截图替代 SVG\n- entity merge 二次 review UI\n- audit log sqlite 持久化"),
+    ]
+    for idx, (title, body) in enumerate(wr_sections):
+        ch_id = f"ch-{wr_id}-{idx}"
+        wr_chapter = Chapter(
+            id=ch_id, asset_id=wr_id, order_index=idx,
+            title=title, content=body, layout={},
+            approval_state="pending",
+        )
+        generation_service._chapters.setdefault(wr_id, []).append(wr_chapter)
 
     generation_service._persist_asset(kg_id)
     generation_service._persist_asset(wr_id)
