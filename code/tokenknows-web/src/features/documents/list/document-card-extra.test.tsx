@@ -189,4 +189,41 @@ describe('DocumentCard extra branches', () => {
     expect(screen.queryByTestId('kg-thumbnail')).toBeNull()
     expect(screen.getByTestId('kg-summary-badge')).toBeInTheDocument()
   })
+
+  // v1.5 T100 · PNG 优先
+  it('T100 · thumbnail_png_b64 优先于 svg (data:image/png)', () => {
+    const fakePng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEX/AAAZ4gk3AAAAAXRSTlMAQObYZgAAAApJREFUCNdjYAAAAAIAAeIhvDMAAAAASUVORK5CYII='
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        kg_summary: {
+          node_count: 5, edge_count: 3,
+          thumbnail_png_b64: fakePng,
+          thumbnail_svg: '<svg></svg>',
+        },
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    const thumb = screen.getByTestId('kg-thumbnail')
+    expect(thumb.getAttribute('data-format')).toBe('png')
+    const img = thumb.querySelector('img')
+    expect(img?.getAttribute('src')).toBe(`data:image/png;base64,${fakePng}`)
+  })
+
+  it('T100 · 只有 svg 时仍用 SVG (PNG 不可用 fallback)', () => {
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        kg_summary: {
+          node_count: 5, edge_count: 3,
+          thumbnail_svg: '<svg></svg>',
+        },
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    const thumb = screen.getByTestId('kg-thumbnail')
+    expect(thumb.getAttribute('data-format')).toBe('svg')
+  })
 })

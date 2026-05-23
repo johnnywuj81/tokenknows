@@ -200,6 +200,132 @@ def get_entity_for_node(asset_id: str, node_id: str) -> ProjectEntity | None:
         return _entities.get(eid) if eid else None
 
 
+def merge_entities(source_id: str, target_id: str) -> ProjectEntity | None:
+    """v1.3.1 T98 · 把 source entity 合并到 target.
+
+    校验:
+        - source 与 target 必须同 project + 同 type (跨类型合并禁止)
+        - source 不等于 target (no-op 也 reject)
+
+    动作:
+        - target.source_refs ∪= source.source_refs (按 (asset,chapter,node) 去重)
+        - target.aliases ∪= [source.label] + source.aliases (按 string 去重)
+        - target.last_seen_at = max
+        - _node_to_entity 中所有指向 source 的 reroute 到 target
+        - _by_canonical 中 source 的键删除 (canonical 不变, 因为 source 被吞)
+        - _entities 中删 source
+    返回合并后的 target; source/target 找不到 → None.
+    """
+    with _lock:
+        if source_id == target_id:
+            return None
+        src = _entities.get(source_id)
+        tgt = _entities.get(target_id)
+        if src is None or tgt is None:
+            return None
+        if src.project_id != tgt.project_id:
+            return None
+        if src.type != tgt.type:
+            return None
+
+        # aliases ∪
+        candidates = [src.label, *src.aliases]
+        for label in candidates:
+            if label != tgt.label and label not in tgt.aliases:
+                tgt.aliases.append(label)
+
+        # source_refs ∪
+        existing_keys = {
+            (r.asset_id, r.chapter_id, r.node_id) for r in tgt.source_refs
+        }
+        for r in src.source_refs:
+            key = (r.asset_id, r.chapter_id, r.node_id)
+            if key not in existing_keys:
+                tgt.source_refs.append(r)
+                existing_keys.add(key)
+
+        tgt.last_seen_at = max(tgt.last_seen_at, src.last_seen_at)
+
+        # reroute node mapping
+        for k, v in list(_node_to_entity.items()):
+            if v == source_id:
+                _node_to_entity[k] = target_id
+
+        # remove from canonical lookup (source key 可能与 target 不同)
+        src_key = (src.project_id, src.type, src.canonical_label)
+        if _by_canonical.get(src_key) == source_id:
+            # source 的 canonical 与 target 不同时, 删除 source key;
+            # 同 canonical 时, target 已占该 key (源已 merge), 直接删
+            del _by_canonical[src_key]
+
+        del _entities[source_id]
+        return tgt
+
+
+def split_node_to_new_entity(
+    entity_id: str,
+    *,
+    asset_id: str,
+    node_id: str,
+    new_label: str | None = None,
+    new_canonical_suffix: str | None = None,
+) -> tuple[ProjectEntity, ProjectEntity] | None:
+    """v1.3.1 T98 · 从 entity 中拆出指定 node, 创建新 entity 承接.
+
+    场景: assess 把两个不同人误合 (都叫 'Alice', 实际不同人), Reviewer 在 UI 上
+    选其中一个节点 "拆出"; 拆出后新 entity 与原 entity 同 type 同 project, 但
+    canonical_label 加后缀防冲突 (默认 ' (split-<n>)').
+
+    参数:
+        entity_id: 要拆分的来源
+        asset_id, node_id: 唯一定位 source_ref (同 entity 内多个 ref 时拆一条)
+        new_label: 新 entity 的展示 label; None 时复用原 label
+        new_canonical_suffix: canonical 后缀; None 自动生成
+
+    返回 (updated_source, new_entity); 找不到 ref 时 None.
+    """
+    with _lock:
+        src = _entities.get(entity_id)
+        if src is None:
+            return None
+        # 找指定 ref
+        target_ref = next(
+            (r for r in src.source_refs
+             if r.asset_id == asset_id and r.node_id == node_id),
+            None,
+        )
+        if target_ref is None:
+            return None
+        if len(src.source_refs) <= 1:
+            # 仅 1 个 ref, 拆了相当于 rename, 拒绝
+            return None
+
+        # 移除 ref
+        src.source_refs = [r for r in src.source_refs if r is not target_ref]
+
+        # 生成新 entity
+        label = new_label or src.label
+        suffix = new_canonical_suffix or f" (split-{uuid4().hex[:6]})"
+        new_canonical = (src.canonical_label + suffix).strip().lower()
+        new_id = f"ent_{uuid4().hex[:12]}"
+        now = _now()
+        new_ent = ProjectEntity(
+            id=new_id,
+            project_id=src.project_id,
+            type=src.type,
+            canonical_label=new_canonical,
+            label=label,
+            aliases=[],
+            source_refs=[target_ref],
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        _entities[new_id] = new_ent
+        _by_canonical[(src.project_id, src.type, new_canonical)] = new_id
+        _node_to_entity[(target_ref.asset_id, target_ref.node_id)] = new_id
+        return src, new_ent
+
+
 def get_sources(
     entity_id: str,
     *,

@@ -1,17 +1,24 @@
 /**
- * NodeCrossDocPanel · v1.3.1 T96 · 节点 click 时显示的跨文档实体面板.
+ * NodeCrossDocPanel · v1.3.1 T96 / v1.5 T98 · 节点 click 时显示的跨文档实体面板.
  *
  * 行为:
  *   - 节点未选 / 未注册 entity → 不显示
  *   - 显示该 entity 出现的其他 asset 列表 (除当前 asset)
  *   - 点击 asset → useNavigate 跳转到该 asset 的 DocumentPage
  *   - 同 asset 内只显示 aliases (不算跨文档)
+ *   - T98: entity 含 >1 个 ref 时显示 "拆出此节点" 按钮 (语义纠错)
  */
 
 import { useNavigate } from 'react-router-dom'
-import { Link2, X, Layers } from 'lucide-react'
+import { Link2, X, Layers, Scissors, Globe2, Upload } from 'lucide-react'
 import type { KGNode } from '@/types/api'
-import { useNodeEntity } from './hooks/useNodeEntity'
+import {
+  useNodeEntity,
+  useSplitNode,
+  useGlobalEntityForProjectEntity,
+  usePublishEntityToGlobal,
+  useUnlinkEntityFromGlobal,
+} from './hooks/useNodeEntity'
 
 interface NodeCrossDocPanelProps {
   /** 当前 asset id (排除自身). */
@@ -32,12 +39,41 @@ export function NodeCrossDocPanel({
   const nodeId = node?.id ?? null
   const query = useNodeEntity(assetId, nodeId)
   const navigate = useNavigate()
+  const splitMutation = useSplitNode()
+  // T99: global entity 查询 + publish/unlink
+  const projectEntityId = query.data?.entity?.id ?? null
+  const globalQuery = useGlobalEntityForProjectEntity(projectEntityId)
+  const publishMutation = usePublishEntityToGlobal()
+  const unlinkMutation = useUnlinkEntityFromGlobal()
 
   if (!node) return null
 
   const entity = query.data?.entity
   const sources = query.data?.sources ?? []
   const otherDocs = sources.filter((s) => s.asset_id !== assetId)
+  // T98: entity 有 >1 个 ref 才能拆 (单 ref 拆 = rename, 后端 422 拒绝)
+  const canSplit = !!(entity && entity.source_refs.length > 1)
+  const globalEntity = globalQuery.data ?? null
+
+  function handleSplit() {
+    if (!entity || !nodeId) return
+    splitMutation.mutate({
+      entityId: entity.id,
+      assetId,
+      nodeId,
+      newLabel: `${node.label} (split)`,
+    })
+  }
+
+  function handlePublishGlobal() {
+    if (!entity) return
+    publishMutation.mutate(entity.id)
+  }
+
+  function handleUnlinkGlobal() {
+    if (!entity) return
+    unlinkMutation.mutate(entity.id)
+  }
 
   return (
     <div
@@ -82,6 +118,68 @@ export function NodeCrossDocPanel({
               </div>
             </div>
           ) : null}
+
+          {canSplit ? (
+            <button
+              type="button"
+              data-testid="kg-cross-doc-split-btn"
+              onClick={handleSplit}
+              disabled={splitMutation.isPending}
+              className="mb-3 flex w-full items-center justify-center gap-1.5 rounded border border-warning bg-warning-bg px-2 py-1.5 font-ui text-caption text-warning-dark hover:bg-warning-bg/80 disabled:opacity-50 transition"
+              title="拆出此节点 — 实际是不同实体, assess 误合"
+            >
+              <Scissors className="size-3" />
+              {splitMutation.isPending ? '拆分中…' : '拆出此节点 (不是同一实体)'}
+            </button>
+          ) : null}
+
+          {/* v1.5 T99 · 跨 project global entity 区 */}
+          <div
+            data-testid="kg-cross-doc-global"
+            className="mb-3 rounded border border-info bg-info-bg/50 p-2"
+          >
+            <div className="mb-1 flex items-center gap-1 font-ui text-micro font-medium text-info-dark uppercase tracking-wider">
+              <Globe2 className="size-3" />
+              全局实体
+            </div>
+            {globalQuery.isLoading ? (
+              <p className="font-ui text-caption text-text-muted">加载中…</p>
+            ) : globalEntity ? (
+              <>
+                <p
+                  className="font-ui text-caption text-text-secondary"
+                  data-testid="kg-cross-doc-global-info"
+                >
+                  已发布 · 跨 <strong className="font-mono">{globalEntity.project_count}</strong> 个 project
+                </p>
+                <button
+                  type="button"
+                  data-testid="kg-cross-doc-unlink-global-btn"
+                  onClick={handleUnlinkGlobal}
+                  disabled={unlinkMutation.isPending}
+                  className="mt-1 font-ui text-micro text-text-muted hover:underline disabled:opacity-50"
+                >
+                  {unlinkMutation.isPending ? '解除中…' : '从全局解除关联'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="font-ui text-caption text-text-muted">
+                  尚未发布到 project 间共享
+                </p>
+                <button
+                  type="button"
+                  data-testid="kg-cross-doc-publish-global-btn"
+                  onClick={handlePublishGlobal}
+                  disabled={publishMutation.isPending}
+                  className="mt-1 flex items-center gap-1 font-ui text-caption text-info-dark hover:underline disabled:opacity-50"
+                >
+                  <Upload className="size-3" />
+                  {publishMutation.isPending ? '发布中…' : '发布到全局'}
+                </button>
+              </>
+            )}
+          </div>
 
           {otherDocs.length === 0 ? (
             <p

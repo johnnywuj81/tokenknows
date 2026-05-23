@@ -106,9 +106,8 @@ async def list_project_assets(
     has_more = (start_idx + limit) < len(items)
     next_cursor = page[-1].id if page and has_more else None
 
-    # v1.2.1 T89 / v1.3.1 T95: knowledge_graph 类型 enrich kg_summary
-    # 节点/边数 + thumbnail_svg (DocumentCard 优先用 thumbnail, fallback 徽章)
-    # 内存查 chapters 几乎零成本.
+    # v1.2.1 T89 / v1.3.1 T95 / v1.5 T100: knowledge_graph 类型 enrich kg_summary
+    # 节点/边数 + thumbnail_svg + thumbnail_png_b64
     enriched: list[Asset] = []
     for a in page:
         if a.type == "knowledge_graph":
@@ -121,9 +120,12 @@ async def list_project_assets(
                     "node_count": len(nodes),
                     "edge_count": len(edges),
                 }
-                thumb = layout.get("thumbnail_svg")
-                if isinstance(thumb, str) and thumb:
-                    summary["thumbnail_svg"] = thumb
+                thumb_svg = layout.get("thumbnail_svg")
+                if isinstance(thumb_svg, str) and thumb_svg:
+                    summary["thumbnail_svg"] = thumb_svg
+                thumb_png = layout.get("thumbnail_png_b64")
+                if isinstance(thumb_png, str) and thumb_png:
+                    summary["thumbnail_png_b64"] = thumb_png
                 a = a.model_copy(update={"kg_summary": summary})
         enriched.append(a)
 

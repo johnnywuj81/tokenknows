@@ -171,3 +171,16 @@ def test_list_endpoint_no_thumbnail_when_absent(client):
     r = client.get("/projects/p-1/assets")
     summary = r.json()["data"][0]["kg_summary"]
     assert "thumbnail_svg" not in summary
+    assert "thumbnail_png_b64" not in summary
+
+
+# v1.5 T100 · PNG b64 enrich
+def test_list_endpoint_includes_thumbnail_png_when_present(client):
+    _seed_kg(asset_id="a-png", nodes=[{"id": "n1"}], edges=[])
+    chapter = generation_service._chapters["a-png"][0]
+    layout_dict = dict(chapter.layout or {})
+    layout_dict["thumbnail_png_b64"] = "iVBORw0KGgo="  # 占位 base64
+    chapter.layout = layout_dict
+    r = client.get("/projects/p-1/assets")
+    summary = r.json()["data"][0]["kg_summary"]
+    assert summary["thumbnail_png_b64"] == "iVBORw0KGgo="

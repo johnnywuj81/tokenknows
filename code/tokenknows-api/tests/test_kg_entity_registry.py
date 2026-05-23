@@ -379,3 +379,220 @@ def test_api_get_node_entity(client):
 def test_api_get_node_entity_404_for_unknown(client):
     r = client.get("/assets/a-X/nodes/n-X/entity")
     assert r.status_code == 404
+
+
+# ── v1.5 T98 · merge / split ─────────────────────────────────────
+
+
+def _seed_two_persons_same_project() -> tuple[str, str]:
+    """构造 2 个 person entity (同 project) → 返回 (src_id, tgt_id)."""
+    src_id = registry.register_entity(
+        project_id="p-1", node_id="n_src", node_type="person",
+        label="Alice", asset_id="a-1", chapter_id="ch-1",
+    )
+    tgt_id = registry.register_entity(
+        project_id="p-1", node_id="n_tgt", node_type="person",
+        label="Bob", asset_id="a-2", chapter_id="ch-2",
+    )
+    return src_id, tgt_id
+
+
+def test_merge_entities_pure_function():
+    src_id, tgt_id = _seed_two_persons_same_project()
+    merged = registry.merge_entities(src_id, tgt_id)
+    assert merged is not None
+    assert merged.id == tgt_id
+    assert merged.asset_count == 2  # 各 1 → 合并后 2
+    # source 被删
+    assert registry.get_entity(src_id) is None
+    # source 的原 label 进 aliases
+    assert "Alice" in merged.aliases
+
+
+def test_merge_node_mapping_reroute():
+    """合并后 (a-1, n_src) → tgt_id (而不是已删的 src_id)."""
+    src_id, tgt_id = _seed_two_persons_same_project()
+    registry.merge_entities(src_id, tgt_id)
+    ent = registry.get_entity_for_node("a-1", "n_src")
+    assert ent is not None
+    assert ent.id == tgt_id
+
+
+def test_merge_dedup_source_refs():
+    """如 source 和 target 共享 (asset,chapter,node), 不重复累加."""
+    eid_a = registry.register_entity(
+        project_id="p-1", node_id="n_shared", node_type="person",
+        label="A", asset_id="a-1", chapter_id="ch-1",
+    )
+    eid_b = registry.register_entity(
+        project_id="p-1", node_id="n_b", node_type="person",
+        label="B", asset_id="a-2", chapter_id="ch-2",
+    )
+    # 把 a-1/n_shared 也加进 eid_b (人为构造冲突)
+    registry._entities[eid_b].source_refs.append(
+        registry.EntitySourceRef(asset_id="a-1", chapter_id="ch-1", node_id="n_shared")
+    )
+    merged = registry.merge_entities(eid_a, eid_b)
+    assert merged is not None
+    # source_refs 不重复: n_shared 仅 1 条
+    n_shared_refs = [r for r in merged.source_refs if r.node_id == "n_shared"]
+    assert len(n_shared_refs) == 1
+
+
+def test_merge_same_id_returns_none():
+    eid, _ = _seed_two_persons_same_project()
+    assert registry.merge_entities(eid, eid) is None
+
+
+def test_merge_cross_project_returns_none():
+    s = registry.register_entity(
+        project_id="p-1", node_id="n", node_type="person",
+        label="X", asset_id="a-1", chapter_id="ch-1",
+    )
+    t = registry.register_entity(
+        project_id="p-2", node_id="n", node_type="person",
+        label="X", asset_id="a-2", chapter_id="ch-2",
+    )
+    assert registry.merge_entities(s, t) is None
+
+
+def test_merge_cross_type_returns_none():
+    s = registry.register_entity(
+        project_id="p-1", node_id="n1", node_type="person",
+        label="X", asset_id="a-1", chapter_id="ch-1",
+    )
+    t = registry.register_entity(
+        project_id="p-1", node_id="n2", node_type="concept",
+        label="X", asset_id="a-2", chapter_id="ch-2",
+    )
+    assert registry.merge_entities(s, t) is None
+
+
+def test_split_node_pure_function():
+    """合并 → 再拆出某节点为新 entity."""
+    src_id, tgt_id = _seed_two_persons_same_project()
+    merged = registry.merge_entities(src_id, tgt_id)
+    assert merged.asset_count == 2
+    # 拆出原 src 的 (a-1, n_src) 回独立 entity
+    result = registry.split_node_to_new_entity(
+        merged.id, asset_id="a-1", node_id="n_src",
+        new_label="Alice (different person)",
+    )
+    assert result is not None
+    src, new_ent = result
+    assert src.id == merged.id
+    assert src.asset_count == 1  # 拆走 1 个后剩 1
+    assert new_ent.id != src.id
+    assert new_ent.label == "Alice (different person)"
+    assert len(new_ent.source_refs) == 1
+
+
+def test_split_node_reroutes_node_mapping():
+    src_id, tgt_id = _seed_two_persons_same_project()
+    merged = registry.merge_entities(src_id, tgt_id)
+    result = registry.split_node_to_new_entity(
+        merged.id, asset_id="a-1", node_id="n_src",
+    )
+    assert result is not None
+    _src, new_ent = result
+    # (a-1, n_src) 现在指向 new_ent
+    looked = registry.get_entity_for_node("a-1", "n_src")
+    assert looked.id == new_ent.id
+
+
+def test_split_node_unknown_ref_returns_none():
+    eid, _ = _seed_two_persons_same_project()
+    r = registry.split_node_to_new_entity(
+        eid, asset_id="a-nope", node_id="n-nope",
+    )
+    assert r is None
+
+
+def test_split_node_only_ref_rejected():
+    """仅 1 个 source_ref 时拆 = rename, 拒绝."""
+    eid = registry.register_entity(
+        project_id="p-1", node_id="n", node_type="person",
+        label="X", asset_id="a-1", chapter_id="ch-1",
+    )
+    r = registry.split_node_to_new_entity(
+        eid, asset_id="a-1", node_id="n",
+    )
+    assert r is None
+
+
+# ── API tests ─────────────────────────────────────────────────────
+
+
+def test_api_merge_entities(client):
+    _seed_asset("a-1")
+    _seed_asset("a-2")
+    src_id, tgt_id = _seed_two_persons_same_project()
+    r = client.post(
+        f"/entities/{src_id}/merge",
+        json={"target_id": tgt_id},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["target"]["id"] == tgt_id
+    assert body["target"]["asset_count"] == 2
+
+
+def test_api_merge_self_rejected(client):
+    eid, _ = _seed_two_persons_same_project()
+    r = client.post(f"/entities/{eid}/merge", json={"target_id": eid})
+    assert r.status_code == 422
+
+
+def test_api_merge_cross_project_rejected(client):
+    a = registry.register_entity(
+        project_id="p-1", node_id="n", node_type="person",
+        label="X", asset_id="a-1", chapter_id="ch-1",
+    )
+    b = registry.register_entity(
+        project_id="p-2", node_id="n", node_type="person",
+        label="X", asset_id="a-2", chapter_id="ch-2",
+    )
+    r = client.post(f"/entities/{a}/merge", json={"target_id": b})
+    assert r.status_code == 422
+
+
+def test_api_merge_404(client):
+    eid, _ = _seed_two_persons_same_project()
+    r = client.post(f"/entities/{eid}/merge", json={"target_id": "no-such"})
+    assert r.status_code == 404
+
+
+def test_api_split_node(client):
+    _seed_asset("a-1")
+    _seed_asset("a-2")
+    src_id, tgt_id = _seed_two_persons_same_project()
+    merged = registry.merge_entities(src_id, tgt_id)
+    r = client.post(
+        f"/entities/{merged.id}/split",
+        json={
+            "asset_id": "a-1", "node_id": "n_src",
+            "new_label": "Alice (different)",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source"]["id"] == merged.id
+    assert body["new_entity"]["label"] == "Alice (different)"
+
+
+def test_api_split_unknown_ref_422(client):
+    eid, _ = _seed_two_persons_same_project()
+    # eid 只有 1 个 ref → 拆要 422
+    r = client.post(
+        f"/entities/{eid}/split",
+        json={"asset_id": "a-1", "node_id": "n_src"},
+    )
+    assert r.status_code == 422
+
+
+def test_api_split_unknown_entity_404(client):
+    r = client.post(
+        "/entities/no-such/split",
+        json={"asset_id": "a", "node_id": "n"},
+    )
+    assert r.status_code == 404

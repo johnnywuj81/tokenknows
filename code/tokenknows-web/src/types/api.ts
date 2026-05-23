@@ -280,8 +280,10 @@ export interface Asset {
   kg_summary?: {
     node_count: number
     edge_count: number
-    /** v1.3.1 T95 · 后端 assess stage 生成的 SVG string, DocumentCard 直接 <img src=data:..>. */
+    /** v1.3.1 T95 · 后端 assess stage 生成的 SVG string. */
     thumbnail_svg?: string
+    /** v1.5 T100 · Pillow PNG base64 (优先级高于 SVG; IM/邮件兼容). */
+    thumbnail_png_b64?: string
   } | null
   created_at: string
   updated_at: string

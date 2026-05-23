@@ -1105,6 +1105,14 @@ async def _stage_assess_knowledge_graph(
         layout_dict["thumbnail_svg"] = render_kg_svg(layout_dict)
     except Exception as exc:  # noqa: BLE001 — thumbnail 非致命
         logger.warning("kg_thumbnail_render_failed", asset_id=asset_id, exc=str(exc))
+    # v1.5 T100 · 同时生成 PNG (Pillow 渲染, 用于不支持 SVG 的客户端: IM 卡片/邮件)
+    try:
+        from app.services.knowledge_graph.thumbnail_png import render_kg_png_b64
+        png_b64 = render_kg_png_b64(layout_dict)
+        if png_b64:
+            layout_dict["thumbnail_png_b64"] = png_b64
+    except Exception as exc:  # noqa: BLE001 — PNG 非致命, SVG 仍兜底
+        logger.warning("kg_thumbnail_png_failed", asset_id=asset_id, exc=str(exc))
     chapter.layout = layout_dict
 
     # v1.3.1 T96 · 注册节点到 project entity registry (跨 KG asset 实体合并)

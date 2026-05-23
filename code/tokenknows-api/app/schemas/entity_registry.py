@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 KGNodeType = Literal["person", "event", "concept", "artifact"]
 
@@ -43,9 +43,10 @@ class ProjectEntity(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def asset_count(self) -> int:
-        """该实体出现在多少个不同 asset 里."""
+        """该实体出现在多少个不同 asset 里. Pydantic computed → JSON 序列化."""
         return len({r.asset_id for r in self.source_refs})
 
 
@@ -57,3 +58,38 @@ class EntitySourceItem(BaseModel):
     asset_type: str
     chapter_ids: list[str]
     node_ids: list[str]
+
+
+# ── v1.5 T99 · global (cross-project) entity ──────────────────────
+
+
+class GlobalEntityLink(BaseModel):
+    """global entity 关联的某个 project entity (反查用)."""
+
+    project_id: str
+    project_entity_id: str
+
+
+class GlobalEntity(BaseModel):
+    """v1.5 T99 · 跨 project 的全局实体 (类似 Skill marketplace).
+
+    project entity 通过 publish_to_global 显式发布到 global; 不自动同步.
+    """
+
+    id: str
+    type: KGNodeType
+    canonical_label: str
+    label: str
+    aliases: list[str] = Field(default_factory=list)
+    linked: list[GlobalEntityLink] = Field(default_factory=list)
+    """所有关联到此 global 的 (project_id, project_entity_id) 对."""
+    created_by: str | None = None
+    """首次 publish 的 user_id (审计用)."""
+    created_at: datetime
+    last_seen_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def project_count(self) -> int:
+        """该 global entity 跨多少 project."""
+        return len({link.project_id for link in self.linked})

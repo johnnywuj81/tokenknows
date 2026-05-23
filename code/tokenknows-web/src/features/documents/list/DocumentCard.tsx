@@ -187,9 +187,14 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
               生成中 · 预计 5 秒... 完成后自动刷新
             </p>
           </div>
-        ) : asset.type === 'knowledge_graph' && asset.kg_summary?.thumbnail_svg ? (
-          // v1.3.1 T95 · KG SVG 缩略图
-          <KGThumbnail svg={asset.kg_summary.thumbnail_svg} />
+        ) : asset.type === 'knowledge_graph' && (
+            asset.kg_summary?.thumbnail_png_b64 || asset.kg_summary?.thumbnail_svg
+          ) ? (
+          // v1.3.1 T95 / v1.5 T100 · KG 缩略图: PNG 优先 (兼容性更好), SVG 兜底
+          <KGThumbnail
+            png={asset.kg_summary.thumbnail_png_b64}
+            svg={asset.kg_summary.thumbnail_svg}
+          />
         ) : asset.metrics ? (
           <Metrics
             coverage={asset.metrics.coverage}
@@ -209,21 +214,33 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
 }
 
 interface KGThumbnailProps {
-  svg: string
+  /** v1.5 T100 · PNG base64 (Pillow 渲染, 优先). */
+  png?: string
+  /** v1.3.1 T95 · SVG string (兜底). */
+  svg?: string
 }
 
 /**
- * v1.3.1 T95 · KG SVG 缩略图.
+ * v1.3.1 T95 / v1.5 T100 · KG 缩略图.
  *
- * 用 data: URI 内嵌 svg, 不需要 URL 编码 (UTF-8 安全; SVG 是文本).
- * 失败 / 空 svg → 不渲染, 让上层 fallback 到节点数徽章.
+ * 优先级: PNG (兼容性更好, IM/邮件可用) > SVG (矢量, 视觉更精).
+ * 都无 → 不渲染, 上层 fallback 到节点数徽章.
  */
-function KGThumbnail({ svg }: KGThumbnailProps) {
-  // 安全: 后端 render_kg_svg 内部对 label 做了 html.escape, svg 是受控字符串
-  const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+function KGThumbnail({ png, svg }: KGThumbnailProps) {
+  let dataUri: string | null = null
+  let format: 'png' | 'svg' | null = null
+  if (png) {
+    dataUri = `data:image/png;base64,${png}`
+    format = 'png'
+  } else if (svg) {
+    dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+    format = 'svg'
+  }
+  if (!dataUri) return null
   return (
     <div
       data-testid="kg-thumbnail"
+      data-format={format ?? undefined}
       className="mt-1 w-full overflow-hidden rounded border border-border-subtle bg-bg-warm"
     >
       <img

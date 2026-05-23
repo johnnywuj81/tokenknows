@@ -181,4 +181,130 @@ describe('NodeCrossDocPanel', () => {
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })
+
+  // v1.5 T98 · split button
+  it('entity 仅 1 个 ref → 不显示拆出按钮', async () => {
+    const apiSpy = vi.spyOn(api, 'get')
+    apiSpy.mockResolvedValueOnce({
+      data: {
+        id: 'ent_x', project_id: 'p1', type: 'person',
+        label: 'Alice', canonical_label: 'alice', aliases: [],
+        source_refs: [
+          { asset_id: 'a1', chapter_id: 'ch1', node_id: 'n_alice' },
+        ],
+      },
+    })
+    apiSpy.mockResolvedValueOnce({ data: [] })
+    render(withWrappers(
+      <NodeCrossDocPanel
+        assetId="a1" projectId="p1" node={mkNode()} onClose={() => {}}
+      />,
+    ))
+    await waitFor(() => {
+      expect(screen.getByTestId('kg-cross-doc-panel')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('kg-cross-doc-split-btn')).toBeNull()
+  })
+
+  it('entity 有 >1 个 ref → 显示拆出按钮; 点击调 POST /entities/:id/split', async () => {
+    const apiGet = vi.spyOn(api, 'get')
+    const apiPost = vi.spyOn(api, 'post')
+    apiGet.mockResolvedValueOnce({
+      data: {
+        id: 'ent_x', project_id: 'p1', type: 'person',
+        label: 'Alice', canonical_label: 'alice', aliases: [],
+        source_refs: [
+          { asset_id: 'a1', chapter_id: 'ch1', node_id: 'n_alice' },
+          { asset_id: 'a2', chapter_id: 'ch2', node_id: 'n_other' },
+        ],
+      },
+    })
+    apiGet.mockResolvedValueOnce({ data: [] })
+    // global query (entity → global) → 404 (未发布)
+    apiGet.mockRejectedValueOnce({ code: 'NOT_FOUND', status: 404 })
+    apiPost.mockResolvedValueOnce({
+      data: {
+        source: { id: 'ent_x', source_refs: [{ asset_id: 'a2', chapter_id: 'ch2', node_id: 'n_other' }] },
+        new_entity: { id: 'ent_new', label: 'Alice (split)' },
+      },
+    })
+    render(withWrappers(
+      <NodeCrossDocPanel
+        assetId="a1" projectId="p1" node={mkNode()} onClose={() => {}}
+      />,
+    ))
+    const btn = await screen.findByTestId('kg-cross-doc-split-btn')
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalled()
+      const [url, body] = apiPost.mock.calls[0]
+      expect(url).toBe('/entities/ent_x/split')
+      expect(body).toMatchObject({
+        asset_id: 'a1',
+        node_id: 'n_alice',
+        new_label: 'Alice (split)',
+      })
+    })
+  })
+
+  // v1.5 T99 · global entity 区
+  it('未发布到全局 → 显示 "发布到全局" 按钮; 点击调 POST /entities/:id/publish_global', async () => {
+    const apiGet = vi.spyOn(api, 'get')
+    const apiPost = vi.spyOn(api, 'post')
+    apiGet.mockResolvedValueOnce({
+      data: {
+        id: 'ent_x', project_id: 'p1', type: 'person',
+        label: 'Alice', canonical_label: 'alice', aliases: [],
+        source_refs: [],
+      },
+    })
+    apiGet.mockResolvedValueOnce({ data: [] })
+    apiGet.mockRejectedValueOnce({ code: 'NOT_FOUND', status: 404 })  // global 未发布
+    apiPost.mockResolvedValueOnce({ data: { id: 'gent_x', project_count: 1 } })
+    render(withWrappers(
+      <NodeCrossDocPanel
+        assetId="a1" projectId="p1" node={mkNode()} onClose={() => {}}
+      />,
+    ))
+    const btn = await screen.findByTestId('kg-cross-doc-publish-global-btn')
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalled()
+      const [url] = apiPost.mock.calls[0]
+      expect(url).toBe('/entities/ent_x/publish_global')
+    })
+  })
+
+  it('已发布全局 → 显示 project_count + 解除按钮', async () => {
+    const apiGet = vi.spyOn(api, 'get')
+    apiGet.mockResolvedValueOnce({
+      data: {
+        id: 'ent_x', project_id: 'p1', type: 'person',
+        label: 'Alice', canonical_label: 'alice', aliases: [],
+        source_refs: [],
+      },
+    })
+    apiGet.mockResolvedValueOnce({ data: [] })
+    apiGet.mockResolvedValueOnce({
+      data: {
+        id: 'gent_x', type: 'person', label: 'Alice',
+        canonical_label: 'alice', aliases: [],
+        linked: [
+          { project_id: 'p1', project_entity_id: 'ent_x' },
+          { project_id: 'p2', project_entity_id: 'ent_y' },
+          { project_id: 'p3', project_entity_id: 'ent_z' },
+        ],
+        created_by: null,
+        project_count: 3,
+      },
+    })
+    render(withWrappers(
+      <NodeCrossDocPanel
+        assetId="a1" projectId="p1" node={mkNode()} onClose={() => {}}
+      />,
+    ))
+    const info = await screen.findByTestId('kg-cross-doc-global-info')
+    expect(info.textContent).toContain('3')
+    expect(screen.getByTestId('kg-cross-doc-unlink-global-btn')).toBeInTheDocument()
+  })
 })
