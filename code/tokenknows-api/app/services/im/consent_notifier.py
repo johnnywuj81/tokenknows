@@ -379,31 +379,199 @@ def build_feishu_card(skill: Skill) -> dict[str, Any]:
     }
 
 
-# ─── 钉钉 / 企微 stub ──────────────────────────────────────
+# ─── 钉钉 ActionCard (T55 实装) ────────────────────────────
+
+
+_DINGTALK_API_BASE = "https://oapi.dingtalk.com"
 
 
 def _send_dm_dingtalk_stub(
     connection_raw: dict, skill: Skill, user_id: str
 ) -> bool:
-    logger.info(
-        "consent_dm_dingtalk_stub",
-        skill_id=skill.id,
-        user_id=user_id,
-        note="v0.5.1.1 will call robot/send user-level with ActionCard",
+    """POST /topapi/message/corpconversation/asyncsend_v2 (工作通知).
+
+    https://open.dingtalk.com/document/orgapp/asynchronous-sending-of-enterprise-session-messages
+    Body: msgtype=action_card, action_card with 2 btn_json_list (sign/reject).
+
+    需 connection_raw 含 agent_id (钉钉企业内部应用 id);
+    缺 agent_id → degrade to stub (返 False, web fallback 已写).
+    保留 _stub 名以保持向后兼容 (路由表不动).
+    """
+    auth_enc = connection_raw.get("auth_token_enc")
+    agent_id = connection_raw.get("agent_id") or connection_raw.get(
+        "dingtalk_agent_id"
     )
-    return False  # stub 不算 dm_success
+    if not auth_enc:
+        logger.warning("consent_dm_dingtalk_no_token", skill_id=skill.id)
+        return False
+    if not agent_id:
+        logger.info(
+            "consent_dm_dingtalk_no_agent_id",
+            skill_id=skill.id,
+            note="connection_raw 缺 agent_id; degrade to web fallback only",
+        )
+        return False
+    try:
+        access_token = decrypt_token(auth_enc)
+    except TokenCryptoError as e:
+        logger.warning(
+            "consent_dm_dingtalk_decrypt_failed",
+            skill_id=skill.id, error=str(e),
+        )
+        return False
+
+    settings = get_settings()
+    base = (settings.public_base_url or "").rstrip("/")
+    detail = f"{base}/skills/{skill.id}" if base else f"/skills/{skill.id}"
+    card = build_dingtalk_action_card(skill, detail_url=detail)
+
+    url = f"{_DINGTALK_API_BASE}/topapi/message/corpconversation/asyncsend_v2"
+    body = {
+        "agent_id": agent_id,
+        "userid_list": user_id,
+        "msg": {"msgtype": "action_card", "action_card": card},
+    }
+    with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
+        resp = client.post(
+            url, params={"access_token": access_token}, json=body
+        )
+    if resp.status_code != 200:
+        logger.warning(
+            "consent_dm_dingtalk_http_error",
+            status=resp.status_code, body=resp.text[:200],
+        )
+        return False
+    data = resp.json()
+    if data.get("errcode", 0) != 0:
+        logger.warning(
+            "consent_dm_dingtalk_api_error",
+            errcode=data.get("errcode"),
+            errmsg=data.get("errmsg"),
+        )
+        return False
+    logger.info(
+        "consent_dm_dingtalk_ok",
+        skill_id=skill.id, user_id=user_id,
+        task_id=data.get("task_id"),
+    )
+    return True
+
+
+def build_dingtalk_action_card(
+    skill: Skill, *, detail_url: str
+) -> dict[str, Any]:
+    """钉钉 ActionCard 模板 (双按钮 sign/reject)."""
+    return {
+        "title": f"🤖 Skill 草稿等待你确认 · {skill.name}",
+        "markdown": (
+            f"### {skill.name}\n\n"
+            f"基于最近研发讨论 (含 {len(skill.contributors)} 位贡献者), "
+            f"自动蒸馏出 Skill 草稿.\n\n"
+            f"请选择是否同意发布到项目知识库.\n\n"
+            f"_30 天内未响应将自动归档为 expired_no_consent._"
+        ),
+        "btn_orientation": "1",  # 横向并排
+        "btn_json_list": [
+            {"title": "✅ 同意发布", "action_url": f"{detail_url}?action=sign"},
+            {"title": "❌ 拒绝", "action_url": f"{detail_url}?action=reject"},
+        ],
+    }
+
+
+# ─── 企微 textcard (T55 实装, 整卡单链接 degrade) ──────────
+
+
+_WEWORK_API_BASE = "https://qyapi.weixin.qq.com"
 
 
 def _send_dm_wework_stub(
     connection_raw: dict, skill: Skill, user_id: str
 ) -> bool:
-    logger.info(
-        "consent_dm_wework_stub",
-        skill_id=skill.id,
-        user_id=user_id,
-        note="v0.5.1.1 will call cgi-bin/message/send text+button",
+    """POST /cgi-bin/message/send (企业应用消息).
+
+    https://developer.work.weixin.qq.com/document/path/90236
+    msgtype=textcard: 整个卡片单链接, 跳到 web detail 让用户选 sign/reject.
+    (企微 textcard 不支持多按钮; template_card 需要更复杂权限.)
+
+    缺 agentid → degrade.
+    """
+    auth_enc = connection_raw.get("auth_token_enc")
+    agentid = connection_raw.get("agentid") or connection_raw.get(
+        "wework_agentid"
     )
-    return False
+    if not auth_enc:
+        logger.warning("consent_dm_wework_no_token", skill_id=skill.id)
+        return False
+    if not agentid:
+        logger.info(
+            "consent_dm_wework_no_agentid",
+            skill_id=skill.id,
+            note="connection_raw 缺 agentid; degrade to web fallback only",
+        )
+        return False
+    try:
+        access_token = decrypt_token(auth_enc)
+    except TokenCryptoError as e:
+        logger.warning(
+            "consent_dm_wework_decrypt_failed",
+            skill_id=skill.id, error=str(e),
+        )
+        return False
+
+    settings = get_settings()
+    base = (settings.public_base_url or "").rstrip("/")
+    detail = f"{base}/skills/{skill.id}" if base else f"/skills/{skill.id}"
+    card = build_wework_textcard(skill, detail_url=detail)
+
+    url = f"{_WEWORK_API_BASE}/cgi-bin/message/send"
+    body = {
+        "touser": user_id,
+        "msgtype": "textcard",
+        "agentid": agentid,
+        "textcard": card,
+    }
+    with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
+        resp = client.post(
+            url, params={"access_token": access_token}, json=body
+        )
+    if resp.status_code != 200:
+        logger.warning(
+            "consent_dm_wework_http_error",
+            status=resp.status_code, body=resp.text[:200],
+        )
+        return False
+    data = resp.json()
+    if data.get("errcode", 0) != 0:
+        logger.warning(
+            "consent_dm_wework_api_error",
+            errcode=data.get("errcode"),
+            errmsg=data.get("errmsg"),
+        )
+        return False
+    logger.info(
+        "consent_dm_wework_ok",
+        skill_id=skill.id, user_id=user_id,
+        msgid=data.get("msgid"),
+    )
+    return True
+
+
+def build_wework_textcard(skill: Skill, *, detail_url: str) -> dict[str, Any]:
+    """企微 textcard 模板 (整卡单链接).
+
+    sign/reject 由跳转的 web 页二选一 (企微 textcard 不支持多按钮).
+    """
+    return {
+        "title": "🤖 Skill 草稿等待确认",
+        "description": (
+            f"<div class=\"highlight\">{skill.name}</div>"
+            f"<div class=\"normal\">"
+            f"基于最近 {len(skill.contributors)} 位贡献者的研发讨论自动蒸馏. "
+            f"点击查看并选择同意/拒绝.</div>"
+        ),
+        "url": detail_url,
+        "btntxt": "查看详情",
+    }
 
 
 # ─── 回执通知 (sign / reject / expired) ───────────────────
@@ -477,7 +645,9 @@ def notify_followup(
 
 __all__ = [
     "NotifyReport",
+    "build_dingtalk_action_card",
     "build_feishu_card",
+    "build_wework_textcard",
     "notify_all",
     "notify_followup",
 ]
