@@ -182,6 +182,35 @@ def _bootstrap_from_db() -> None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("entity_registry_rebuild_failed", exc=str(exc))
 
+    # v1.8 T110 · sweep stuck generating: 重启时 LLM 跑到一半挂了的 asset
+    # 永远停在 generating, 用户 UI 一直转圈. 启动时把超时的 mark draft + 标记
+    # parse_error 让用户能看出失败原因.
+    _GENERATING_TIMEOUT_MIN = 5
+    try:
+        now_ts = _now()
+        stuck_ids: list[str] = []
+        for aid, a in list(_assets.items()):
+            if a.status != "generating":
+                continue
+            age_min = (now_ts - a.updated_at).total_seconds() / 60
+            if age_min < _GENERATING_TIMEOUT_MIN:
+                continue
+            # 标 draft + parse_error 告诉用户失败
+            a.status = "draft"
+            a.updated_at = now_ts
+            chapters = _chapters.get(aid, [])
+            if chapters and isinstance(chapters[0].layout, dict):
+                chapters[0].layout["parse_error"] = (
+                    f"生成超时 (启动时仍 generating, age={age_min:.1f}min). "
+                    "可能 LLM 网络不通或 quota 不足. 删除此 asset 重试."
+                )
+            _persist_asset(aid)
+            stuck_ids.append(aid)
+        if stuck_ids:
+            logger.warning("stuck_generating_swept", count=len(stuck_ids), asset_ids=stuck_ids)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("stuck_generating_sweep_failed", exc=str(exc))
+
     stats = db.stats()
     logger.info(
         "persistence_loaded",
