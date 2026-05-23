@@ -25,6 +25,7 @@ import { ConsentPending } from './components/ConsentPending'
 import { ReviewActions } from './components/ReviewActions'
 import { EvolveChain } from './components/EvolveChain'
 import { ReviewTimeline } from './components/ReviewTimeline'
+import { PublishToggle } from './components/PublishToggle'
 import {
   useDeleteSkill,
   useEvolveSkill,
@@ -183,6 +184,9 @@ function SkillDetail({
 
       {/* v0.6.0 T58 · Reviewer 审批操作区 */}
       <ReviewActions skill={skill} />
+
+      {/* v1.0.0 T70 · 发布到 Marketplace toggle */}
+      <PublishToggle skill={skill} />
 
       <div className="flex items-start justify-between gap-4">
         <div>

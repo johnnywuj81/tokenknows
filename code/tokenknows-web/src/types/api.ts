@@ -580,6 +580,12 @@ export interface Skill {
   review_history: ReviewRecord[]
   last_reviewer_id: string | null
   last_reviewed_at: string | null
+  // v1.0.0 · Marketplace (T68)
+  visibility?: 'private' | 'public'
+  published_at?: string | null
+  source_skill_id?: string | null
+  source_project_id?: string | null
+  imported_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -661,6 +667,35 @@ export interface AddProjectMemberRequest {
   user_id: string
   role: ProjectMemberRole
   note?: string
+}
+
+// v1.0.0 · Marketplace (T68-T70)
+export interface SkillPublishResponse {
+  skill_id: string
+  visibility: 'private' | 'public'
+  published_at: string | null
+}
+
+export interface MarketplaceSkillCard {
+  skill_id: string
+  name: string
+  version: number
+  project_id: string
+  trust_score: number
+  usage_count: number
+  acceptance_count: number
+  published_at: string
+  skill_md_preview: string
+}
+
+export interface MarketplaceListResponse {
+  items: MarketplaceSkillCard[]
+  total: number
+}
+
+export interface SkillImportRequest {
+  source_skill_id: string
+  name_hint?: string
 }
 
 // v0.5.1 · Consent endpoints (T50)
