@@ -26,20 +26,25 @@ from app.schemas.skill import (
     ConsentRejectResponse,
     ConsentSignRequest,
     ConsentSignResponse,
+    MarketplaceListResponse,
+    MarketplaceSkillCard,
     Skill,
     SkillDistillRequest,
     SkillEvolveChainResponse,
     SkillGovernanceSummary,
+    SkillImportRequest,
+    SkillPublishResponse,
     SkillReviewActionResponse,
     SkillReviewApproveRequest,
     SkillReviewRejectRequest,
     SkillSubmitForReviewRequest,
     SkillUpdateRequest,
 )
-from app.gateway.http_api._session import get_current_user_id
+from app.gateway.http_api._session import get_current_user_id, require_user_id
 from app.services import generation_service, skill_service
 from app.services.project import membership
 from app.services.skill import consent as skill_consent
+from app.services.skill import marketplace as skill_marketplace
 from app.services.skill import pool as skill_pool
 from app.services.skill import review as skill_review
 
@@ -529,6 +534,137 @@ async def reject_review_endpoint(
         last_reviewer_id=new_skill.last_reviewer_id,
         last_reviewed_at=new_skill.last_reviewed_at,
     )
+
+
+# ─── v1.0.0 · Marketplace endpoints (T68-T69) ──────────────────
+
+
+@router.get("/marketplace/skills", response_model=MarketplaceListResponse)
+async def list_marketplace_skills(
+    q: str | None = None,
+    min_trust: float = 0.0,
+    limit: int = 50,
+) -> MarketplaceListResponse:
+    """跨 project 列 visibility=public 的 skill, 按 published_at DESC."""
+    raw = skill_marketplace.list_marketplace(
+        q=q, min_trust=min_trust, limit=limit
+    )
+    items = [MarketplaceSkillCard(**r) for r in raw]
+    return MarketplaceListResponse(items=items, total=len(items))
+
+
+@router.post(
+    "/skills/{skill_id}/publish",
+    response_model=SkillPublishResponse,
+)
+async def publish_skill_endpoint(
+    skill_id: str,
+    actor_id: str = Depends(require_user_id),
+) -> SkillPublishResponse:
+    """把 skill 发布到 Marketplace. 仅 owner 可操作.
+
+    前置: status=active + review_state=approved.
+    """
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if not membership.is_owner(actor_id, skill.project_id):
+        raise HTTPException(
+            403,
+            detail=f"Only project owner can publish skill {skill_id}",
+        )
+    try:
+        new_skill = skill_marketplace.publish_public(skill)
+    except skill_marketplace.MarketplaceError as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().update(new_skill)
+    logger.info(
+        "skill_published",
+        skill_id=skill_id, project_id=skill.project_id, actor=actor_id,
+    )
+    return SkillPublishResponse(
+        skill_id=new_skill.id,
+        visibility=new_skill.visibility,
+        published_at=new_skill.published_at,
+    )
+
+
+@router.post(
+    "/skills/{skill_id}/unpublish",
+    response_model=SkillPublishResponse,
+)
+async def unpublish_skill_endpoint(
+    skill_id: str,
+    actor_id: str = Depends(require_user_id),
+) -> SkillPublishResponse:
+    """从 Marketplace 撤回 (visibility → private). 仅 owner."""
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if not membership.is_owner(actor_id, skill.project_id):
+        raise HTTPException(
+            403,
+            detail=f"Only project owner can unpublish skill {skill_id}",
+        )
+    new_skill = skill_marketplace.unpublish(skill)
+    skill_service.get_registry().update(new_skill)
+    logger.info(
+        "skill_unpublished",
+        skill_id=skill_id, project_id=skill.project_id, actor=actor_id,
+    )
+    return SkillPublishResponse(
+        skill_id=new_skill.id,
+        visibility=new_skill.visibility,
+        published_at=None,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/skills/import",
+    response_model=Skill,
+    status_code=201,
+)
+async def import_skill_endpoint(
+    project_id: str,
+    body: SkillImportRequest,
+    actor_id: str = Depends(require_user_id),
+) -> Skill:
+    """从 marketplace 复制 1 个 public skill 到本 project.
+
+    需 actor 是 target_project 的 contributor 以上 (含 owner/reviewer).
+    新 skill: status=draft + review_state=not_submitted, 待本 project 审批.
+    """
+    if not membership.can_contribute(actor_id, project_id):
+        raise HTTPException(
+            403,
+            detail=(
+                f"user {actor_id} lacks contributor role for "
+                f"project {project_id}"
+            ),
+        )
+    source = skill_service.get_skill(body.source_skill_id)
+    if source is None:
+        raise HTTPException(404, detail="Source skill not found")
+    try:
+        new_skill = skill_marketplace.import_skill(
+            source_skill=source,
+            target_project_id=project_id,
+            name_hint=body.name_hint,
+        )
+    except skill_marketplace.MarketplaceError as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().add(new_skill)
+    logger.info(
+        "skill_imported",
+        new_skill_id=new_skill.id,
+        source_skill_id=source.id,
+        source_project=source.project_id,
+        target_project=project_id,
+        actor=actor_id,
+    )
+    return new_skill
 
 
 def _find_submit_author(skill: Skill) -> str | None:

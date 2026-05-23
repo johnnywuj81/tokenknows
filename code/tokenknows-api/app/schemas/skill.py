@@ -202,6 +202,26 @@ class Skill(BaseModel):
 
     # ─── v0.6.0 · Reviewer 审批流 (T56) ────────────────────────
     review_state: ReviewState = "not_submitted"
+
+    # ─── v1.0.0 · Marketplace (T68) ────────────────────────────
+    visibility: Literal["private", "public"] = "private"
+    """private = 仅本 project; public = 加入 Skill Marketplace 跨项目可见.
+
+    publish 仅 owner 操作; 仅 status=active + review_state=approved 才允许.
+    """
+
+    published_at: datetime | None = None
+    """publish_public 时填; unpublish 重置 None."""
+
+    source_skill_id: str | None = None
+    """import 时填: 上游 marketplace skill_id (用于追溯)."""
+
+    source_project_id: str | None = None
+    """import 时填: 上游 project_id (跨项目引用; 仅展示, 不强校验存在)."""
+
+    imported_at: datetime | None = None
+    """import 时刻."""
+
     """审批阶段状态. 与 status 正交 (e.g. draft + pending_review).
 
     转换矩阵:
@@ -247,6 +267,12 @@ class Skill(BaseModel):
             values.setdefault("review_history", [])
             values.setdefault("last_reviewer_id", None)
             values.setdefault("last_reviewed_at", None)
+            # v1.0 marketplace (T68)
+            values.setdefault("visibility", "private")
+            values.setdefault("published_at", None)
+            values.setdefault("source_skill_id", None)
+            values.setdefault("source_project_id", None)
+            values.setdefault("imported_at", None)
         return values
 
 
@@ -348,6 +374,45 @@ class SkillReviewActionResponse(BaseModel):
     last_action: Literal["submit", "approve", "reject"]
     last_reviewer_id: str | None = None
     last_reviewed_at: datetime | None = None
+
+
+# ─── v1.0.0 · Marketplace endpoints (T68-T69) ───────────────────────
+
+
+class SkillPublishResponse(BaseModel):
+    """POST /skills/:id/publish response."""
+
+    skill_id: str
+    visibility: Literal["private", "public"]
+    published_at: datetime | None = None
+
+
+class MarketplaceSkillCard(BaseModel):
+    """Marketplace 列表项 (隐藏内部字段)."""
+
+    skill_id: str
+    name: str
+    version: int
+    project_id: str
+    trust_score: float
+    usage_count: int
+    acceptance_count: int
+    published_at: datetime
+    skill_md_preview: str
+    """前 500 字 (避免列表 payload 爆炸); 详情用 GET /skills/:id."""
+
+
+class MarketplaceListResponse(BaseModel):
+    items: list[MarketplaceSkillCard] = Field(default_factory=list)
+    total: int
+
+
+class SkillImportRequest(BaseModel):
+    """POST /projects/:id/skills/import body."""
+
+    source_skill_id: str = Field(..., min_length=1, max_length=64)
+    name_hint: str | None = Field(default=None, max_length=128)
+    """覆盖 skill 名 (避免与本项目冲突)."""
 
 
 # ─── v0.8.0 · Governance Summary (T62) ────────────────────────────
