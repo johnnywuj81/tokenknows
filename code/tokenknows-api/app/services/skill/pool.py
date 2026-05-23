@@ -70,6 +70,61 @@ def collect_evolve_candidates() -> list[dict[str, Any]]:
     return candidates
 
 
+def recompute_all_trust_scores(*, now: datetime | None = None) -> dict[str, int]:
+    """T61: 每日重算所有 active/draft skill 的 trust_score.
+
+    问题: _compute_trust_score 的 recency_decay = exp(-days/30) 是时间函数,
+    但当前只在 on_chapter_state_changed 时算; 不用的 skill recency_decay
+    自然衰减但 trust_score 不更新 → select_skills 排序失真.
+
+    解法: 每天 02:00 全量 recompute. 不动 metrics 计数 (acceptance/rejection/
+    usage), 只重算 trust_score.
+
+    Returns:
+        {"scanned": N, "updated": M, "skipped": K}
+        updated = trust_score 真有变 (避免无谓 disk write);
+        skipped = deprecated/locked 等不动的 status.
+    """
+    from app.services import skill_service
+    from app.services.skill_service import _compute_trust_score
+
+    scanned = 0
+    updated = 0
+    skipped = 0
+    try:
+        for skill_id, skill in list(
+            skill_service.get_registry()._skills.items()  # noqa: SLF001
+        ):
+            scanned += 1
+            if skill.status not in ("active", "draft"):
+                skipped += 1
+                continue
+            if skill.locked:
+                skipped += 1
+                continue
+            new_trust = _compute_trust_score(
+                acceptance=skill.metrics.acceptance_count,
+                rejection=skill.metrics.rejection_count,
+                usage=skill.metrics.usage_count,
+                last_used_at=skill.last_used_at,
+            )
+            # 浮点 noise tolerance: 差异 < 1e-4 不写
+            if abs(new_trust - skill.metrics.trust_score) < 1e-4:
+                continue
+            new_metrics = skill.metrics.model_copy(
+                update={"trust_score": new_trust}
+            )
+            new_skill = skill.model_copy(update={
+                "metrics": new_metrics,
+                "updated_at": now or datetime.now(timezone.utc),
+            })
+            skill_service.get_registry().update(new_skill)
+            updated += 1
+    except Exception as e:  # noqa: BLE001
+        logger.warning("recompute_all_trust_scores_failed", error=str(e))
+    return {"scanned": scanned, "updated": updated, "skipped": skipped}
+
+
 def collect_deprecation_candidates(
     *, now: datetime | None = None
 ) -> list[dict[str, Any]]:
@@ -128,4 +183,5 @@ __all__ = [
     "collect_deprecation_candidates",
     "collect_evolve_candidates",
     "collect_failing_chapters_for_skill",
+    "recompute_all_trust_scores",
 ]

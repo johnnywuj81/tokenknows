@@ -205,6 +205,32 @@ async def quota_resetter_job() -> None:
         logger.error("auto_trigger_quota_resetter_failed", error=str(e))
 
 
+async def skill_trust_recompute_job() -> None:
+    """每天 02:00 重算所有 active/draft skill 的 trust_score (T61).
+
+    保持 recency_decay 随时间自然衰减反映到 select_skills_for_chapter 的排序;
+    无须 evolve / deprecation 子集合, 只刷数. 与 03:00 evolve / 03:10
+    deprecation 错峰, 让后续 job 用到的是最新 trust_score.
+    """
+    try:
+        from app.services.skill import pool as skill_pool
+
+        result = skill_pool.recompute_all_trust_scores()
+        if result["updated"] > 0:
+            logger.info(
+                "skill_trust_recompute_done",
+                scanned=result["scanned"],
+                updated=result["updated"],
+                skipped=result["skipped"],
+            )
+        else:
+            logger.debug("skill_trust_recompute_noop", scanned=result["scanned"])
+    except Exception as e:
+        logger.error(
+            "skill_trust_recompute_failed", error=str(e), exc_info=True
+        )
+
+
 async def skill_deprecation_sweep_job() -> None:
     """每天 03:10 扫 dormant / low-trust skill 自动 deprecate (T60).
 
@@ -338,6 +364,7 @@ __all__ = [
     "consent_sweep_expired_job",
     "cron_evaluator_job",
     "skill_deprecation_sweep_job",
+    "skill_trust_recompute_job",
     "threshold_scanner_job",
     "withdraw_window_resolver_job",
     "skill_evolve_checker_job",

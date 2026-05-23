@@ -198,6 +198,15 @@ def _register_fixed_jobs(scheduler: AsyncIOScheduler) -> None:
         name="Skill 自动归档 (每天 03:10)",
     )
 
+    # 9. T61 v0.7.0 · Skill trust_score 重算: 每天 02:00 (在 evolve/deprecation 前)
+    scheduler.add_job(
+        auto_trigger_jobs.skill_trust_recompute_job,
+        trigger=CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TIMEZONE),
+        id="skill_trust_recompute",
+        replace_existing=True,
+        name="Skill trust_score 重算 (每天 02:00)",
+    )
+
     logger.debug("auto_trigger_jobs_registered", count=len(scheduler.get_jobs()))
 
 
