@@ -14,6 +14,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type {
+  ConsentRejectRequest,
+  ConsentRejectResponse,
+  ConsentSignRequest,
+  ConsentSignResponse,
   Skill,
   SkillDistillRequest,
   SkillStatus,
@@ -129,6 +133,50 @@ export function useDeleteSkill(projectId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['skills', projectId] })
+    },
+  })
+}
+
+// ─── v0.5.1 · Consent (T50) ──────────────────────────────────────
+
+export function useSignConsent(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      skillId,
+      body,
+    }: { skillId: string; body: ConsentSignRequest }) => {
+      const res = await api.post<ConsentSignResponse>(
+        `/skills/${skillId}/consent/sign`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
+      qc.invalidateQueries({ queryKey: skillKey.detail(data.skill_id) })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+export function useRejectConsent(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      skillId,
+      body,
+    }: { skillId: string; body: ConsentRejectRequest }) => {
+      const res = await api.post<ConsentRejectResponse>(
+        `/skills/${skillId}/consent/reject`,
+        body,
+      )
+      return res.data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
+      qc.invalidateQueries({ queryKey: skillKey.detail(data.skill_id) })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

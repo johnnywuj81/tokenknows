@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { ProjectSwitcher } from '@/features/workbench/components/ProjectSwitcher'
 import { WithdrawNotification } from '@/features/auto-triggers/WithdrawNotification'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 
 export function AppLayout() {
   const user = useAuthStore((s) => s.user)
@@ -50,6 +51,9 @@ export function AppLayout() {
         <div className="flex items-center gap-3">
           {/* 项目切换器 (T03) - 在所有需要项目上下文的页面都可见 */}
           <ProjectSwitcher />
+
+          {/* v0.5.1 T51 · 通知铃铛 (consent_* 事件) */}
+          {user ? <NotificationBell /> : null}
 
           {user ? (
             <div className="flex items-center gap-2">

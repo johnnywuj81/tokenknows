@@ -500,7 +500,23 @@ export interface InstanceStats {
 // v0.2 · Skill (蒸馏出的 Agent 专家技能)
 // ────────────────────────────────────────────────────────────────────
 
-export type SkillStatus = 'draft' | 'active' | 'deprecated'
+export type SkillStatus =
+  | 'draft'
+  | 'active'
+  | 'deprecated'
+  | 'locked'
+  // v0.5.1 · Q5 contributor 个人同意 (T48)
+  | 'pending_contributor_consent'
+  | 'rejected_by_contributor'
+  | 'expired_no_consent'
+
+/** v0.5.1 · 单条 contributor consent 记录 */
+export interface ConsentRecord {
+  user_id: string
+  signed_at: string
+  channel: 'im_dm' | 'web'
+  note: string | null
+}
 
 export interface SkillMetrics {
   /** 被注入到 prompt 的累计次数 */
@@ -538,8 +554,64 @@ export interface Skill {
   status: SkillStatus
   /** evolve_skill_v2 时记录上一代 skill id */
   parent_skill_id: string | null
+  // v0.5.1 · Q5 consent (T48)
+  contributors: string[]
+  consent_required_from: string[]
+  consent_signed_by: ConsentRecord[]
+  consent_rejected_by: ConsentRecord | null
+  consent_expires_at: string | null
   created_at: string
   updated_at: string
+}
+
+// v0.5.1 · Consent endpoints (T50)
+export interface ConsentSignRequest {
+  user_id: string
+  channel?: 'im_dm' | 'web'
+  note?: string
+}
+
+export interface ConsentSignResponse {
+  skill_id: string
+  current_status: SkillStatus
+  signed_count: number
+  required_count: number
+  all_signed: boolean
+}
+
+export interface ConsentRejectRequest {
+  user_id: string
+  channel?: 'im_dm' | 'web'
+  reason: string
+}
+
+export interface ConsentRejectResponse {
+  skill_id: string
+  current_status: SkillStatus
+  rejected_by: string
+}
+
+export type NotificationType =
+  | 'consent_request'
+  | 'consent_signed'
+  | 'consent_rejected'
+  | 'consent_expired'
+
+export interface WebNotification {
+  id: string
+  user_id: string
+  type: NotificationType
+  title: string
+  body: string
+  link_url: string
+  read: boolean
+  created_at: string
+  related_skill_id: string | null
+}
+
+export interface WebNotificationListResponse {
+  items: WebNotification[]
+  unread_count: number
 }
 
 export interface SkillDistillRequest {

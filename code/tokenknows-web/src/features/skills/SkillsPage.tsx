@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Skill, SkillStatus } from '@/types/api'
+import { ConsentPending } from './components/ConsentPending'
 import {
   useDeleteSkill,
   useEvolveSkill,
@@ -73,6 +74,9 @@ export default function SkillsPage() {
         <TabsList>
           <TabsTrigger value="active">当前 (active)</TabsTrigger>
           <TabsTrigger value="draft">草稿 (draft)</TabsTrigger>
+          <TabsTrigger value="pending_contributor_consent">
+            待 contributor 同意
+          </TabsTrigger>
           <TabsTrigger value="deprecated">归档 (deprecated)</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -171,6 +175,9 @@ function SkillDetail({
 }: SkillDetailProps) {
   return (
     <Card className="flex flex-col gap-4 p-5">
+      {/* v0.5.1 T51 · pending_contributor_consent 时显示 banner */}
+      <ConsentPending skill={skill} />
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="font-content text-xl font-semibold text-text-primary">
