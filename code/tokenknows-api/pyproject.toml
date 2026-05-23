@@ -29,6 +29,13 @@ dependencies = [
     "apscheduler>=3.10.0,<4.0",
     # v0.4 自动触发 · cron 表达式解析 (T29 RuleEvaluator)
     "croniter>=2.0.0",
+    # v1.1 · JWT session auth (T74-T76 替换 v0.9 X-User-Id MVP)
+    "python-jose[cryptography]>=3.5.0",
+    "passlib[bcrypt]>=1.7.4",
+    # 注: bcrypt 5.x 与 passlib 1.7.x 不兼容 (passlib 探测 __about__);
+    # pin <4.1 等 passlib 2.x 出来再放开
+    "bcrypt>=4.0,<4.1",
+    "email-validator>=2.0.0",
 ]
 
 [project.optional-dependencies]

@@ -1123,6 +1123,59 @@ class SqliteStore:
             return None
         return json.loads(rows[0]["json"])
 
+    # ─── 用户账户 (v1.1.0 · T74) ─────────────────────────
+
+    def upsert_user(
+        self,
+        user_id: str,
+        email: str,
+        display_name: str,
+        password_hash: str,
+        is_instance_admin: bool,
+        last_login_at: str | None,
+        created_at: str,
+        updated_at: str,
+        json_str: str,
+    ) -> None:
+        """新建 / 更新用户. email UNIQUE."""
+        self._exec(
+            """
+            INSERT INTO users
+                (id, email, display_name, password_hash, is_instance_admin,
+                 last_login_at, created_at, updated_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                email             = excluded.email,
+                display_name      = excluded.display_name,
+                password_hash     = excluded.password_hash,
+                is_instance_admin = excluded.is_instance_admin,
+                last_login_at     = excluded.last_login_at,
+                updated_at        = excluded.updated_at,
+                json              = excluded.json
+            """,
+            (
+                user_id, email, display_name, password_hash,
+                1 if is_instance_admin else 0,
+                last_login_at, created_at, updated_at, json_str,
+            ),
+        )
+
+    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM users WHERE id = ?", (user_id,)
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM users WHERE email = ?", (email.lower(),)
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
     # ─── 项目成员 (v0.9.0 · T65) ─────────────────────────
 
     def upsert_project_member(

@@ -224,6 +224,21 @@ CREATE TABLE IF NOT EXISTS generation_quotas (
 CREATE INDEX IF NOT EXISTS generation_quotas_project_idx
     ON generation_quotas(project_id, year_month DESC);
 
+-- v1.1.0 · 账户系统 (T74)
+-- 邮箱 + bcrypt 密码 + JWT issue (替换 v0.9 X-User-Id MVP)
+CREATE TABLE IF NOT EXISTS users (
+    id                  TEXT PRIMARY KEY,
+    email               TEXT NOT NULL UNIQUE,
+    display_name        TEXT NOT NULL,
+    password_hash       TEXT NOT NULL,                 -- bcrypt
+    is_instance_admin   INTEGER NOT NULL DEFAULT 0,
+    last_login_at       TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    json                TEXT NOT NULL                  -- 完整 User dump
+);
+CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
+
 -- v0.9.0 · 项目成员 + 角色 (T65)
 -- 一个 user 在一个 project 内仅 1 role; 同 user 跨 project 各自一行.
 CREATE TABLE IF NOT EXISTS project_members (

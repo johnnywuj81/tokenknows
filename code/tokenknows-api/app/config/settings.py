@@ -172,6 +172,19 @@ class Settings(BaseSettings):
         default=None, alias="PUBLIC_BASE_URL",
     )
 
+    # ─── v1.1 · JWT Auth (T74) ───────────────────────────────────
+    # JWT 签名密钥. MVP 用 env var; 生产换 KMS / Vault 旋转.
+    # 默认值仅 dev 用; 生产 startup 校验非默认值.
+    jwt_secret_key: str = Field(
+        default="dev-only-jwt-secret-change-me-in-prod",
+        alias="JWT_SECRET_KEY",
+    )
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    # access_token 过期 (短期); refresh_token v1.2 实现
+    jwt_access_token_ttl_minutes: int = Field(
+        default=60 * 24, alias="JWT_ACCESS_TOKEN_TTL_MINUTES"
+    )
+
     # ─── 服务运行 ────────────────────────────────────────────────
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
