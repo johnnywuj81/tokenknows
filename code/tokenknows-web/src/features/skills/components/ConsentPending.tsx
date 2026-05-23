@@ -12,7 +12,7 @@
  * 设计依据: T51 §5.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Skill } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
@@ -25,6 +25,10 @@ interface ConsentPendingProps {
 export function ConsentPending({ skill }: ConsentPendingProps) {
   const user = useAuthStore((s) => s.user)
   const [action, setAction] = useState<'sign' | 'reject' | null>(null)
+  // v1.0.1 review fix: skill 变化时重置 action
+  useEffect(() => {
+    setAction(null)
+  }, [skill.id])
 
   // 仅 pending 时显示
   if (skill.status !== 'pending_contributor_consent') {

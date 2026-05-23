@@ -55,7 +55,7 @@ def collect_evolve_candidates() -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     try:
         # _registry._skills 是 dict[skill_id, Skill]; 内存全量遍历
-        for skill in skill_service.get_registry()._skills.values():  # noqa: SLF001
+        for skill in skill_service.get_registry().all_skills():
             if skill_service.should_evolve(skill):
                 candidates.append({
                     "skill_id": skill.id,
@@ -92,9 +92,7 @@ def recompute_all_trust_scores(*, now: datetime | None = None) -> dict[str, int]
     updated = 0
     skipped = 0
     try:
-        for skill_id, skill in list(
-            skill_service.get_registry()._skills.items()  # noqa: SLF001
-        ):
+        for skill_id, skill in skill_service.get_registry().all_skill_items():
             scanned += 1
             if skill.status not in ("active", "draft"):
                 skipped += 1
@@ -145,7 +143,7 @@ def collect_deprecation_candidates(
     dormant_cutoff = now_utc - timedelta(days=DORMANT_DAYS)
     candidates: list[dict[str, Any]] = []
     try:
-        for skill in skill_service.get_registry()._skills.values():  # noqa: SLF001
+        for skill in skill_service.get_registry().all_skills():
             if skill.status != "active":
                 continue
             if skill.locked:
@@ -245,15 +243,18 @@ def build_evolve_chain(skill_id: str) -> list[dict[str, Any]]:
         return []
 
     # parent 链: 向上追溯到没有 parent 的 root
+    # v1.0.1 (review fix): seen 集合包含 target.id 防 cycle 回到自身
     parents: list[Any] = []
+    seen_parent_ids: set[str] = {target.id}
     cur = target
     while cur.parent_skill_id:
+        if cur.parent_skill_id in seen_parent_ids:
+            break  # 防环 (包含回到 target / 直接重复)
         parent = skill_service.get_skill(cur.parent_skill_id)
         if parent is None:
             break
-        if parent.id in [p.id for p in parents]:
-            break  # 防环 (理论不该发生)
         parents.append(parent)
+        seen_parent_ids.add(parent.id)
         cur = parent
     parents.reverse()
 

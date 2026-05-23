@@ -14,12 +14,17 @@ Backward-compat:
 
 from __future__ import annotations
 
+import threading
 import uuid
 from datetime import datetime, timezone
 
 from app.config.logging import logger
 from app.persistence import store as store_module
 from app.schemas.project_member import ProjectMember, ProjectMemberRole
+
+# v1.0.1 (review fix): bootstrap 防竞态 - 进程内锁
+# 多进程不够 (需 DB 级 unique constraint), v1.1 上 JWT + 真实 user 后再加.
+_bootstrap_lock = threading.Lock()
 
 
 # role 数值排序: 高 → 低权; 用户实际 role 数值 >= 要求 role → has_role=True

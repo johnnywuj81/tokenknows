@@ -126,6 +126,19 @@ class _SkillRegistry:
     def get(self, skill_id: str) -> Skill | None:
         return self._skills.get(skill_id)
 
+    def all_skills(self) -> list[Skill]:
+        """v1.0.1 (review fix): 暴露只读快照供 pool.py 等使用,
+        避免私有属性 _skills 被外部访问 (SLF001).
+        返回 list 而非 dict.values() 以让调用方安全遍历 (避免遍历中 mutation).
+        """
+        with self._write_lock:
+            return list(self._skills.values())
+
+    def all_skill_items(self) -> list[tuple[str, Skill]]:
+        """同 all_skills 但返 (id, skill) 元组列表."""
+        with self._write_lock:
+            return list(self._skills.items())
+
     def list_for_project(
         self, project_id: str, status: SkillStatus | None = None
     ) -> list[Skill]:

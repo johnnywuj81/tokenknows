@@ -31,8 +31,10 @@ export function useUnreadCount(pollIntervalMs = 60_000) {
   return useQuery({
     queryKey: notificationKey.unreadCount(userId),
     queryFn: async (): Promise<number> => {
+      // v1.0.1 review fix: 替换 ! 非空断言为显式 guard
+      if (!userId) throw new Error('userId required')
       const res = await api.get<{ unread_count: number }>(
-        `/me/notifications/unread-count?user_id=${encodeURIComponent(userId!)}`,
+        `/me/notifications/unread-count?user_id=${encodeURIComponent(userId)}`,
       )
       return res.data.unread_count
     },
@@ -47,8 +49,10 @@ export function useNotifications(unreadOnly = false, limit = 50) {
   return useQuery({
     queryKey: notificationKey.list(userId, unreadOnly),
     queryFn: async (): Promise<WebNotification[]> => {
+      // v1.0.1 review fix: 同上 guard
+      if (!userId) throw new Error('userId required')
       const params = new URLSearchParams()
-      params.set('user_id', userId!)
+      params.set('user_id', userId)
       params.set('limit', String(limit))
       if (unreadOnly) params.set('unread_only', 'true')
       const res = await api.get<WebNotificationListResponse>(

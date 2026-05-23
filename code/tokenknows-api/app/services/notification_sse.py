@@ -122,7 +122,9 @@ def publish_to_user(user_id: str, event: SseNotificationEvent) -> int:
             target_user=user_id,
         )
         return 0
-    queues = _sse_queues.get(user_id, [])
+    # v1.0.1 (review fix): snapshot list 避免 publish 同时 subscribe/cleanup
+    # 导致 "dict changed size during iteration" / 持有已 close queue.
+    queues = list(_sse_queues.get(user_id, []))
     delivered = 0
     for q in queues:
         try:

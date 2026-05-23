@@ -192,9 +192,9 @@ def _publish_sse_notification(
 ) -> None:
     """统一 SSE 推送入口 (try-except 不阻塞主路径)."""
     try:
+        # v1.0.1: 去掉重复 import (store_module 已在模块顶层导入)
         from app.services import notification_sse
         from app.services.notification_sse import SseNotificationEvent
-        from app.persistence import store as store_module
 
         unread = store_module.get_db().count_unread_notifications(notif.user_id)
         ev = SseNotificationEvent(

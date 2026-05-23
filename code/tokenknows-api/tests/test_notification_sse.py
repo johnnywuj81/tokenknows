@@ -188,9 +188,14 @@ def test_stream_endpoint_registered():
 
 
 def test_stream_endpoint_user_id_required_via_route_validation(client):
-    """缺 user_id 应 422 (Pydantic Query 校验)."""
-    # 不打开 stream, 用 HEAD 触发 Query validation
+    """缺 user_id query 应 422; 缺 X-User-Id session 应 401."""
+    # 无 session header → 401
     r = client.get("/me/notifications/stream")
-    assert r.status_code == 422
+    assert r.status_code == 401
+    # 有 session 但无 user_id → 422
+    r2 = client.get(
+        "/me/notifications/stream", headers={"X-User-Id": "ou-a"}
+    )
+    assert r2.status_code == 422
 
 

@@ -41,9 +41,17 @@ export function MembersPanel({ projectId }: MembersPanelProps) {
   }
   if (q.isError || !q.data) {
     return (
-      <p className="text-sm text-danger">
-        加载成员失败. <button onClick={() => q.refetch()}>重试</button>
-      </p>
+      <div className="flex items-center gap-2 text-sm text-danger">
+        <span>加载成员失败.</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => q.refetch()}
+        >
+          重试
+        </Button>
+      </div>
     )
   }
 

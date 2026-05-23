@@ -11,7 +11,7 @@
  * 当前用户 ∈ contributors 时认作 "可操作".
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Skill } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
@@ -26,6 +26,10 @@ export function ReviewActions({ skill }: ReviewActionsProps) {
   const [action, setAction] = useState<
     'submit' | 'approve' | 'reject' | 'resubmit' | null
   >(null)
+  // v1.0.1 review fix: skill 变化时重置 action 避免上一个 skill 的 dialog 继续显示
+  useEffect(() => {
+    setAction(null)
+  }, [skill.id])
 
   const currentUserId = user?.id ?? ''
   // MVP: 任何 contributor 都可以是 reviewer / author

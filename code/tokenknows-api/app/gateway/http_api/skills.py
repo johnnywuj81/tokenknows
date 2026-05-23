@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config.logging import logger
 from app.schemas.skill import (
@@ -186,12 +186,16 @@ async def delete_skill_endpoint(skill_id: str) -> None:
     response_model=ConsentSignResponse,
 )
 async def sign_consent_endpoint(
-    skill_id: str, body: ConsentSignRequest
+    skill_id: str,
+    body: ConsentSignRequest,
+    session_user: str | None = Depends(get_current_user_id),
 ) -> ConsentSignResponse:
     """Contributor 签字同意发布该 skill.
 
     全员签 → status 自动转 draft (进入 Reviewer 审批流).
     幂等: 同一 user 第二次 sign 返 200 但只计一次.
+    v1.0.1: 若传 X-User-Id, 校验 session_user == body.user_id (防伪造);
+    backward-compat: 无 header 时退化用 body.user_id (老 IM 跳链接).
     """
     skill = skill_service.get_skill(skill_id)
     if skill is None:
@@ -203,6 +207,12 @@ async def sign_consent_endpoint(
                 f"Skill status={skill.status}; "
                 f"consent sign 仅在 pending_contributor_consent 阶段允许"
             ),
+        )
+    # v1.0.1 安全修复: session_user 必须与 body.user_id 一致 (有 session 时)
+    if session_user and session_user != body.user_id:
+        raise HTTPException(
+            403,
+            detail="body.user_id mismatch with X-User-Id session",
         )
     if body.user_id not in skill.consent_required_from:
         raise HTTPException(
@@ -255,12 +265,15 @@ async def sign_consent_endpoint(
     response_model=ConsentRejectResponse,
 )
 async def reject_consent_endpoint(
-    skill_id: str, body: ConsentRejectRequest
+    skill_id: str,
+    body: ConsentRejectRequest,
+    session_user: str | None = Depends(get_current_user_id),
 ) -> ConsentRejectResponse:
     """Contributor 拒绝该 skill 发布 (单否决冻结).
 
     一旦任一 contributor 拒绝, status → rejected_by_contributor;
     其他人后续 sign 无效 (409).
+    v1.0.1: session_user 必须与 body.user_id 一致 (有 session 时).
     """
     skill = skill_service.get_skill(skill_id)
     if skill is None:
@@ -272,6 +285,11 @@ async def reject_consent_endpoint(
                 f"Skill status={skill.status}; "
                 f"consent reject 仅在 pending_contributor_consent 阶段允许"
             ),
+        )
+    if session_user and session_user != body.user_id:
+        raise HTTPException(
+            403,
+            detail="body.user_id mismatch with X-User-Id session",
         )
     if body.user_id not in skill.consent_required_from:
         raise HTTPException(
@@ -333,16 +351,24 @@ async def list_pending_review_skills(project_id: str) -> list[Skill]:
     response_model=SkillReviewActionResponse,
 )
 async def submit_for_review_endpoint(
-    skill_id: str, body: SkillSubmitForReviewRequest
+    skill_id: str,
+    body: SkillSubmitForReviewRequest,
+    session_user: str | None = Depends(get_current_user_id),
 ) -> SkillReviewActionResponse:
     """作者提交 skill 等待审批 (draft → review_state=pending_review).
 
     通知策略: 默认通知该 project 下所有 contributor 作为潜在 reviewer
     (生产应换为 project_owner / 显式 reviewer role).
+    v1.0.1: session_user 必须与 body.user_id 一致 (有 session 时).
     """
     skill = skill_service.get_skill(skill_id)
     if skill is None:
         raise HTTPException(404, detail="Skill not found")
+    if session_user and session_user != body.user_id:
+        raise HTTPException(
+            403,
+            detail="body.user_id mismatch with X-User-Id session",
+        )
     if skill.status != "draft":
         raise HTTPException(
             409,
@@ -541,9 +567,9 @@ async def reject_review_endpoint(
 
 @router.get("/marketplace/skills", response_model=MarketplaceListResponse)
 async def list_marketplace_skills(
-    q: str | None = None,
-    min_trust: float = 0.0,
-    limit: int = 50,
+    q: str | None = Query(default=None, max_length=200),
+    min_trust: float = Query(default=0.0, ge=0.0, le=1.0),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> MarketplaceListResponse:
     """跨 project 列 visibility=public 的 skill, 按 published_at DESC."""
     raw = skill_marketplace.list_marketplace(
@@ -656,6 +682,38 @@ async def import_skill_endpoint(
         raise HTTPException(409, detail=str(e)) from e
 
     skill_service.get_registry().add(new_skill)
+    # v1.0.1 (review fix): import 后 embedding=None, 异步触发重算
+    # 避免 select_skills_for_chapter 排序 score=0 (空 embedding 跳过)
+    try:
+        import asyncio
+        from app.services.skill_service import embed_batch
+
+        async def _reembed() -> None:
+            try:
+                vectors = await embed_batch([new_skill.skill_md])
+                if vectors:
+                    updated = new_skill.model_copy(
+                        update={"embedding": vectors[0]}
+                    )
+                    skill_service.get_registry().update(updated)
+                    logger.info(
+                        "skill_import_embedding_done",
+                        skill_id=new_skill.id,
+                        embedding_dim=len(vectors[0]),
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "skill_import_embedding_failed",
+                    skill_id=new_skill.id, error=str(e),
+                )
+
+        asyncio.create_task(_reembed())
+    except Exception as e:  # noqa: BLE001
+        # embed_batch 可能未导入 (e.g. unit test 环境); 不阻断 import
+        logger.warning(
+            "skill_import_embedding_skip", skill_id=new_skill.id, error=str(e)
+        )
+
     logger.info(
         "skill_imported",
         new_skill_id=new_skill.id,

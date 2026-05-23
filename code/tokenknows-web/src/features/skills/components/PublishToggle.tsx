@@ -22,14 +22,14 @@ export function PublishToggle({ skill }: PublishToggleProps) {
   const unpublish = useUnpublishSkill(skill.project_id)
   const [error, setError] = useState<string | null>(null)
 
-  // 不满足条件 → 不渲染 (避免 UI 干扰)
+  // v1.0.1 review fix: 显示条件 = canPublish OR isPublic (不是 AND!)
+  // 已 public 的 skill 即便 status 变了也要让 owner 能撤回.
   const canPublish =
     skill.status === 'active' && skill.review_state === 'approved'
-  if (!canPublish && skill.visibility !== 'public') {
+  const isPublic = skill.visibility === 'public'
+  if (!canPublish && !isPublic) {
     return null
   }
-
-  const isPublic = skill.visibility === 'public'
 
   async function handleToggle(): Promise<void> {
     setError(null)

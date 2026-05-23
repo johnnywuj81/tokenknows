@@ -93,7 +93,7 @@ def list_marketplace(
     items: list[dict[str, Any]] = []
     try:
         q_lower = q.lower() if q else None
-        for skill in skill_service.get_registry()._skills.values():  # noqa: SLF001
+        for skill in skill_service.get_registry().all_skills():
             if skill.visibility != "public":
                 continue
             if skill.metrics.trust_score < min_trust:

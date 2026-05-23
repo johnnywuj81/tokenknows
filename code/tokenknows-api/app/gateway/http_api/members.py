@@ -60,17 +60,24 @@ async def add_member_endpoint(
 
     Bootstrap: 项目无任何 member 时, 第一个调用者自动成为 owner
     (规避 鸡生蛋: 没 owner 就没人能创建第一个 owner).
+    v1.0.1: bootstrap 加进程内锁防止并发请求让 2 个用户同时成 owner.
     """
+    # 先在锁外快速判: 大部分调用是非 bootstrap 路径, 不进锁省并发开销
     existing = membership.list_members(project_id)
     if not existing:
-        # bootstrap: 强制 actor 成为 owner, 忽略 body.role
-        return membership.add_member(
-            project_id=project_id,
-            user_id=actor_id,
-            role="owner",
-            added_by=actor_id,
-            note="(auto-bootstrap owner)",
-        )
+        # bootstrap: 进入锁内再读一次 (double-check)
+        with membership._bootstrap_lock:  # noqa: SLF001
+            existing = membership.list_members(project_id)
+            if not existing:
+                # 强制 actor 成为 owner, 忽略 body.role
+                return membership.add_member(
+                    project_id=project_id,
+                    user_id=actor_id,
+                    role="owner",
+                    added_by=actor_id,
+                    note="(auto-bootstrap owner)",
+                )
+            # else: 已有他人 bootstrap 成功, 走非 bootstrap 路径 (下面)
     # 非 bootstrap 路径: 必须 owner
     if not membership.is_owner(actor_id, project_id):
         raise HTTPException(403, detail="Only project owner can add members")

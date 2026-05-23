@@ -244,7 +244,6 @@ async def skill_deprecation_sweep_job() -> None:
     try:
         from datetime import datetime, timezone
 
-        from app.persistence import store as store_module
         from app.services import skill_service
         from app.services.skill import pool as skill_pool
         from app.services.skill import review_notifier
@@ -254,7 +253,8 @@ async def skill_deprecation_sweep_job() -> None:
             logger.debug("skill_deprecation_sweep_no_candidates")
             return
 
-        db = store_module.get_db()
+        # v1.0.1 (review fix): 移除未用的 db assignment (ruff F841);
+        # 实际持久化通过 skill_service.get_registry().update 透传到 store.
         now_iso = datetime.now(timezone.utc).isoformat()
         deprecated = 0
         errors = 0
