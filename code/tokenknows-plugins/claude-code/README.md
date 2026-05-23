@@ -1,6 +1,8 @@
-# tokenknows — Claude Code Plugin
+# tokenknows — Claude Code / Cowork Plugin
 
-把当前 Claude Code session 蒸馏成 **7 种结构化文档** (周报 / 技术方案 / ADR / 故障复盘 / 技术书籍 / Skill / 知识图谱),通过 MCP 接 [tokenknows-api](https://github.com/johnnywuj81/tokenknows) 后端 5-stage LLM pipeline。
+把当前 Claude session 蒸馏成 **7 种结构化文档** (周报 / 技术方案 / ADR / 故障复盘 / 技术书籍 / Skill / 知识图谱),通过 MCP 接 [tokenknows-api](https://github.com/johnnywuj81/tokenknows) 后端 5-stage LLM pipeline。
+
+> 同时支持 **Claude Cowork** (官方 plugin schema 完全兼容,一份 plugin 双 host 用)。Cowork 安装方式详见 [INSTALL-COWORK.md](./INSTALL-COWORK.md)。
 
 ## 能干什么
 
