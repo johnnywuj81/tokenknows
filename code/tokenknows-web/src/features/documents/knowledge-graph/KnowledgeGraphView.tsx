@@ -1,5 +1,5 @@
 /**
- * KnowledgeGraphView · v1.2.1 T88 · DocumentPage 的 KG 分支容器.
+ * KnowledgeGraphView · v1.2.1 T88 / v1.3.1 T96 · DocumentPage 的 KG 分支容器.
  *
  * 抽出原因: useChapterEvidence 不能在 DocumentPage 主体的 if 分支后调用
  * (违反 React Hooks rules); 抽成子组件每次都无条件 hook.
@@ -9,13 +9,16 @@
  *   - 收到 KnowledgeGraphPage onNodeClick 时, 按 node.source_event_ids 找匹配
  *     evidence_id, 触发 openEvidence(chapter_id, evidence_id)
  *   - 没有匹配时 fallback: openEvidence(chapter_id, null) (打开 drawer 默认第一条)
+ *   - v1.3.1 T96: 同时跟踪 selectedNode, 在画布右上浮起 NodeCrossDocPanel
+ *     显示该实体跨文档关联
  */
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import type { Asset, Chapter, KGNode } from '@/types/api'
 import { DocHeader } from '../page/components/DocHeader'
 import KnowledgeGraphPage from './KnowledgeGraphPage'
 import { useChapterEvidence } from '../hooks/useChapterEvidence'
+import { NodeCrossDocPanel } from './NodeCrossDocPanel'
 
 interface KnowledgeGraphViewProps {
   asset: Asset
@@ -37,9 +40,12 @@ export function KnowledgeGraphView({
 }: KnowledgeGraphViewProps) {
   const evidenceQuery = useChapterEvidence(asset.id, chapter.id)
   const evidences = evidenceQuery.data ?? []
+  const [selectedNode, setSelectedNode] = useState<KGNode | null>(null)
 
   const handleNodeClick = useCallback(
     (node: KGNode): void => {
+      // T96: 记录选中, 触发跨文档面板
+      setSelectedNode(node)
       // 找第一条 evidence.event_id ∈ node.source_event_ids
       const eventIds = new Set(node.source_event_ids)
       const match = evidences.find((ev) => eventIds.has(ev.event_id))
@@ -61,7 +67,19 @@ export function KnowledgeGraphView({
         submitting={submitting}
         onPublish={onPublish}
       />
-      <KnowledgeGraphPage chapter={chapter} onNodeClick={handleNodeClick} />
+      <div className="relative h-full min-h-0">
+        <KnowledgeGraphPage chapter={chapter} onNodeClick={handleNodeClick} />
+        {selectedNode ? (
+          <div className="absolute right-4 bottom-4 z-20">
+            <NodeCrossDocPanel
+              assetId={asset.id}
+              projectId={asset.project_id}
+              node={selectedNode}
+              onClose={() => setSelectedNode(null)}
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

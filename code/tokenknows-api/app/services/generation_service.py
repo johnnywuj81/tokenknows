@@ -1097,7 +1097,27 @@ async def _stage_assess_knowledge_graph(
     # 写回 layout
     layout.nodes = new_nodes
     layout.edges = new_edges
-    chapter.layout = layout.model_dump(mode="json")
+    layout_dict = layout.model_dump(mode="json")
+    # v1.3.1 T95 · 生成 SVG thumbnail, 存进 layout.thumbnail_svg
+    # (前端 DocumentCard 列表卡片读, 替代 kg-summary 节点数徽章)
+    try:
+        from app.services.knowledge_graph.thumbnail import render_kg_svg
+        layout_dict["thumbnail_svg"] = render_kg_svg(layout_dict)
+    except Exception as exc:  # noqa: BLE001 — thumbnail 非致命
+        logger.warning("kg_thumbnail_render_failed", asset_id=asset_id, exc=str(exc))
+    chapter.layout = layout_dict
+
+    # v1.3.1 T96 · 注册节点到 project entity registry (跨 KG asset 实体合并)
+    try:
+        from app.services.knowledge_graph.entity_registry import register_asset_nodes
+        register_asset_nodes(
+            project_id=asset.project_id,
+            asset_id=asset_id,
+            chapter_id=chapter.id,
+            nodes=layout_dict.get("nodes") or [],
+        )
+    except Exception as exc:  # noqa: BLE001 — registry 非致命
+        logger.warning("entity_registry_failed", asset_id=asset_id, exc=str(exc))
 
     # AssetMetrics
     asset.metrics = AssetMetrics(

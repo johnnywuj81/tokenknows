@@ -143,3 +143,31 @@ def test_list_endpoint_filter_type_knowledge_graph(client):
     assert len(body["data"]) == 1
     assert body["data"][0]["type"] == "knowledge_graph"
     assert body["data"][0]["kg_summary"]["node_count"] == 1
+
+
+# v1.3.1 T95 · thumbnail_svg enrich
+def test_list_endpoint_includes_thumbnail_svg_when_present(client):
+    """assess stage 写到 layout.thumbnail_svg → list endpoint enrich 到 kg_summary."""
+    _seed_kg(
+        asset_id="a-thumb",
+        nodes=[{"id": "n1"}],
+        edges=[],
+    )
+    chapter = generation_service._chapters["a-thumb"][0]
+    layout_dict = dict(chapter.layout or {})
+    layout_dict["thumbnail_svg"] = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"></svg>'
+    )
+    chapter.layout = layout_dict
+    r = client.get("/projects/p-1/assets")
+    body = r.json()
+    assert "thumbnail_svg" in body["data"][0]["kg_summary"]
+    assert body["data"][0]["kg_summary"]["thumbnail_svg"].startswith("<svg")
+
+
+def test_list_endpoint_no_thumbnail_when_absent(client):
+    """layout 没有 thumbnail_svg → kg_summary 不含该 key."""
+    _seed_kg(asset_id="a-no-thumb", nodes=[{"id": "n"}], edges=[])
+    r = client.get("/projects/p-1/assets")
+    summary = r.json()["data"][0]["kg_summary"]
+    assert "thumbnail_svg" not in summary

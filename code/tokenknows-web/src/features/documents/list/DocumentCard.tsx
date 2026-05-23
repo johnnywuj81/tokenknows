@@ -187,6 +187,9 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
               生成中 · 预计 5 秒... 完成后自动刷新
             </p>
           </div>
+        ) : asset.type === 'knowledge_graph' && asset.kg_summary?.thumbnail_svg ? (
+          // v1.3.1 T95 · KG SVG 缩略图
+          <KGThumbnail svg={asset.kg_summary.thumbnail_svg} />
         ) : asset.metrics ? (
           <Metrics
             coverage={asset.metrics.coverage}
@@ -202,6 +205,34 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
         <time dateTime={asset.updated_at}>{formatRelative(asset.updated_at)}</time>
       </footer>
     </article>
+  )
+}
+
+interface KGThumbnailProps {
+  svg: string
+}
+
+/**
+ * v1.3.1 T95 · KG SVG 缩略图.
+ *
+ * 用 data: URI 内嵌 svg, 不需要 URL 编码 (UTF-8 安全; SVG 是文本).
+ * 失败 / 空 svg → 不渲染, 让上层 fallback 到节点数徽章.
+ */
+function KGThumbnail({ svg }: KGThumbnailProps) {
+  // 安全: 后端 render_kg_svg 内部对 label 做了 html.escape, svg 是受控字符串
+  const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+  return (
+    <div
+      data-testid="kg-thumbnail"
+      className="mt-1 w-full overflow-hidden rounded border border-border-subtle bg-bg-warm"
+    >
+      <img
+        src={dataUri}
+        alt="知识图谱缩略图"
+        loading="lazy"
+        className="h-24 w-full object-contain"
+      />
+    </div>
   )
 }
 

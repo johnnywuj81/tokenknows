@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.gateway.http_api import (
     auth,
     auto_trigger,
+    entities,
     events,
     generation,
     health,
@@ -31,3 +32,4 @@ api_router.include_router(auto_trigger.router, tags=["auto-trigger"])  # v0.4 T3
 api_router.include_router(notifications.router)                        # v0.5.1 T49+T51
 api_router.include_router(members.router)                              # v0.9.0 T66
 api_router.include_router(auth.router)                                 # v1.1.0 T74
+api_router.include_router(entities.router, tags=["entities"])          # v1.3.1 T96

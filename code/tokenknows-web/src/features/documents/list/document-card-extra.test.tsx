@@ -157,4 +157,36 @@ describe('DocumentCard extra branches', () => {
     />))
     expect(screen.getByText('知识图谱')).toBeInTheDocument()
   })
+
+  // v1.3.1 T95 · KG thumbnail
+  it('knowledge_graph with thumbnail_svg → 渲染 <img> 缩略图', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><circle cx="50" cy="50" r="5"/></svg>'
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        kg_summary: { node_count: 5, edge_count: 3, thumbnail_svg: svg },
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    const thumb = screen.getByTestId('kg-thumbnail')
+    expect(thumb).toBeInTheDocument()
+    const img = thumb.querySelector('img')
+    expect(img).not.toBeNull()
+    expect(img?.getAttribute('src')).toContain('data:image/svg+xml')
+    expect(img?.getAttribute('src')).toContain(encodeURIComponent('<circle'))
+  })
+
+  it('knowledge_graph without thumbnail_svg → 不渲染缩略图 (仅节点数徽章)', () => {
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        kg_summary: { node_count: 5, edge_count: 3 },  // 没 thumbnail_svg
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    expect(screen.queryByTestId('kg-thumbnail')).toBeNull()
+    expect(screen.getByTestId('kg-summary-badge')).toBeInTheDocument()
+  })
 })

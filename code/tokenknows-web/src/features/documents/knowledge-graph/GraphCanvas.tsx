@@ -1,16 +1,18 @@
 /**
- * GraphCanvas · v1.2.0 T85 / v1.3 T91 · React Flow 包装 + dagre 自动布局.
+ * GraphCanvas · v1.2.0 T85 / v1.3 T91 / v1.3.1 T94 · React Flow 包装 + dagre 自动布局 + LOD.
  *
  * 入参: KnowledgeGraphLayout (nodes + edges + layout_hints + user_positions?)
  * 行为:
+ *   - 大图 (>100 节点) 自动 LOD 聚类 (T94): 每 type top-20 + 1 supernode
  *   - dagre LR 自动布局 (useMemo 一次性, 同 layout 引用不重算)
  *   - 节点 onClick → 触发 props.onNodeClick (传 node + char_offset)
+ *   - supernode onClick → 展开该 type 的所有节点
  *   - 节点拖动 → 写本地 positionStore + debounced PATCH 后端 (T91)
  *   - 位置优先级 (T91): layout.user_positions (server) > positionStore (local) > dagre 自动
  *   - 内置 Controls (zoom/pan/fit) + MiniMap
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   Controls,
@@ -29,14 +31,17 @@ import { PersonNode } from './nodes/PersonNode'
 import { EventNode } from './nodes/EventNode'
 import { ConceptNode } from './nodes/ConceptNode'
 import { ArtifactNode } from './nodes/ArtifactNode'
+import { ClusterNode } from './nodes/ClusterNode'
 import { usePositionStore } from './store/positionStore'
 import { useChapterPositionsSync } from './store/useChapterPositionsSync'
+import { clusterLayout, isSuperNode } from './lod'
 
 const NODE_TYPES: NodeTypes = {
   person: PersonNode,
   event: EventNode,
   concept: ConceptNode,
   artifact: ArtifactNode,
+  cluster: ClusterNode,
 }
 
 const NODE_W = 180
@@ -126,6 +131,11 @@ export function GraphCanvas({
   // v1.3 T91: 后端同步 hook (debounced PATCH)
   const { sync } = useChapterPositionsSync(assetId ?? null, chapterId ?? null)
 
+  // v1.3.1 T94: LOD 聚类展开状态 (用户点 supernode 可展开该 type)
+  const [expandedTypes, setExpandedTypes] = useState<Set<KGNode['type']>>(
+    () => new Set(),
+  )
+
   // v1.3 T91: server 的 user_positions 为权威; 进入页面 hydrate 一次到 store
   // 这样跨设备打开能拿到他端拖的位置. 已 hydrate 过的 asset 不重复 hydrate
   // (避免覆盖用户当前拖动中的临时位置).
@@ -139,16 +149,52 @@ export function GraphCanvas({
     hydrateAsset(assetId, serverPositions)
   }, [assetId, serverPositions, hydrateAsset])
 
+  // v1.3.1 T94: LOD 聚类 (>100 节点自动启用)
+  const lodResult = useMemo(
+    () => clusterLayout(layout, { expanded: expandedTypes }),
+    [layout, expandedTypes],
+  )
+
   const { rfNodes, rfEdges } = useMemo(() => {
+    // dagre 用聚类后视觉节点跑布局, 避免对隐藏节点空跑
+    const dagreNodesForLayout: KGNode[] = lodResult.visibleNodes.map((n) =>
+      isSuperNode(n)
+        ? ({
+            id: n.id,
+            type: 'concept',  // dagre 仅用 id, type 占位
+            label: n.label,
+            summary: null,
+            properties: {},
+            source_event_ids: [],
+            trust_score: n.avg_trust,
+            span_anchor: null,
+          } satisfies KGNode)
+        : n,
+    )
     const dagrePositions = _runDagreLayout(
-      layout.nodes,
-      layout.edges,
+      dagreNodesForLayout,
+      lodResult.visibleEdges,
       layout.layout_hints.rankdir,
     )
 
-    const rfNodes: Node[] = layout.nodes.map((node) => {
-      // 优先级: server.user_positions > 本地 store > dagre 自动
-      // (server hydrate 后 storedPositions 也会拿到同样值, 但 server 派发先于 store update)
+    const rfNodes: Node[] = lodResult.visibleNodes.map((node) => {
+      if (isSuperNode(node)) {
+        // supernode 不参与拖动位置持久化 (id 随 cluster 状态变, 不稳定)
+        const position = dagrePositions.get(node.id) ?? { x: 0, y: 0 }
+        return {
+          id: node.id,
+          type: 'cluster',
+          position,
+          data: {
+            label: node.label,
+            childType: node.child_type,
+            count: node.children.length,
+            avgTrust: node.avg_trust,
+          },
+          draggable: false,
+        }
+      }
+      // 普通节点: server.user_positions > 本地 store > dagre
       const fromServer = serverPositions?.[node.id]
       const userPos = fromServer ?? storedPositions[node.id]
       const position = userPos ?? dagrePositions.get(node.id) ?? { x: 0, y: 0 }
@@ -161,7 +207,7 @@ export function GraphCanvas({
       }
     })
 
-    const rfEdges: Edge[] = layout.edges.map((edge) => ({
+    const rfEdges: Edge[] = lodResult.visibleEdges.map((edge) => ({
       id: edge.id,
       source: edge.source,
       target: edge.target,
@@ -180,14 +226,14 @@ export function GraphCanvas({
     }))
 
     return { rfNodes, rfEdges }
-  }, [layout, storedPositions, serverPositions])
+  }, [lodResult, layout.layout_hints.rankdir, storedPositions, serverPositions])
 
-  // 拖动结束时保存位置 (本地 store + debounced PATCH)
+  // 拖动结束时保存位置 (本地 store + debounced PATCH); supernode 不可拖
   const handleNodeDragStop = useCallback<NodeMouseHandler>(
     (_event, node) => {
       if (!assetId) return
+      if (node.id.startsWith('cluster_')) return
       setPosition(assetId, node.id, { x: node.position.x, y: node.position.y })
-      // T91: PATCH 整套 snapshot (latest store state after this set)
       const next = {
         ...usePositionStore.getState().getPositions(assetId),
         [node.id]: { x: node.position.x, y: node.position.y },
@@ -200,8 +246,27 @@ export function GraphCanvas({
   return (
     <div
       data-testid="kg-graph-canvas"
+      className="relative"
       style={{ width: '100%', height: '100%' }}
     >
+      {lodResult.clustered ? (
+        <div
+          data-testid="kg-lod-banner"
+          className="absolute right-4 top-4 z-10 rounded-md border border-border-subtle bg-bg-card px-3 py-1.5 font-ui text-caption text-text-secondary shadow-sm"
+        >
+          🧩 已聚类 {Object.values(lodResult.hiddenByType).reduce((a, b) => a + b, 0)} 个低 trust 节点
+          {expandedTypes.size > 0 ? (
+            <button
+              type="button"
+              data-testid="kg-lod-collapse-all"
+              className="ml-2 text-accent-primary hover:underline"
+              onClick={() => setExpandedTypes(new Set())}
+            >
+              全部折叠
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -209,6 +274,19 @@ export function GraphCanvas({
         fitView
         proOptions={{ hideAttribution: true }}
         onNodeClick={(_, n) => {
+          // supernode: 展开该 type
+          if (n.type === 'cluster') {
+            const data = n.data as { childType?: KGNode['type'] }
+            const t = data?.childType
+            if (t) {
+              setExpandedTypes((prev) => {
+                const next = new Set(prev)
+                next.add(t)
+                return next
+              })
+            }
+            return
+          }
           const kgNode = (n.data as { node?: KGNode })?.node
           if (kgNode && onNodeClick) {
             onNodeClick(kgNode)
