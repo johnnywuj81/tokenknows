@@ -14,12 +14,16 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# v1.8 · API 根目录锚 (`code/tokenknows-api/`); 用 __file__ 推导, 不依赖 cwd
+# settings.py 在 code/tokenknows-api/app/config/, 往上 3 级到 api root
+_API_ROOT = Path(__file__).parent.parent.parent.resolve()
+
 # 在 Settings 实例化前预处理:
 # pydantic-settings 默认 process env > env_file. 但 shell 中可能存在空值 (如 Claude Code CLI
 # 注入的 ANTHROPIC_API_KEY="") 会覆盖 .env.local 的真实值. 这里主动:
 #   1. 先清掉 process env 里的空值
 #   2. 用 dotenv override=True 让 .env.local 强制覆盖剩余的 process env
-_env_path = Path(__file__).parent.parent.parent / ".env.local"
+_env_path = _API_ROOT / ".env.local"
 for _key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY", "OLLAMA_API_KEY"):
     if os.environ.get(_key, "").strip() == "":
         os.environ.pop(_key, None)
@@ -202,7 +206,11 @@ class Settings(BaseSettings):
     )
 
     # ─── 出域审计 ────────────────────────────────────────────────
-    egress_log_path: str = Field(default="./data/egress.sqlite", alias="EGRESS_LOG_PATH")
+    # v1.8 · 默认锚定 api root 而非 cwd; 若用户 env 传相对路径会在 validator 中 resolve
+    egress_log_path: str = Field(
+        default=str(_API_ROOT / "data" / "egress.sqlite"),
+        alias="EGRESS_LOG_PATH",
+    )
 
     # ─── Validator: 空字符串视为未设置 ──────────────────────────
     # 防止 shell env 注入空 key (如 Claude Code CLI 注入的 ANTHROPIC_API_KEY="")
@@ -219,6 +227,18 @@ class Settings(BaseSettings):
         if isinstance(v, str) and v.strip() == "":
             return None
         return v
+
+    # v1.8 · 路径解析: 相对路径 (./data/...) 锚定到 api root, 不再依赖 cwd
+    # 解决 backend 从不同目录启动时 sqlite 走到错路径加载空库的问题
+    @field_validator("egress_log_path", mode="before")
+    @classmethod
+    def _resolve_egress_path(cls, v: object) -> object:
+        if not isinstance(v, str) or not v.strip():
+            return v
+        p = Path(v)
+        if p.is_absolute():
+            return str(p)
+        return str((_API_ROOT / p).resolve())
 
     # ─── 派生属性 ────────────────────────────────────────────────
     @property
