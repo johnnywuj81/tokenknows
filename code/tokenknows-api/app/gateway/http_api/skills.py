@@ -28,6 +28,8 @@ from app.schemas.skill import (
     ConsentSignResponse,
     Skill,
     SkillDistillRequest,
+    SkillEvolveChainResponse,
+    SkillGovernanceSummary,
     SkillReviewActionResponse,
     SkillReviewApproveRequest,
     SkillReviewRejectRequest,
@@ -36,6 +38,7 @@ from app.schemas.skill import (
 )
 from app.services import generation_service, skill_service
 from app.services.skill import consent as skill_consent
+from app.services.skill import pool as skill_pool
 from app.services.skill import review as skill_review
 
 router = APIRouter()
@@ -491,6 +494,58 @@ def _find_submit_author(skill: Skill) -> str | None:
         if r.action == "submit":
             return r.reviewer_id
     return None
+
+
+# ─── v0.8.0 · Governance dashboard endpoints (T62) ─────────────
+
+
+@router.get(
+    "/projects/{project_id}/skills/governance",
+    response_model=SkillGovernanceSummary,
+)
+async def get_governance_summary(project_id: str) -> SkillGovernanceSummary:
+    """项目级 Skill 池总览 (前端 dashboard 卡片)."""
+    summary = skill_pool.build_governance_summary(project_id)
+    return SkillGovernanceSummary(**summary)
+
+
+@router.get(
+    "/skills/{skill_id}/evolve-chain",
+    response_model=SkillEvolveChainResponse,
+)
+async def get_evolve_chain(skill_id: str) -> SkillEvolveChainResponse:
+    """Skill 的 parent → current → children 进化链 (按 version 升序)."""
+    if skill_service.get_skill(skill_id) is None:
+        raise HTTPException(404, detail="Skill not found")
+    nodes = skill_pool.build_evolve_chain(skill_id)
+    return SkillEvolveChainResponse(skill_id=skill_id, nodes=nodes)
+
+
+@router.post("/projects/{project_id}/skills/governance/run-trust-recompute")
+async def trigger_trust_recompute(project_id: str) -> dict[str, int]:
+    """手动触发 trust_score 重算 (T61 job 的手动入口).
+
+    project_id 暂用于 scope log; 实际 recompute 是全量 (跨 project 在单进程内).
+    """
+    result = skill_pool.recompute_all_trust_scores()
+    logger.info(
+        "governance_manual_trust_recompute",
+        project_id=project_id,
+        **result,
+    )
+    return result
+
+
+@router.post("/projects/{project_id}/skills/governance/run-deprecation-sweep")
+async def trigger_deprecation_sweep(project_id: str) -> dict[str, int]:
+    """手动触发 dormant/low_trust deprecation (T60 job 的手动入口)."""
+    from app.services.auto_trigger.jobs import skill_deprecation_sweep_job
+
+    await skill_deprecation_sweep_job()
+    # 不返单 project 计数, 返"已触发"信号
+    candidates = skill_pool.collect_deprecation_candidates()
+    remaining = sum(1 for c in candidates if c["project_id"] == project_id)
+    return {"remaining_candidates": remaining}
 
 
 # ─── 辅助 ───────────────────────────────────────────────────

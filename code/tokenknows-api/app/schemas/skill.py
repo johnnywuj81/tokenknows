@@ -350,6 +350,51 @@ class SkillReviewActionResponse(BaseModel):
     last_reviewed_at: datetime | None = None
 
 
+# ─── v0.8.0 · Governance Summary (T62) ────────────────────────────
+
+
+class SkillGovernanceSummary(BaseModel):
+    """项目级 Skill 池总览 (用于 dashboard 卡片)."""
+
+    project_id: str
+    total: int
+    by_status: dict[str, int]
+    """{'draft': N, 'active': M, 'deprecated': K, ...}"""
+    by_review_state: dict[str, int]
+    """{'not_submitted': N, 'pending_review': M, 'approved': K, 'rejected': L}"""
+    evolve_candidates: int
+    """should_evolve=True 的当前候选数 (T59)."""
+    dormant_candidates: int
+    """dormant 自动归档候选数 (T60)."""
+    low_trust_candidates: int
+    """low_trust 自动归档候选数 (T60)."""
+    avg_trust_score: float
+    """active skill 平均 trust_score (0 - 1)."""
+
+
+class SkillEvolveChainNode(BaseModel):
+    """evolve chain 单节点."""
+
+    skill_id: str
+    name: str
+    version: int
+    status: SkillStatus
+    parent_skill_id: str | None
+    created_at: datetime
+    is_current: bool
+    """是否被查询的 skill 本身."""
+
+
+class SkillEvolveChainResponse(BaseModel):
+    """GET /skills/:id/evolve-chain response.
+
+    nodes 按 version 升序; 含 parent 链 (向前追溯) + children (向后扩展).
+    """
+
+    skill_id: str
+    nodes: list[SkillEvolveChainNode]
+
+
 class SkillApplicationRecord(BaseModel):
     """Chapter 中记录的 skill 应用 (chapter.applied_skills 单项).
 

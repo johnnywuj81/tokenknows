@@ -177,9 +177,120 @@ def collect_deprecation_candidates(
     return candidates
 
 
+def build_governance_summary(project_id: str) -> dict[str, Any]:
+    """T62 · 项目级 Skill 池总览 (dashboard 用).
+
+    返回 dict 而非 Pydantic (endpoint 层再 wrap), 便于复用.
+    """
+    from app.services import skill_service
+
+    by_status: dict[str, int] = {}
+    by_review_state: dict[str, int] = {}
+    total = 0
+    trust_sum = 0.0
+    trust_count = 0
+    try:
+        skills = skill_service.list_skills(project_id)
+        for s in skills:
+            total += 1
+            by_status[s.status] = by_status.get(s.status, 0) + 1
+            by_review_state[s.review_state] = (
+                by_review_state.get(s.review_state, 0) + 1
+            )
+            if s.status == "active":
+                trust_sum += s.metrics.trust_score
+                trust_count += 1
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "governance_summary_failed",
+            project_id=project_id, error=str(e),
+        )
+
+    evolve_n = sum(
+        1 for c in collect_evolve_candidates() if c["project_id"] == project_id
+    )
+    deprecation = collect_deprecation_candidates()
+    dormant_n = sum(
+        1 for c in deprecation
+        if c["project_id"] == project_id and c["reason"] == "dormant"
+    )
+    low_trust_n = sum(
+        1 for c in deprecation
+        if c["project_id"] == project_id and c["reason"] == "low_trust"
+    )
+    avg_trust = trust_sum / trust_count if trust_count > 0 else 0.0
+
+    return {
+        "project_id": project_id,
+        "total": total,
+        "by_status": by_status,
+        "by_review_state": by_review_state,
+        "evolve_candidates": evolve_n,
+        "dormant_candidates": dormant_n,
+        "low_trust_candidates": low_trust_n,
+        "avg_trust_score": round(avg_trust, 4),
+    }
+
+
+def build_evolve_chain(skill_id: str) -> list[dict[str, Any]]:
+    """T62 · 构造 evolve 链 (parent 向上追溯 + children 向下扩展).
+
+    返回按 version 升序的 list of dict 节点; is_current 标记被查询的 skill 自身.
+    若 skill 不存在, 返 [].
+    """
+    from app.services import skill_service
+
+    target = skill_service.get_skill(skill_id)
+    if target is None:
+        return []
+
+    # parent 链: 向上追溯到没有 parent 的 root
+    parents: list[Any] = []
+    cur = target
+    while cur.parent_skill_id:
+        parent = skill_service.get_skill(cur.parent_skill_id)
+        if parent is None:
+            break
+        if parent.id in [p.id for p in parents]:
+            break  # 防环 (理论不该发生)
+        parents.append(parent)
+        cur = parent
+    parents.reverse()
+
+    # children 链: 找 parent_skill_id 链上指向 target 的 skill
+    # 单进程内存全量遍历足够; 大量 skill 时建议建反向 index
+    children: list[Any] = []
+    seen = {target.id}
+    queue = [target.id]
+    while queue:
+        current_id = queue.pop(0)
+        for s in skill_service.get_registry()._skills.values():  # noqa: SLF001
+            if s.parent_skill_id == current_id and s.id not in seen:
+                children.append(s)
+                seen.add(s.id)
+                queue.append(s.id)
+    children.sort(key=lambda s: s.version)
+
+    chain = parents + [target] + children
+    return [
+        {
+            "skill_id": s.id,
+            "name": s.name,
+            "version": s.version,
+            "status": s.status,
+            "parent_skill_id": s.parent_skill_id,
+            "created_at": s.created_at,
+            "is_current": s.id == skill_id,
+        }
+        for s in chain
+    ]
+
+
 __all__ = [
     "DORMANT_DAYS",
     "LOW_TRUST_FLOOR",
+    "build_evolve_chain",
+    "build_governance_summary",
     "collect_deprecation_candidates",
     "collect_evolve_candidates",
     "collect_failing_chapters_for_skill",
