@@ -36,10 +36,16 @@ _QUEUE_MAXSIZE = 64
 
 
 SseNotificationEventType = Literal[
+    # v0.5.1 consent
     "consent_request",
     "consent_signed",
     "consent_rejected",
     "consent_expired",
+    # v0.6.0 review
+    "skill_review_request",
+    "skill_review_approved",
+    "skill_review_rejected",
+    # 控制类
     "snapshot",
 ]
 

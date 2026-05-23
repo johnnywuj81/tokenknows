@@ -28,10 +28,15 @@ from app.schemas.skill import (
     ConsentSignResponse,
     Skill,
     SkillDistillRequest,
+    SkillReviewActionResponse,
+    SkillReviewApproveRequest,
+    SkillReviewRejectRequest,
+    SkillSubmitForReviewRequest,
     SkillUpdateRequest,
 )
 from app.services import generation_service, skill_service
 from app.services.skill import consent as skill_consent
+from app.services.skill import review as skill_review
 
 router = APIRouter()
 
@@ -298,6 +303,194 @@ async def reject_consent_endpoint(
         current_status=new_skill.status,
         rejected_by=body.user_id,
     )
+
+
+# ─── v0.6.0 · Reviewer 审批 endpoints (T57) ────────────────────
+
+
+@router.get(
+    "/projects/{project_id}/skills/pending-review",
+    response_model=list[Skill],
+)
+async def list_pending_review_skills(project_id: str) -> list[Skill]:
+    """Reviewer Inbox: 该项目下所有 review_state=pending_review 的 skill."""
+    all_skills = skill_service.list_skills(project_id)
+    return [s for s in all_skills if s.review_state == "pending_review"]
+
+
+@router.post(
+    "/skills/{skill_id}/submit-for-review",
+    response_model=SkillReviewActionResponse,
+)
+async def submit_for_review_endpoint(
+    skill_id: str, body: SkillSubmitForReviewRequest
+) -> SkillReviewActionResponse:
+    """作者提交 skill 等待审批 (draft → review_state=pending_review).
+
+    通知策略: 默认通知该 project 下所有 contributor 作为潜在 reviewer
+    (生产应换为 project_owner / 显式 reviewer role).
+    """
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if skill.status != "draft":
+        raise HTTPException(
+            409,
+            detail=(
+                f"skill status={skill.status}; "
+                f"submit-for-review 仅在 status=draft 阶段允许"
+            ),
+        )
+    try:
+        new_skill = skill_review.submit_for_review(
+            skill, user_id=body.user_id, note=body.note
+        )
+    except skill_review.InvalidReviewTransition as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().update(new_skill)
+    # 通知潜在 reviewer (contributors 列表)
+    try:
+        from app.services.skill import review_notifier
+        reviewers = [
+            uid for uid in new_skill.contributors if uid != body.user_id
+        ]
+        if reviewers:
+            review_notifier.notify_review_request(
+                new_skill,
+                reviewer_user_ids=reviewers,
+                author_user_id=body.user_id,
+            )
+    except Exception as e:
+        logger.warning(
+            "submit_for_review_notify_failed",
+            skill_id=skill_id, error=str(e),
+        )
+
+    return SkillReviewActionResponse(
+        skill_id=new_skill.id,
+        status=new_skill.status,
+        review_state=new_skill.review_state,
+        last_action="submit",
+        last_reviewer_id=None,
+        last_reviewed_at=None,
+    )
+
+
+@router.post(
+    "/skills/{skill_id}/review/approve",
+    response_model=SkillReviewActionResponse,
+)
+async def approve_review_endpoint(
+    skill_id: str, body: SkillReviewApproveRequest
+) -> SkillReviewActionResponse:
+    """Reviewer 批准: review_state=approved + status draft→active."""
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if skill.review_state != "pending_review":
+        raise HTTPException(
+            409,
+            detail=(
+                f"review_state={skill.review_state}; "
+                f"approve 仅在 pending_review 阶段允许"
+            ),
+        )
+    try:
+        new_skill = skill_review.approve(
+            skill, reviewer_id=body.reviewer_id, note=body.note
+        )
+    except skill_review.InvalidReviewTransition as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().update(new_skill)
+    # 通知作者 (latest submit record 里的 reviewer_id 就是作者)
+    try:
+        from app.services.skill import review_notifier
+        author = _find_submit_author(new_skill)
+        if author and author != body.reviewer_id:
+            review_notifier.notify_review_decision(
+                new_skill,
+                type_="skill_review_approved",
+                author_user_id=author,
+                reviewer_id=body.reviewer_id,
+            )
+    except Exception as e:
+        logger.warning(
+            "approve_review_notify_failed",
+            skill_id=skill_id, error=str(e),
+        )
+
+    return SkillReviewActionResponse(
+        skill_id=new_skill.id,
+        status=new_skill.status,
+        review_state=new_skill.review_state,
+        last_action="approve",
+        last_reviewer_id=new_skill.last_reviewer_id,
+        last_reviewed_at=new_skill.last_reviewed_at,
+    )
+
+
+@router.post(
+    "/skills/{skill_id}/review/reject",
+    response_model=SkillReviewActionResponse,
+)
+async def reject_review_endpoint(
+    skill_id: str, body: SkillReviewRejectRequest
+) -> SkillReviewActionResponse:
+    """Reviewer 拒绝: review_state=rejected; status 保留 draft."""
+    skill = skill_service.get_skill(skill_id)
+    if skill is None:
+        raise HTTPException(404, detail="Skill not found")
+    if skill.review_state != "pending_review":
+        raise HTTPException(
+            409,
+            detail=(
+                f"review_state={skill.review_state}; "
+                f"reject 仅在 pending_review 阶段允许"
+            ),
+        )
+    try:
+        new_skill = skill_review.reject(
+            skill, reviewer_id=body.reviewer_id, reason=body.reason
+        )
+    except skill_review.InvalidReviewTransition as e:
+        raise HTTPException(409, detail=str(e)) from e
+
+    skill_service.get_registry().update(new_skill)
+    try:
+        from app.services.skill import review_notifier
+        author = _find_submit_author(new_skill)
+        if author and author != body.reviewer_id:
+            review_notifier.notify_review_decision(
+                new_skill,
+                type_="skill_review_rejected",
+                author_user_id=author,
+                reviewer_id=body.reviewer_id,
+                reason=body.reason,
+            )
+    except Exception as e:
+        logger.warning(
+            "reject_review_notify_failed",
+            skill_id=skill_id, error=str(e),
+        )
+
+    return SkillReviewActionResponse(
+        skill_id=new_skill.id,
+        status=new_skill.status,
+        review_state=new_skill.review_state,
+        last_action="reject",
+        last_reviewer_id=new_skill.last_reviewer_id,
+        last_reviewed_at=new_skill.last_reviewed_at,
+    )
+
+
+def _find_submit_author(skill: Skill) -> str | None:
+    """从 review_history 倒序找最近一次 submit action 的 reviewer_id (= 作者)."""
+    for r in reversed(skill.review_history):
+        if r.action == "submit":
+            return r.reviewer_id
+    return None
 
 
 # ─── 辅助 ───────────────────────────────────────────────────

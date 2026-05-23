@@ -19,10 +19,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 NotificationType = Literal[
+    # v0.5.1 consent
     "consent_request",
     "consent_signed",
     "consent_rejected",
     "consent_expired",
+    # v0.6.0 review
+    "skill_review_request",   # 给 reviewer: 有新 skill 等审批
+    "skill_review_approved",  # 给作者: 你的 skill 被批准
+    "skill_review_rejected",  # 给作者: 你的 skill 被拒
 ]
 
 
