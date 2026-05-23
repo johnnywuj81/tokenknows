@@ -78,4 +78,28 @@ describe('positionStore', () => {
     }
     expect(parsed.state.positions['a-1']['n_x']).toEqual({ x: 50, y: 75 })
   })
+
+  // v1.3 T91 · hydrateAsset
+  it('hydrateAsset 用 server snapshot 覆写整个 asset 的位置', () => {
+    usePositionStore.getState().setPosition('a-1', 'n_a', { x: 1, y: 1 })
+    usePositionStore.getState().setPosition('a-1', 'n_b', { x: 2, y: 2 })
+    usePositionStore.getState().hydrateAsset('a-1', {
+      n_x: { x: 10, y: 20 },
+      n_y: { x: 30, y: 40 },
+    })
+    const positions = usePositionStore.getState().getPositions('a-1')
+    // 完整覆盖 (n_a/n_b 被替换)
+    expect(positions).toEqual({
+      n_x: { x: 10, y: 20 },
+      n_y: { x: 30, y: 40 },
+    })
+  })
+
+  it('hydrateAsset 不影响其他 asset', () => {
+    usePositionStore.getState().setPosition('a-2', 'n_q', { x: 99, y: 99 })
+    usePositionStore.getState().hydrateAsset('a-1', { n_x: { x: 1, y: 2 } })
+    expect(usePositionStore.getState().getPositions('a-2')['n_q']).toEqual({
+      x: 99, y: 99,
+    })
+  })
 })

@@ -11,7 +11,7 @@
  * 设计依据: T07 任务包 §3 + SharedFoundations §5 (queryKey 规范).
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -53,6 +53,26 @@ export function EvidenceDrawer({ assetId }: EvidenceDrawerProps) {
   const list = evidenceList ?? []
   const activeEvidence = list.find((e) => e.id === activeId) ?? list[0] ?? null
 
+  // v1.3 T92 · 跨 evidence 切换时, 把 active tab 按钮 scrollIntoView (横向 Tab 条).
+  // 触发场景: KG 节点 click (T88) 定位到列表中部 / 用户切换时长列表
+  const activeTabRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    if (!open || !activeEvidence) return
+    const el = activeTabRef.current
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    }
+  }, [open, activeEvidence])
+
+  // v1.3 T92 · 主体内容容器, evidence 切换时把内容滚回顶部 (避免上次 evidence
+  // 滚到中段, 切到下一个看到的还是中段位置).
+  const cardScrollRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (cardScrollRef.current) {
+      cardScrollRef.current.scrollTop = 0
+    }
+  }, [activeEvidence?.id])
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && close()}>
       <SheetContent
@@ -86,6 +106,9 @@ export function EvidenceDrawer({ assetId }: EvidenceDrawerProps) {
                 <button
                   key={ev.id}
                   type="button"
+                  ref={isActive ? activeTabRef : null}
+                  data-active={isActive ? 'true' : undefined}
+                  data-evidence-id={ev.id}
                   onClick={() => setActive(ev.id)}
                   className={cn(
                     'flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-caption transition',
@@ -104,7 +127,10 @@ export function EvidenceDrawer({ assetId }: EvidenceDrawerProps) {
         ) : null}
 
         {/* 主体 · 三态 */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div
+          ref={cardScrollRef}
+          className="flex-1 overflow-y-auto px-6 py-4"
+        >
           {query.isLoading ? (
             <DrawerLoading />
           ) : query.error ? (

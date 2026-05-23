@@ -132,6 +132,7 @@ export default function KnowledgeGraphPage({
             onNodeClick={handleNodeClick}
             onEdgeClick={handleEdgeClick}
             assetId={chapter.asset_id}
+            chapterId={chapter.id}
           />
         ) : (
           <EmptyState

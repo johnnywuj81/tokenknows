@@ -234,4 +234,58 @@ describe('EvidenceDrawer', () => {
       expect(useDocumentUiStore.getState().activeEvidenceId).toBe('ev-auto'),
     )
   })
+
+  // v1.3 T92 · active tab scrollIntoView
+  it('T92 · active tab 切换时调用 scrollIntoView', async () => {
+    const scrollSpy = vi.fn()
+    // jsdom 不实现 scrollIntoView, 这里 monkey-patch 到 HTMLElement
+    const origScroll = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = scrollSpy as unknown as
+      HTMLElement['scrollIntoView']
+
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: [
+        mkEvidence({ id: 'ev1' }),
+        mkEvidence({ id: 'ev2' }),
+        mkEvidence({ id: 'ev3' }),
+      ],
+    })
+    useDocumentUiStore.setState({
+      evidenceOpen: true,
+      evidenceChapterId: 'c1',
+      activeEvidenceId: 'ev3',  // 模拟 KG 节点 click → 直接定位到 ev3
+    })
+    render(withQuery(<EvidenceDrawer assetId="a1" />))
+    await waitFor(() => expect(screen.getByLabelText('查看证据 3')).toBeInTheDocument())
+    await waitFor(() => {
+      expect(scrollSpy).toHaveBeenCalled()
+      // 应该至少有一次带 inline: center 的调用 (tab scroll)
+      const calls = scrollSpy.mock.calls as unknown as Array<[Record<string, string>]>
+      const hasInlineCenter = calls.some(
+        (c) => c[0] && typeof c[0] === 'object' && c[0].inline === 'center',
+      )
+      expect(hasInlineCenter).toBe(true)
+    })
+
+    HTMLElement.prototype.scrollIntoView = origScroll
+  })
+
+  it('T92 · 切到 N 后 active 按钮带 aria-pressed=true + data-evidence-id 锚定', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: [mkEvidence({ id: 'ev-a' }), mkEvidence({ id: 'ev-b' })],
+    })
+    useDocumentUiStore.setState({
+      evidenceOpen: true,
+      evidenceChapterId: 'c1',
+      activeEvidenceId: null,  // 先 null, render 后用户点 tab 2
+    })
+    render(withQuery(<EvidenceDrawer assetId="a1" />))
+    const tab2 = await waitFor(() => screen.getByLabelText('查看证据 2'))
+    fireEvent.click(tab2)
+    await waitFor(() => {
+      expect(tab2.getAttribute('aria-pressed')).toBe('true')
+      expect(tab2.getAttribute('data-evidence-id')).toBe('ev-b')
+      expect(tab2.getAttribute('data-active')).toBe('true')
+    })
+  })
 })

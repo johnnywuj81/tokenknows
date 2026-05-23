@@ -33,6 +33,22 @@ class ChapterPatchRequest(BaseModel):
     content: str
 
 
+class _NodePosition(BaseModel):
+    """v1.3 T91 · 单节点拖动位置 (x/y 像素坐标)."""
+
+    x: float
+    y: float
+
+
+class ChapterPositionsPatchRequest(BaseModel):
+    """v1.3 T91 · knowledge_graph 节点拖动位置批量上报.
+
+    positions = {nodeId: {x, y}}; 替换语义 (前端发什么就存什么).
+    """
+
+    positions: dict[str, _NodePosition]
+
+
 class PaginatedAssets(BaseModel):
     """前端 useInfiniteQuery 期待的分页响应格式 (与 MSW mock 一致)."""
 
@@ -138,6 +154,28 @@ async def patch_chapter(
 ) -> Chapter:
     """更新章节内容 (T06 自动保存). 返回 server-side 结果让前端 reconcile."""
     updated = svc.update_chapter_content(asset_id, chapter_id, body.content)
+    if updated is None:
+        raise HTTPException(404, detail="Chapter not found")
+    return updated
+
+
+@router.patch(
+    "/assets/{asset_id}/chapters/{chapter_id}/positions",
+    response_model=Chapter,
+)
+async def patch_chapter_positions(
+    asset_id: str, chapter_id: str, body: ChapterPositionsPatchRequest
+) -> Chapter:
+    """v1.3 T91 · knowledge_graph 节点拖动位置持久化.
+
+    前端 GraphCanvas onNodeDragStop → debounced PATCH; 后端写 chapter.layout.user_positions.
+    跨浏览器/跨设备 都拿得到位置, localStorage 仅做"未联网"兜底.
+    """
+    positions = {
+        node_id: {"x": pos.x, "y": pos.y}
+        for node_id, pos in body.positions.items()
+    }
+    updated = svc.update_chapter_positions(asset_id, chapter_id, positions)
     if updated is None:
         raise HTTPException(404, detail="Chapter not found")
     return updated

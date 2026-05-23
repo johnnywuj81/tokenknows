@@ -330,6 +330,8 @@ export interface KnowledgeGraphLayout {
   layout_hints: KGLayoutHints
   parse_error?: string | null
   raw_output?: string | null
+  /** v1.3 T91 · 用户拖动后的节点位置 (跨设备同步). server-side PATCH 写入. */
+  user_positions?: Record<string, { x: number; y: number }>
 }
 
 export type RedactedSpanType =

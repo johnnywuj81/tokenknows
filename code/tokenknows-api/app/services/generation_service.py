@@ -2495,6 +2495,34 @@ def update_chapter_content(
     return None
 
 
+def update_chapter_positions(
+    asset_id: str,
+    chapter_id: str,
+    positions: dict[str, dict[str, float]],
+) -> Chapter | None:
+    """v1.3 T91 · knowledge_graph 节点拖动位置后端持久化.
+
+    `chapter.layout` 是 KnowledgeGraphLayout dict, 写到嵌套 `user_positions` 键 (避免污染 nodes/edges).
+    替换语义 (前端发什么就存什么) — MVP 简单, 不做 merge.
+
+    返回 server-side 结果让前端 reconcile (其它字段不动).
+    """
+    chapters = _chapters.get(asset_id)
+    if not chapters:
+        return None
+    for c in chapters:
+        if c.id == chapter_id:
+            layout = dict(c.layout) if c.layout else {}
+            layout["user_positions"] = positions
+            c.layout = layout
+            asset = _assets.get(asset_id)
+            if asset is not None:
+                asset.updated_at = _now()
+            _persist_asset(asset_id)   # P1
+            return c
+    return None
+
+
 # ─── T09 · 审批 (chapter 级 + asset 级) ────────────────────────
 
 
