@@ -23,6 +23,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Skill, SkillStatus } from '@/types/api'
 import { ConsentPending } from './components/ConsentPending'
 import { ReviewActions } from './components/ReviewActions'
+import { EvolveChain } from './components/EvolveChain'
+import { ReviewTimeline } from './components/ReviewTimeline'
 import {
   useDeleteSkill,
   useEvolveSkill,
@@ -240,6 +242,10 @@ function SkillDetail({
           {skill.skill_md}
         </pre>
       </section>
+
+      {/* v0.8.0 T63 · 进化链 + 审批历史 */}
+      <EvolveChain skillId={skill.id} />
+      <ReviewTimeline history={skill.review_history} />
     </Card>
   )
 }

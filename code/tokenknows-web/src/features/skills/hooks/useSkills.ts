@@ -20,6 +20,8 @@ import type {
   ConsentSignResponse,
   Skill,
   SkillDistillRequest,
+  SkillEvolveChainResponse,
+  SkillGovernanceSummary,
   SkillReviewActionResponse,
   SkillReviewApproveRequest,
   SkillReviewRejectRequest,
@@ -259,6 +261,68 @@ export function useRejectSkillReview(projectId: string) {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['skills', projectId] })
       qc.invalidateQueries({ queryKey: skillKey.detail(data.skill_id) })
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+// ─── v0.8.0 · Governance dashboard (T62-T64) ─────────────
+
+
+export function useSkillGovernanceSummary(projectId: string) {
+  return useQuery({
+    queryKey: ['skills', projectId, 'governance'] as const,
+    queryFn: async (): Promise<SkillGovernanceSummary> => {
+      const res = await api.get<SkillGovernanceSummary>(
+        `/projects/${projectId}/skills/governance`,
+      )
+      return res.data
+    },
+    enabled: Boolean(projectId),
+  })
+}
+
+export function useSkillEvolveChain(skillId: string | null) {
+  return useQuery({
+    queryKey: ['skills', 'evolve-chain', skillId ?? ''] as const,
+    queryFn: async (): Promise<SkillEvolveChainResponse> => {
+      const res = await api.get<SkillEvolveChainResponse>(
+        `/skills/${skillId}/evolve-chain`,
+      )
+      return res.data
+    },
+    enabled: Boolean(skillId),
+  })
+}
+
+export function useRunTrustRecompute(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{
+        scanned: number
+        updated: number
+        skipped: number
+      }>(`/projects/${projectId}/skills/governance/run-trust-recompute`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
+    },
+  })
+}
+
+export function useRunDeprecationSweep(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ remaining_candidates: number }>(
+        `/projects/${projectId}/skills/governance/run-deprecation-sweep`,
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills', projectId] })
       qc.invalidateQueries({ queryKey: ['notifications'] })
     },
   })

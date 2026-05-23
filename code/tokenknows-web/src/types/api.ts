@@ -609,6 +609,33 @@ export interface SkillReviewActionResponse {
   last_reviewed_at: string | null
 }
 
+// v0.8.0 · Governance dashboard (T62)
+export interface SkillGovernanceSummary {
+  project_id: string
+  total: number
+  by_status: Record<string, number>
+  by_review_state: Record<string, number>
+  evolve_candidates: number
+  dormant_candidates: number
+  low_trust_candidates: number
+  avg_trust_score: number
+}
+
+export interface SkillEvolveChainNode {
+  skill_id: string
+  name: string
+  version: number
+  status: SkillStatus
+  parent_skill_id: string | null
+  created_at: string
+  is_current: boolean
+}
+
+export interface SkillEvolveChainResponse {
+  skill_id: string
+  nodes: SkillEvolveChainNode[]
+}
+
 // v0.5.1 · Consent endpoints (T50)
 export interface ConsentSignRequest {
   user_id: string
