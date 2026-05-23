@@ -11,10 +11,30 @@
  */
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ShieldCheck, ShieldOff, Beaker, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+
+// T109 · 真实 provider 状态 (取自 backend)
+interface ApiProviderStatus {
+  name: 'anthropic' | 'openai' | 'minimax' | 'ollama'
+  models: string[]
+  configured: boolean
+  status: 'configured' | 'key_missing'
+}
+
+function useProviderStatus() {
+  return useQuery({
+    queryKey: ['llm', 'providers', 'status'],
+    queryFn: async () => {
+      const { data } = await api.get<ApiProviderStatus[]>('/llm/providers/status')
+      return data
+    },
+    staleTime: 60_000,
+  })
+}
 
 interface LlmEgressPanelProps {
   projectId: string | undefined
@@ -88,16 +108,8 @@ export function LlmEgressPanel({ projectId }: LlmEgressPanelProps) {
         </ul>
       </section>
 
-      {/* 模型 allowlist */}
-      <section className="rounded-md border border-border-subtle bg-bg-card p-4 space-y-3">
-        <h3 className="font-content text-h3 text-text-primary">允许的 provider / 模型</h3>
-        <ul className="space-y-1.5">
-          <ProviderRow name="anthropic" models={['claude-sonnet-4-6', 'claude-haiku-4-5']} status="reachable_no_vpn" />
-          <ProviderRow name="openai" models={['gpt-4o', 'gpt-4o-mini']} status="reachable_no_vpn" />
-          <ProviderRow name="minimax" models={['abab6.5s-chat']} status="key_invalid" />
-          <ProviderRow name="ollama" models={['minimax-m2:cloud', 'gpt-oss:20b']} status="active" />
-        </ul>
-      </section>
+      {/* 模型 allowlist (T109 真实状态 from backend) */}
+      <ProviderAllowlist />
 
       {/* 审计 */}
       <section className="rounded-md border border-border-subtle bg-bg-card p-4 space-y-2">
@@ -185,10 +197,43 @@ function envVar(tier: string): string {
   return 'TASK_<TASK>_PROVIDER'
 }
 
+/** T109 · 真实状态 (取自 backend GET /llm/providers/status). */
+function ProviderAllowlist() {
+  const q = useProviderStatus()
+  return (
+    <section className="rounded-md border border-border-subtle bg-bg-card p-4 space-y-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="font-content text-h3 text-text-primary">允许的 provider / 模型</h3>
+        <p className="font-ui text-caption text-text-muted">
+          仅看 key 是否配置 (configured); 真可达性需调 Dry-run preview 验证.
+        </p>
+      </div>
+      {q.isLoading ? (
+        <p className="font-ui text-caption text-text-muted">检测中…</p>
+      ) : q.error ? (
+        <p className="font-ui text-caption text-danger">
+          状态查询失败: {q.error instanceof Error ? q.error.message : '未知'}
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {(q.data ?? []).map((p) => (
+            <ProviderRow
+              key={p.name}
+              name={p.name}
+              models={p.models}
+              status={p.status === 'configured' ? 'configured_only' : 'key_missing'}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 interface ProviderRowProps {
   name: string
   models: string[]
-  status: 'active' | 'reachable_no_vpn' | 'key_invalid' | 'configured_only'
+  status: 'active' | 'reachable_no_vpn' | 'key_invalid' | 'configured_only' | 'key_missing'
 }
 
 function ProviderRow({ name, models, status }: ProviderRowProps) {
@@ -196,7 +241,8 @@ function ProviderRow({ name, models, status }: ProviderRowProps) {
     active: { label: '在线', cls: 'bg-success-bg text-success-dark' },
     reachable_no_vpn: { label: '本机网络不通', cls: 'bg-warning-bg text-warning' },
     key_invalid: { label: 'Key 无效', cls: 'bg-danger-bg text-danger' },
-    configured_only: { label: '已配置', cls: 'bg-info-bg text-info' },
+    configured_only: { label: '已配置', cls: 'bg-success-bg text-success-dark' },
+    key_missing: { label: '未配置 API key', cls: 'bg-warning-bg text-warning-dark' },
   } as const
   const s = statusMap[status]
   return (
@@ -204,7 +250,7 @@ function ProviderRow({ name, models, status }: ProviderRowProps) {
       <div className="min-w-0 flex-1">
         <p className="font-mono text-body-sm text-text-primary">{name}</p>
         <p className="font-ui text-micro text-text-subtle">
-          {models.join(' · ')}
+          {models.length > 0 ? models.join(' · ') : '(无 model)'}
         </p>
       </div>
       <span className={cn('shrink-0 rounded-full px-2 py-0.5 font-ui text-micro', s.cls)}>
