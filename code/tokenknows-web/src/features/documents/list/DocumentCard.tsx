@@ -118,6 +118,16 @@ export function DocumentCard({ asset, projectId, onClone, onDelete }: DocumentCa
             {isGenerating ? <Loader2 className="size-2.5 animate-spin" /> : null}
             {statusMeta.label}
           </span>
+          {/* v1.2.1 T89: knowledge_graph 静态徽章 (节点数 · 边数) */}
+          {asset.type === 'knowledge_graph' && asset.kg_summary ? (
+            <span
+              className="rounded bg-accent-primary-light px-1.5 py-0.5 font-mono text-micro font-medium text-accent-primary-dark"
+              data-testid="kg-summary-badge"
+              title={`${asset.kg_summary.node_count} 个节点, ${asset.kg_summary.edge_count} 条边`}
+            >
+              🌐 {asset.kg_summary.node_count}n·{asset.kg_summary.edge_count}e
+            </span>
+          ) : null}
         </div>
         {!isGenerating ? (
           <DropdownMenu>

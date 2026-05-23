@@ -169,15 +169,16 @@ describe('KnowledgeGraphPage', () => {
     expect(screen.getByText(/无匹配节点/)).toBeInTheDocument()
   })
 
-  it('节点点击触发 onEvidenceJump (含 char_offset)', () => {
-    const onJump = vi.fn()
+  it('节点点击触发 onNodeClick (T88 抛节点给父组件)', () => {
+    const onNodeClick = vi.fn()
     _render(
       <KnowledgeGraphPage
         chapter={_chapter(_baseLayout())}
-        onEvidenceJump={onJump}
+        onNodeClick={onNodeClick}
       />,
     )
     expect(screen.getByTestId('kg-page')).toBeInTheDocument()
+    // GraphCanvas 被 mock, 实际 click 不触发; 仅 smoke 验 prop 接受
   })
 
   it('view mode 切换: 默认 graph, 点 table → ReviewerNodeTable', () => {

@@ -24,7 +24,7 @@ import { DocSidebar } from './page/components/DocSidebar'
 import { EvidenceDrawer } from './page/components/EvidenceDrawer'
 import { RegenerateDialog } from './page/components/RegenerateDialog'
 import { BookProgressCard } from './page/components/BookProgressCard'
-import KnowledgeGraphPage from './knowledge-graph/KnowledgeGraphPage'
+import { KnowledgeGraphView } from './knowledge-graph/KnowledgeGraphView'
 import { PublishDialog } from '../publish/PublishDialog'
 
 export default function DocumentPage() {
@@ -108,23 +108,18 @@ export default function DocumentPage() {
   const chapters = chaptersQuery.data ?? []
 
   // v1.2 · knowledge_graph 分支: 复用 DocHeader, 中部换成 GraphCanvas
+  // v1.2.1 T88: 抽出子组件 KnowledgeGraphView 以便 useChapterEvidence (hook
+  //              不能在条件分支里直接调).
   if (asset.type === 'knowledge_graph' && chapters.length > 0) {
     return (
-      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-        <DocHeader
-          asset={asset}
-          onSubmit={handleSubmitForReview}
-          submitting={submitMutation.isPending}
-          onPublish={openPublish}
-        />
-        <KnowledgeGraphPage
-          chapter={chapters[0]}
-          onEvidenceJump={(charOffset) => {
-            handleViewEvidence(chapters[0].id, undefined)
-            void charOffset // v1.3: 用 char_offset 在 EvidenceDrawer 内精准定位
-          }}
-        />
-      </div>
+      <KnowledgeGraphView
+        asset={asset}
+        chapter={chapters[0]}
+        onSubmit={handleSubmitForReview}
+        submitting={submitMutation.isPending}
+        onPublish={openPublish}
+        onOpenEvidence={handleViewEvidence}
+      />
     )
   }
 

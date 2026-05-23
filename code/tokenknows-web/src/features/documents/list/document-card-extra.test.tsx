@@ -105,4 +105,56 @@ describe('DocumentCard extra branches', () => {
     fireEvent.click(moreBtn)
     // dropdown opens, no nav
   })
+
+  // v1.2.1 T89: knowledge_graph 类型 + kg_summary → 显示徽章
+  it('knowledge_graph asset 显示 kg-summary 静态徽章', () => {
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        title: '团队复盘图谱',
+        kg_summary: { node_count: 12, edge_count: 18 },
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    const badge = screen.getByTestId('kg-summary-badge')
+    expect(badge.textContent).toContain('12n')
+    expect(badge.textContent).toContain('18e')
+  })
+
+  it('weekly_report asset 不渲染 kg-summary 徽章 (即使误填 kg_summary 也忽略)', () => {
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'weekly_report',
+        kg_summary: { node_count: 5, edge_count: 3 },  // 非 KG 不该读
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    expect(screen.queryByTestId('kg-summary-badge')).toBeNull()
+  })
+
+  it('knowledge_graph 但 kg_summary 缺失 (生成中) → 不渲染徽章', () => {
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        kg_summary: null,
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    expect(screen.queryByTestId('kg-summary-badge')).toBeNull()
+  })
+
+  it('knowledge_graph TYPE_LABEL 显示 "知识图谱"', () => {
+    render(withWrappers(<DocumentCard
+      asset={mkAsset({
+        type: 'knowledge_graph',
+        kg_summary: { node_count: 5, edge_count: 3 },
+      })}
+      projectId="p1"
+      onClone={() => {}} onDelete={() => {}}
+    />))
+    expect(screen.getByText('知识图谱')).toBeInTheDocument()
+  })
 })

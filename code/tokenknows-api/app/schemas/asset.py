@@ -99,6 +99,10 @@ class Asset(BaseModel):
     # v0.4 · 自动触发标记 (None = 手动生成; 非空 = 由 trigger_rule 自动生成)
     # 详见 app/schemas/auto_trigger.py::AssetTriggerMeta + Proposal v0.4 §7.2
     trigger_meta: dict | None = None
+    # v1.2.1 · knowledge_graph 列表卡片摘要 (node_count + edge_count);
+    # 仅 type='knowledge_graph' 时 list endpoint 填充; 非 KG asset 永远 None.
+    # 详情页不读此字段 (读 chapter.layout 全图); 仅供 DocumentCard 静态徽章.
+    kg_summary: dict | None = None
     created_at: datetime
     updated_at: datetime
 

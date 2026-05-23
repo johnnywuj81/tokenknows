@@ -15,12 +15,15 @@ import { ReviewerNodeTable } from './ReviewerNodeTable'
 
 interface KnowledgeGraphPageProps {
   chapter: Chapter
-  onEvidenceJump?: (charOffset: number) => void
+  /** v1.2.1 T88: 节点 click 时把 KGNode 抛给父组件,
+   *  由 DocumentPage 内 useChapterEvidence 配合 source_event_ids 解出 evidenceId
+   *  并触发 EvidenceDrawer. */
+  onNodeClick?: (node: KGNode) => void
 }
 
 export default function KnowledgeGraphPage({
   chapter,
-  onEvidenceJump,
+  onNodeClick,
 }: KnowledgeGraphPageProps) {
   const layout = useMemo(() => {
     const raw = chapter.layout as unknown
@@ -71,9 +74,8 @@ export default function KnowledgeGraphPage({
   }
 
   function handleNodeClick(node: KGNode): void {
-    if (onEvidenceJump && node.span_anchor) {
-      onEvidenceJump(node.span_anchor.char_offset)
-    }
+    // v1.2.1 T88: 抛给父组件; 父组件用 useChapterEvidence 解出 evidenceId
+    onNodeClick?.(node)
   }
 
   function handleEdgeClick(_edge: KGEdge): void {
@@ -129,6 +131,7 @@ export default function KnowledgeGraphPage({
             layout={filteredLayout}
             onNodeClick={handleNodeClick}
             onEdgeClick={handleEdgeClick}
+            assetId={chapter.asset_id}
           />
         ) : (
           <EmptyState

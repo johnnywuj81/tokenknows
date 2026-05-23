@@ -90,8 +90,26 @@ async def list_project_assets(
     has_more = (start_idx + limit) < len(items)
     next_cursor = page[-1].id if page and has_more else None
 
+    # v1.2.1 T89: knowledge_graph 类型 enrich kg_summary (node/edge 数)
+    # 用于 DocumentCard 静态徽章; 内存查 chapters 几乎零成本.
+    enriched: list[Asset] = []
+    for a in page:
+        if a.type == "knowledge_graph":
+            chapters = svc._chapters.get(a.id, [])  # noqa: SLF001 - MVP 内存版
+            if chapters:
+                layout = chapters[0].layout or {}
+                nodes = layout.get("nodes") or []
+                edges = layout.get("edges") or []
+                a = a.model_copy(update={
+                    "kg_summary": {
+                        "node_count": len(nodes),
+                        "edge_count": len(edges),
+                    }
+                })
+        enriched.append(a)
+
     return PaginatedAssets(
-        data=page,
+        data=enriched,
         meta={"total": len(items), "cursor": next_cursor, "has_more": has_more},
     )
 

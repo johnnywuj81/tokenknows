@@ -8,7 +8,7 @@
  *   - 内置 Controls (zoom/pan/fit) + MiniMap
  */
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   Background,
   Controls,
@@ -16,6 +16,7 @@ import {
   ReactFlow,
   type Edge,
   type Node,
+  type NodeMouseHandler,
   type NodeTypes,
 } from '@xyflow/react'
 import dagre from '@dagrejs/dagre'
@@ -26,6 +27,7 @@ import { PersonNode } from './nodes/PersonNode'
 import { EventNode } from './nodes/EventNode'
 import { ConceptNode } from './nodes/ConceptNode'
 import { ArtifactNode } from './nodes/ArtifactNode'
+import { usePositionStore } from './store/positionStore'
 
 const NODE_TYPES: NodeTypes = {
   person: PersonNode,
@@ -41,6 +43,9 @@ interface GraphCanvasProps {
   layout: KnowledgeGraphLayout
   onNodeClick?: (node: KGNode) => void
   onEdgeClick?: (edge: KGEdge) => void
+  /** v1.2.1 T90: 用于按 asset 维度持久化拖动位置.
+   *  null 时不持久化 (e.g. 测试 / 预览态). */
+  assetId?: string | null
 }
 
 function _runDagreLayout(
@@ -74,21 +79,37 @@ function _runDagreLayout(
   return positions
 }
 
-export function GraphCanvas({ layout, onNodeClick, onEdgeClick }: GraphCanvasProps) {
+export function GraphCanvas({
+  layout,
+  onNodeClick,
+  onEdgeClick,
+  assetId,
+}: GraphCanvasProps) {
+  // v1.2.1 T90: 拖动位置持久化 (zustand persist 到 localStorage)
+  const storedPositions = usePositionStore((s) =>
+    assetId ? s.getPositions(assetId) : {},
+  )
+  const setPosition = usePositionStore((s) => s.setPosition)
+
   const { rfNodes, rfEdges } = useMemo(() => {
-    const positions = _runDagreLayout(
+    const dagrePositions = _runDagreLayout(
       layout.nodes,
       layout.edges,
       layout.layout_hints.rankdir,
     )
 
-    const rfNodes: Node[] = layout.nodes.map((node) => ({
-      id: node.id,
-      type: node.type,
-      position: positions.get(node.id) ?? { x: 0, y: 0 },
-      data: { node },
-      draggable: true,
-    }))
+    const rfNodes: Node[] = layout.nodes.map((node) => {
+      // 优先用 store 中的拖动位置, 否则 dagre 自动布局
+      const userPos = storedPositions[node.id]
+      const position = userPos ?? dagrePositions.get(node.id) ?? { x: 0, y: 0 }
+      return {
+        id: node.id,
+        type: node.type,
+        position,
+        data: { node },
+        draggable: true,
+      }
+    })
 
     const rfEdges: Edge[] = layout.edges.map((edge) => ({
       id: edge.id,
@@ -109,7 +130,17 @@ export function GraphCanvas({ layout, onNodeClick, onEdgeClick }: GraphCanvasPro
     }))
 
     return { rfNodes, rfEdges }
-  }, [layout])
+  }, [layout, storedPositions])
+
+  // 拖动结束时保存位置
+  const handleNodeDragStop = useCallback<NodeMouseHandler>(
+    (_event, node) => {
+      if (assetId) {
+        setPosition(assetId, node.id, { x: node.position.x, y: node.position.y })
+      }
+    },
+    [assetId, setPosition],
+  )
 
   return (
     <div
@@ -128,6 +159,7 @@ export function GraphCanvas({ layout, onNodeClick, onEdgeClick }: GraphCanvasPro
             onNodeClick(kgNode)
           }
         }}
+        onNodeDragStop={handleNodeDragStop}
         onEdgeClick={(_, e) => {
           const kgEdge = (e.data as { edge?: KGEdge })?.edge
           if (kgEdge && onEdgeClick) {

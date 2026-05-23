@@ -276,6 +276,8 @@ export interface Asset {
   metrics: AssetMetrics | null
   /** v0.4 · 自动触发标记 (null = 手动生成; 非空 = 由规则自动生成) */
   trigger_meta?: AssetTriggerMeta | null
+  /** v1.2.1 · knowledge_graph 列表卡片摘要; 非 KG 类型为 null. */
+  kg_summary?: { node_count: number; edge_count: number } | null
   created_at: string
   updated_at: string
 }
