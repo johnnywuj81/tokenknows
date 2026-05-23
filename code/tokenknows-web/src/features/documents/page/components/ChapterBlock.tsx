@@ -11,7 +11,7 @@
 
 import { useMemo } from 'react'
 import MarkdownIt from 'markdown-it'
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, AlertCircle, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Chapter } from '@/types/api'
 import { ChapterFooter } from './ChapterFooter'
@@ -98,6 +98,9 @@ export function ChapterBlock({
         </div>
       ) : null}
 
+      {/* T128 · 章节被 reviewer 退回时显示退回理由 (从 regeneration_history 抽 [REJECT] 那条) */}
+      <RejectReasonBanner chapter={chapter} />
+
       {/* A3 · 长文档懒挂载: content > 20KB 默认预览, 点击展开才挂 TipTap */}
       <LazyChapterEditor
         chapterId={chapter.id}
@@ -154,5 +157,68 @@ function SaveBadge({ state, error }: SaveBadgeProps) {
       <AlertCircle className="size-2.5" />
       已存本地 (重试中)
     </span>
+  )
+}
+
+
+// ── T128 · 退回理由 banner ──────────────────────────────────────
+
+
+/**
+ * 从 regeneration_history 找最新一条 `[REJECT] <reason>` 记录, 抽出理由 + 时间.
+ * 没有 reject 记录或 chapter 状态不是 rejected 时返 null.
+ */
+function _latestRejection(chapter: Chapter): { reason: string; at: string } | null {
+  if (chapter.approval_state !== 'rejected') return null
+  const history = chapter.regeneration_history ?? []
+  // 倒序找首个 [REJECT] 开头
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i]
+    if (typeof h.instruction === 'string' && h.instruction.startsWith('[REJECT] ')) {
+      return { reason: h.instruction.slice('[REJECT] '.length), at: h.at }
+    }
+  }
+  // 状态是 rejected 但没找到对应记录 (旧数据 / 异常), 仍返一个空 placeholder
+  // 让作者知道这章被退回了
+  return { reason: '(未填理由)', at: '' }
+}
+
+
+function _fmtAt(at: string): string {
+  if (!at) return ''
+  try {
+    const d = new Date(at)
+    if (Number.isNaN(d.getTime())) return at
+    return d.toLocaleString('zh-CN', { hour12: false })
+  } catch {
+    return at
+  }
+}
+
+
+function RejectReasonBanner({ chapter }: { chapter: Chapter }) {
+  const reject = _latestRejection(chapter)
+  if (!reject) return null
+  return (
+    <div
+      role="alert"
+      data-testid={`chapter-reject-banner-${chapter.id}`}
+      className="flex items-start gap-2 rounded-md border border-danger-border bg-danger-bg/40 px-3 py-2"
+    >
+      <XCircle className="size-4 shrink-0 mt-0.5 text-danger" />
+      <div className="flex-1 min-w-0">
+        <p className="font-ui text-body-sm font-medium text-danger-dark">
+          审批人退回了本章
+          {reject.at ? (
+            <span className="ml-2 font-normal text-caption text-text-muted">
+              · {_fmtAt(reject.at)}
+            </span>
+          ) : null}
+        </p>
+        <p className="mt-1 font-ui text-caption text-text-secondary whitespace-pre-wrap break-words">
+          {reject.reason}
+        </p>
+      </div>
+    </div>
   )
 }

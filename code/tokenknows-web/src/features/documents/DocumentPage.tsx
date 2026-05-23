@@ -10,8 +10,11 @@
 
 import { useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { XCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
+import type { Asset, Chapter } from '@/types/api'
 import { useDocumentUiStore } from '@/stores/documentUiStore'
 import { useSubmitAsset } from '../review/hooks/useReviewMutations'
 import { useAsset } from './hooks/useAsset'
@@ -159,6 +162,8 @@ export default function DocumentPage() {
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-6">
+              {/* T128 · 整 asset 被退回时显示顶部 banner + 跳第一章按钮 */}
+              <AssetRejectedBanner asset={asset} chapters={chapters} />
               {chapters.map((ch) => (
                 <ChapterBlock
                   key={ch.id}
@@ -184,6 +189,81 @@ export default function DocumentPage() {
 
       {/* T11 · 发布对话框 */}
       <PublishDialog assetId={docId} />
+    </div>
+  )
+}
+
+
+// ── T128 · 整 asset 退回顶部 banner ─────────────────────────────
+
+
+interface AssetRejectedBannerProps {
+  asset: Asset
+  chapters: Chapter[]
+}
+
+
+/**
+ * 当 asset.approval_state='rejected' 时显示在文档顶部, 提示作者审批人退回了
+ * 整个文档, 提供"跳到第一个被退回章节"操作.
+ *
+ * 与 ChapterBlock 的 RejectReasonBanner 互补: 这里是全局摘要 (N 章被退回),
+ * 章节内部 banner 显示每章的具体理由.
+ */
+function AssetRejectedBanner({ asset, chapters }: AssetRejectedBannerProps) {
+  if (asset.approval_state !== 'rejected') return null
+  const rejectedChapters = chapters.filter((c) => c.approval_state === 'rejected')
+  if (rejectedChapters.length === 0) {
+    // asset.approval_state=rejected 但章节都已修订过 — 仍提示一下全局状态
+    return (
+      <div
+        role="alert"
+        data-testid="asset-rejected-banner"
+        className="flex items-start gap-3 rounded-md border border-danger-border bg-danger-bg/30 px-4 py-3"
+      >
+        <XCircle className="size-5 shrink-0 text-danger mt-0.5" />
+        <div className="flex-1">
+          <p className="font-content text-h3 text-danger-dark">本文档之前被退回</p>
+          <p className="mt-1 font-ui text-body-sm text-text-secondary">
+            修订完成后请重新提交审批。
+          </p>
+        </div>
+      </div>
+    )
+  }
+  const firstRejected = rejectedChapters[0]
+  function scrollToFirstRejected(): void {
+    const el = document.getElementById(`chapter-anchor-${firstRejected.id}`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  return (
+    <div
+      role="alert"
+      data-testid="asset-rejected-banner"
+      className="flex items-start gap-3 rounded-md border border-danger-border bg-danger-bg/30 px-4 py-3"
+    >
+      <XCircle className="size-5 shrink-0 text-danger mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="font-content text-h3 text-danger-dark">
+          审批人退回了 {rejectedChapters.length} 个章节
+        </p>
+        <p className="mt-1 font-ui text-body-sm text-text-secondary">
+          每个被退回章节下方有审批人填写的理由。修订完成后请用顶部「提交审批」重新发起。
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={scrollToFirstRejected}
+          >
+            跳到第一个退回章节 (§{firstRejected.order_index + 1})
+          </Button>
+          <span className="font-mono text-caption text-text-muted">
+            退回章节: {rejectedChapters.map((c) => `§${c.order_index + 1}`).join(' · ')}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

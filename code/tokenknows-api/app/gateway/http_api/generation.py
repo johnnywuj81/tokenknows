@@ -22,7 +22,9 @@ from app.schemas.generation import (
     GenerateAssetRequest,
     GenerationProgress,
 )
+from app.schemas.todo import TodoItem
 from app.services import generation_service as svc
+from app.services import todo_service
 
 router = APIRouter()
 
@@ -133,6 +135,25 @@ async def list_project_assets(
         data=enriched,
         meta={"total": len(items), "cursor": next_cursor, "has_more": has_more},
     )
+
+
+# ─── 工作台 · 本周待办 (T128) ───────────────────────────────────────
+
+
+@router.get(
+    "/projects/{project_id}/todos",
+    response_model=list[TodoItem],
+)
+async def list_project_todos(project_id: str) -> list[TodoItem]:
+    """T128 · 工作台「本周待办」.
+
+    从当前项目 _assets 实时推导, 无独立存储. 优先级:
+      pending_revision (rejected, 作者要修) > pending_review > pending_publish
+      > pending_redaction > pending_generate (卡住的).
+
+    单 asset 最多 1 条 todo. 前端 useTodos 期待裸数组 (与 MSW handler 对齐).
+    """
+    return todo_service.list_todos(project_id)
 
 
 # ─── 单 asset 详情 ────────────────────────────────────────────────

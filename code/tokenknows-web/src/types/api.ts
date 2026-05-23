@@ -549,7 +549,8 @@ export interface AuditLogEntry {
 
 export interface TodoItem {
   id: string
-  type: 'pending_review' | 'pending_generate' | 'pending_publish' | 'pending_redaction'
+  // T128 加 pending_revision: 章节被退回, 作者侧待修订
+  type: 'pending_review' | 'pending_generate' | 'pending_publish' | 'pending_redaction' | 'pending_revision'
   title: string
   asset_id?: string
   due_at: string | null

@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileCheck, Eye, Sparkles, Send, AlertTriangle } from 'lucide-react'
+import { FileCheck, Eye, Sparkles, Send, AlertTriangle, RotateCcw } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -26,6 +26,8 @@ const TYPE_META: Record<TodoItem['type'], { icon: React.ComponentType<{ classNam
   pending_redaction: { icon: Eye, label: '待脱敏' },
   pending_generate: { icon: Sparkles, label: '待生成' },
   pending_publish: { icon: Send, label: '待发布' },
+  // T128 · 章节被 reviewer 退回, 作者需修订
+  pending_revision: { icon: RotateCcw, label: '待修订' },
 }
 
 export function TodoList({ todos, isLoading, error, onRetry, projectId }: TodoListProps) {

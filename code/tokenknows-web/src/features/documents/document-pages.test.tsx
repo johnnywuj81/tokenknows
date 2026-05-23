@@ -168,4 +168,40 @@ describe('DocumentPage', () => {
     render(withDoc(<DocumentPage />))
     await waitFor(() => expect(screen.getByText('章节尚未生成')).toBeInTheDocument())
   })
+
+  // T128 · 整 asset 被退回时顶部 banner
+  it('shows asset-rejected banner with rejected chapter count + scroll target', async () => {
+    vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url.includes('/chapters')) {
+        return Promise.resolve({
+          data: [
+            mkChapter({ id: 'c1', order_index: 0, title: '亮点', approval_state: 'approved' }),
+            mkChapter({
+              id: 'c4', order_index: 3, title: '风险与阻塞', approval_state: 'rejected',
+              regeneration_history: [{
+                at: '2026-05-23T17:00:00Z', user_id: 'reviewer',
+                instruction: '[REJECT] 风险评估不够具体', model: 'human',
+              }],
+            }),
+          ],
+        })
+      }
+      return Promise.resolve({ data: mkAsset({ approval_state: 'rejected', status: 'draft' }) })
+    })
+    render(withDoc(<DocumentPage />))
+    const banner = await screen.findByTestId('asset-rejected-banner')
+    expect(banner).toHaveTextContent('审批人退回了 1 个章节')
+    expect(banner).toHaveTextContent('跳到第一个退回章节')
+    expect(banner).toHaveTextContent('§4')
+  })
+
+  it('no asset-rejected banner when asset.approval_state is not rejected', async () => {
+    vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url.includes('/chapters')) return Promise.resolve({ data: [mkChapter()] })
+      return Promise.resolve({ data: mkAsset({ approval_state: 'pending' }) })
+    })
+    render(withDoc(<DocumentPage />))
+    await waitFor(() => expect(screen.getByText('亮点')).toBeInTheDocument())
+    expect(screen.queryByTestId('asset-rejected-banner')).not.toBeInTheDocument()
+  })
 })
