@@ -8,8 +8,9 @@
  * 这里只搭骨架,文字占位。
  */
 
+import { useState, type ComponentType } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox, BarChart3, Globe, Network } from 'lucide-react'
+import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox, BarChart3, Globe, Network, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -17,19 +18,49 @@ import { ProjectSwitcher } from '@/features/workbench/components/ProjectSwitcher
 import { WithdrawNotification } from '@/features/auto-triggers/WithdrawNotification'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 
+interface NavLeaf {
+  to: string
+  icon: ComponentType<{ className?: string }>
+  label: string
+}
+
+interface NavGroup {
+  /** group id, 用于展开 state */
+  id: string
+  icon: ComponentType<{ className?: string }>
+  label: string
+  /** group 自己有路由时, 点 group header 直接跳; 没的话仅展开/收起. */
+  to?: string
+  children: NavLeaf[]
+}
+
+type NavItem = NavLeaf | NavGroup
+
+function isGroup(item: NavItem): item is NavGroup {
+  return 'children' in item
+}
+
 export function AppLayout() {
   const user = useAuthStore((s) => s.user)
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const location = useLocation()
 
-  const navItems = currentProjectId
+  // T123: Skills 类聚成嵌套 group (审批收件箱 / 治理 / 市场 都是 Skills 子项)
+  const navItems: NavItem[] = currentProjectId
     ? [
         { to: `/projects/${currentProjectId}`, icon: LayoutDashboard, label: '工作台' },
         { to: `/projects/${currentProjectId}/documents`, icon: FileText, label: '文档' },
-        { to: `/projects/${currentProjectId}/skills`, icon: Sparkles, label: 'Skills' },
-        { to: `/projects/${currentProjectId}/skills/review-inbox`, icon: Inbox, label: '审批收件箱' },
-        { to: `/projects/${currentProjectId}/skills/governance`, icon: BarChart3, label: 'Skill 治理' },
-        { to: `/skills/marketplace`, icon: Globe, label: 'Skill 市场' },
+        {
+          id: 'skills',
+          icon: Sparkles,
+          label: 'Skills',
+          to: `/projects/${currentProjectId}/skills`,
+          children: [
+            { to: `/projects/${currentProjectId}/skills/review-inbox`, icon: Inbox, label: '审批收件箱' },
+            { to: `/projects/${currentProjectId}/skills/governance`, icon: BarChart3, label: '治理' },
+            { to: `/skills/marketplace`, icon: Globe, label: '市场' },
+          ],
+        },
         { to: `/global-entities`, icon: Network, label: '全局实体' },
         { to: `/projects/${currentProjectId}/datasources`, icon: Plug, label: 'IM 接入' },
         { to: `/projects/${currentProjectId}/settings`, icon: Settings, label: '项目设置' },
@@ -80,32 +111,16 @@ export function AppLayout() {
 
       {/* 主区: 左侧栏 + 主内容 + 抽屉槽位 */}
       <div className="grid grid-cols-[200px_1fr] overflow-hidden">
-        {/* 左侧导航 */}
+        {/* 左侧导航 (T123: Skills 类用嵌套 group) */}
         <nav className="border-r border-border-subtle bg-bg-card p-3" aria-label="主导航">
           <ul className="space-y-1">
-            {navItems.map((item) => {
-              const isWorkbench = item.label === '工作台'
-              const isActive =
-                location.pathname === item.to ||
-                (isWorkbench && location.pathname === '/') ||
-                (!isWorkbench && location.pathname.startsWith(item.to + '/'))
-              return (
-                <li key={item.to}>
-                  <Link
-                    to={item.to}
-                    className={cn(
-                      'flex items-center gap-2 rounded-md px-3 py-2 font-ui text-body-sm transition',
-                      isActive
-                        ? 'bg-accent-primary-light text-accent-primary-dark'
-                        : 'text-text-secondary hover:bg-bg-warm',
-                    )}
-                  >
-                    <item.icon className="size-4" />
-                    {item.label}
-                  </Link>
-                </li>
+            {navItems.map((item) => (
+              isGroup(item) ? (
+                <NavGroupItem key={item.id} group={item} pathname={location.pathname} />
+              ) : (
+                <NavLeafItem key={item.to} leaf={item} pathname={location.pathname} />
               )
-            })}
+            ))}
             {navItems.length === 0 ? (
               <li className="px-3 py-2 font-ui text-caption text-text-subtle">
                 选择或创建项目
@@ -126,5 +141,114 @@ export function AppLayout() {
         <WithdrawNotification />
       </div>
     </div>
+  )
+}
+
+
+// ── nav 子组件 ────────────────────────────────────────────────────
+
+
+/** 叶子节点 (无子项); 路由匹配规则: exact match 或 prefix + '/'. */
+function NavLeafItem({ leaf, pathname }: { leaf: NavLeaf; pathname: string }) {
+  const isWorkbench = leaf.label === '工作台'
+  const isActive =
+    pathname === leaf.to ||
+    (isWorkbench && pathname === '/') ||
+    (!isWorkbench && pathname.startsWith(leaf.to + '/'))
+  return (
+    <li>
+      <Link
+        to={leaf.to}
+        className={cn(
+          'flex items-center gap-2 rounded-md px-3 py-2 font-ui text-body-sm transition',
+          isActive
+            ? 'bg-accent-primary-light text-accent-primary-dark'
+            : 'text-text-secondary hover:bg-bg-warm',
+        )}
+      >
+        <leaf.icon className="size-4" />
+        {leaf.label}
+      </Link>
+    </li>
+  )
+}
+
+
+/** 可折叠 group; 默认按当前路由是否命中子项自动展开. */
+function NavGroupItem({ group, pathname }: { group: NavGroup; pathname: string }) {
+  // 路径在 group 自己 to 上 (e.g. /projects/x/skills) 或任一 child → 展开
+  const isSelfActive = !!group.to && (
+    pathname === group.to || pathname.startsWith(group.to + '/')
+  )
+  const anyChildActive = group.children.some(
+    (c) => pathname === c.to || pathname.startsWith(c.to + '/'),
+  )
+  const isGroupActive = isSelfActive || anyChildActive
+  // 默认: 命中则展开
+  const [expanded, setExpanded] = useState(isGroupActive)
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        data-testid={`nav-group-${group.id}`}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md px-3 py-2 font-ui text-body-sm transition text-left',
+          isGroupActive && !anyChildActive
+            ? 'bg-accent-primary-light text-accent-primary-dark'
+            : 'text-text-secondary hover:bg-bg-warm',
+        )}
+      >
+        <group.icon className="size-4" />
+        <span className="flex-1">{group.label}</span>
+        <ChevronRight
+          className={cn(
+            'size-3 shrink-0 text-text-subtle transition-transform',
+            expanded && 'rotate-90',
+          )}
+        />
+      </button>
+      {expanded ? (
+        <ul className="mt-0.5 ml-2 space-y-0.5 border-l border-border-subtle pl-2">
+          {/* group.to 存在时, 第 1 项是 group 自己 ("Skill 列表") */}
+          {group.to ? (
+            <li>
+              <Link
+                to={group.to}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-2 py-1.5 font-ui text-caption transition',
+                  isSelfActive
+                    ? 'bg-accent-primary-light text-accent-primary-dark'
+                    : 'text-text-secondary hover:bg-bg-warm',
+                )}
+              >
+                Skill 列表
+              </Link>
+            </li>
+          ) : null}
+          {group.children.map((c) => {
+            const childActive = pathname === c.to || pathname.startsWith(c.to + '/')
+            return (
+              <li key={c.to}>
+                <Link
+                  to={c.to}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md px-2 py-1.5 font-ui text-caption transition',
+                    childActive
+                      ? 'bg-accent-primary-light text-accent-primary-dark'
+                      : 'text-text-secondary hover:bg-bg-warm',
+                  )}
+                >
+                  <c.icon className="size-3.5" />
+                  {c.label}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </li>
   )
 }
