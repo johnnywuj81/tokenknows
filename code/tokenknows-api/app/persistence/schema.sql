@@ -223,3 +223,19 @@ CREATE TABLE IF NOT EXISTS generation_quotas (
 );
 CREATE INDEX IF NOT EXISTS generation_quotas_project_idx
     ON generation_quotas(project_id, year_month DESC);
+
+-- v0.5.1 · 站内通知 (T49 ConsentNotifier 主表)
+-- 关键索引: (user_id, read, created_at DESC) 服务铃铛角标查询.
+CREATE TABLE IF NOT EXISTS notifications (
+    id                  TEXT PRIMARY KEY,
+    user_id             TEXT NOT NULL,                 -- 接收者 platform user_id
+    type                TEXT NOT NULL,                 -- consent_request / consent_signed / consent_rejected / consent_expired
+    related_skill_id    TEXT,                          -- 反查方便
+    read                INTEGER NOT NULL DEFAULT 0,    -- 0/1
+    created_at          TEXT NOT NULL,
+    json                TEXT NOT NULL                  -- 完整 WebNotification dump
+);
+CREATE INDEX IF NOT EXISTS notifications_user_unread_idx
+    ON notifications(user_id, read, created_at DESC);
+CREATE INDEX IF NOT EXISTS notifications_skill_idx
+    ON notifications(related_skill_id) WHERE related_skill_id IS NOT NULL;

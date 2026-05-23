@@ -1123,6 +1123,149 @@ class SqliteStore:
             return None
         return json.loads(rows[0]["json"])
 
+    # ─── 站内通知 (v0.5.1 · T49) ─────────────────────────
+
+    def upsert_notification(
+        self,
+        notification_id: str,
+        user_id: str,
+        type_: str,
+        related_skill_id: str | None,
+        read: bool,
+        created_at: str,
+        json_str: str,
+    ) -> None:
+        """新增 / 更新单条通知 (mark_read 用 update_notification_read)."""
+        self._exec(
+            """
+            INSERT INTO notifications
+                (id, user_id, type, related_skill_id, read, created_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                read = excluded.read,
+                json = excluded.json
+            """,
+            (
+                notification_id, user_id, type_, related_skill_id,
+                1 if read else 0, created_at, json_str,
+            ),
+        )
+
+    def batch_insert_notifications(
+        self,
+        rows: list[tuple[str, str, str, str | None, bool, str, str]],
+    ) -> None:
+        """executemany 批量入库 (避免 N 次 IO).
+
+        每行: (id, user_id, type, related_skill_id, read, created_at, json_str)
+        """
+        if not rows:
+            return
+        with self._write_lock:
+            self._conn.executemany(
+                """
+                INSERT OR IGNORE INTO notifications
+                    (id, user_id, type, related_skill_id, read, created_at, json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (r[0], r[1], r[2], r[3], 1 if r[4] else 0, r[5], r[6])
+                    for r in rows
+                ],
+            )
+
+    def get_notification(self, notification_id: str) -> dict[str, Any] | None:
+        rows = self._query(
+            "SELECT json FROM notifications WHERE id = ?", (notification_id,)
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_notifications_for_user(
+        self,
+        user_id: str,
+        unread_only: bool = False,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """铃铛 popover 查询: 单 user, 默认 50 条按时间倒序."""
+        if unread_only:
+            rows = self._query(
+                """
+                SELECT json FROM notifications
+                WHERE user_id = ? AND read = 0
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+        else:
+            rows = self._query(
+                """
+                SELECT json FROM notifications
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+        return [json.loads(r["json"]) for r in rows]
+
+    def count_unread_notifications(self, user_id: str) -> int:
+        rows = self._query(
+            "SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0",
+            (user_id,),
+        )
+        return int(rows[0]["n"])
+
+    def mark_notification_read(self, notification_id: str) -> bool:
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                UPDATE notifications
+                SET read = 1, json = json_replace(json, '$.read', json('true'))
+                WHERE id = ?
+                """,
+                (notification_id,),
+            )
+            return cur.rowcount > 0
+
+    def mark_all_notifications_read(self, user_id: str) -> int:
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                UPDATE notifications
+                SET read = 1, json = json_replace(json, '$.read', json('true'))
+                WHERE user_id = ? AND read = 0
+                """,
+                (user_id,),
+            )
+            return int(cur.rowcount)
+
+    def list_notifications_for_skill(
+        self, skill_id: str, type_: str | None = None
+    ) -> list[dict[str, Any]]:
+        """ConsentNotifier 去重检查 (同 skill 不重复发)."""
+        if type_:
+            rows = self._query(
+                """
+                SELECT json FROM notifications
+                WHERE related_skill_id = ? AND type = ?
+                ORDER BY created_at DESC
+                """,
+                (skill_id, type_),
+            )
+        else:
+            rows = self._query(
+                """
+                SELECT json FROM notifications
+                WHERE related_skill_id = ?
+                ORDER BY created_at DESC
+                """,
+                (skill_id,),
+            )
+        return [json.loads(r["json"]) for r in rows]
+
     # ─── 调试 ────────────────────────────────────────
 
     def stats(self) -> dict[str, int]:
@@ -1139,4 +1282,5 @@ class SqliteStore:
             "trigger_rules": self._query("SELECT COUNT(*) AS n FROM trigger_rules")[0]["n"],
             "trigger_executions": self._query("SELECT COUNT(*) AS n FROM trigger_executions")[0]["n"],
             "generation_quotas": self._query("SELECT COUNT(*) AS n FROM generation_quotas")[0]["n"],
+            "notifications": self._query("SELECT COUNT(*) AS n FROM notifications")[0]["n"],
         }

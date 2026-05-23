@@ -284,20 +284,89 @@ async def _dispatch_skill_distill(
 
     fake_chapter = _build_fake_chapter_from_signals(execution.project_id, signals)
     name_hint = f"im-distilled-{rule.name[:20]}"
+    contributors = _extract_contributors_from_signals(signals)
     skill = await skill_service.distill_skill(
         project_id=execution.project_id,
         source_chapters=[fake_chapter],
         name_hint=name_hint,
         project_label=execution.project_id,
     )
+    # v0.5.1 T49: distill_skill 默认 status=draft + contributors=[];
+    # 这里补 contributors (从 IM signal sender 推导) 并触发 consent 流程.
+    if contributors:
+        skill = skill.model_copy(update={"contributors": contributors})
+        try:
+            from app.services.im import consent_notifier
+            from app.services.skill import consent as skill_consent
+            skill = skill_consent.initialize_pending(skill)
+            # 持久化 pending 状态
+            get_db().upsert_skill(
+                skill_id=skill.id,
+                project_id=skill.project_id,
+                name=skill.name,
+                version=skill.version,
+                status=skill.status,
+                trust_score=skill.metrics.trust_score,
+                updated_at=skill.updated_at.isoformat(),
+                json_str=skill.model_dump_json(),
+            )
+            # 找一个该 project 下的 IM connection 用于 DM (取最新 active)
+            conn_raw = _pick_project_im_connection(execution.project_id)
+            consent_notifier.notify_all(skill, connection_raw=conn_raw)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "auto_trigger_skill_consent_init_failed",
+                skill_id=skill.id,
+                error=str(e),
+            )
     logger.info(
         "auto_trigger_skill_distilled",
         skill_id=skill.id,
         project_id=execution.project_id,
         signals_used=len(signals),
+        contributors=len(contributors),
+        status=skill.status,
         trigger_meta_rule=trigger_meta.get("rule_name"),
     )
     return skill.id
+
+
+def _extract_contributors_from_signals(signals: list[dict[str, Any]]) -> list[str]:
+    """从 IM signal 列表去重抽出 sender.user_id (按出现顺序保序).
+
+    跳过空 / 匿名 user_id; signals 已按时间倒序, 这里保持原顺序.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in signals:
+        sender = m.get("sender")
+        if not isinstance(sender, dict):
+            continue
+        uid = sender.get("user_id")
+        if not uid or uid.startswith("anon-"):
+            continue
+        if uid in seen:
+            continue
+        seen.add(uid)
+        out.append(uid)
+    return out
+
+
+def _pick_project_im_connection(project_id: str) -> dict | None:
+    """取该 project 下任一 active IM connection (最新优先).
+
+    用于 ConsentNotifier 发 DM 的 token 来源.
+    无 connection / 全 disabled → 返 None, notify_all 走 web 兜底.
+    """
+    try:
+        conns = get_db().list_im_connections(project_id=project_id, status="active")
+        return conns[0] if conns else None
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "pick_project_im_connection_failed",
+            project_id=project_id, error=str(e),
+        )
+        return None
 
 
 async def fire_batch(execution_ids: list[str]) -> dict[str, int]:
