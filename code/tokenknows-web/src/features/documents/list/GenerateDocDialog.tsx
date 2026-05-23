@@ -201,9 +201,9 @@ export function GenerateDocDialog({
             >
               <div className="flex items-start justify-between gap-2">
                 <strong className="font-ui">⚠️ 生成失败</strong>
-                {errorStatus ? (
+                {errorStatus !== null ? (
                   <span className="font-mono text-caption text-text-muted">
-                    HTTP {errorStatus}
+                    {errorStatus === 0 ? '网络错误' : `HTTP ${errorStatus}`}
                   </span>
                 ) : null}
               </div>
