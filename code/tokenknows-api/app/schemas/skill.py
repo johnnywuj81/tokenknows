@@ -19,15 +19,44 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 SkillStatus = Literal[
-    "draft",       # 刚蒸馏出来, 待审批
+    # v0.2 - v0.4 既有
+    "draft",       # 刚蒸馏出来, 待审批 (手动蒸馏 / 全员签字后转入)
     "active",      # 正式可被注入下游生成
     "deprecated",  # 已停用 (人工或自动)
+    "locked",      # 固化版本 (不再参与自进化; 与 Skill.locked 区分: 字段 vs 状态)
+    # v0.5.1 新增 (Q5 contributor 个人同意闸门)
+    "pending_contributor_consent",  # 自动蒸馏出来 contributors 非空, 等所有人签
+    "rejected_by_contributor",      # 任一 contributor 拒绝, 冻结归档
+    "expired_no_consent",           # 30 天无人响应, 自动归档
 ]
+
+
+# ─── v0.5.1 · Consent (Q5 决策落地) ───────────────────────────────
+
+
+class ConsentRecord(BaseModel):
+    """单条 contributor 同意 / 拒绝记录.
+
+    Skill.consent_signed_by 是 list[ConsentRecord];
+    Skill.consent_rejected_by 是 单个 ConsentRecord | None (首位拒绝者冻结).
+    """
+
+    user_id: str
+    """contributor 的 platform user_id (open_id / userid)."""
+
+    signed_at: datetime
+    """签字 / 拒绝时刻 (UTC)."""
+
+    channel: Literal["im_dm", "web"]
+    """signed 的渠道: im_dm = IM 私聊卡片;web = 站内 Notification Bell."""
+
+    note: str | None = None
+    """可选备注 (拒绝时常用, 如 '此聊天属于人事讨论不宜蒸馏')."""
 
 
 class SkillMetrics(BaseModel):
@@ -111,8 +140,53 @@ class Skill(BaseModel):
     parent_skill_id: str | None = None
     """evolve_skill_v2 时记录上一代 skill_id (用于升级历史 timeline)."""
 
+    # ─── v0.5.1 · Q5 contributor 同意闸门 (T48) ────────────────
+    contributors: list[str] = Field(default_factory=list)
+    """蒸馏来源 chapter 关联到的 contributor user_id 列表.
+
+    distill_skill 时由调用方填入 (从 source_chapters → IMValueSegment.contributors 推导).
+    空列表 = 手动蒸馏 / 无 IM 链路, 直接跳过 consent 流程进 draft.
+    """
+
+    consent_required_from: list[str] = Field(default_factory=list)
+    """需同意的 contributor user_id 列表.
+
+    `initialize_pending(skill)` 时一次性从 `contributors` 复制 (避免事后被改);
+    不可手动改 (语义: 锁定签字目标集).
+    """
+
+    consent_signed_by: list[ConsentRecord] = Field(default_factory=list)
+    """已签字的 contributors. 全员签 (len == len(consent_required_from)) → 转 draft."""
+
+    consent_rejected_by: ConsentRecord | None = None
+    """首位拒绝者. 一旦被填则状态冻结到 rejected_by_contributor,
+    后续即使其他人签也无效 (单否决原则)."""
+
+    consent_expires_at: datetime | None = None
+    """OD-6: initialize_pending 时 +30 天.
+
+    daily sweep_expired_consents 任务扫到 now > consent_expires_at 且仍 pending
+    → 转 expired_no_consent.
+    """
+
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _backfill_consent_fields(cls, values: Any) -> Any:
+        """v0.5 之前的 Skill JSON 无 consent 字段; load 时回填 default.
+
+        必须 `mode="before"`: 在 Pydantic 字段默认值填充前注入, 不破坏
+        老数据 round-trip (json dump 再 load 不改值).
+        """
+        if isinstance(values, dict):
+            values.setdefault("contributors", [])
+            values.setdefault("consent_required_from", [])
+            values.setdefault("consent_signed_by", [])
+            values.setdefault("consent_rejected_by", None)
+            values.setdefault("consent_expires_at", None)
+        return values
 
 
 # ─── 请求 / 响应 DTO ──────────────────────────────────────────────
