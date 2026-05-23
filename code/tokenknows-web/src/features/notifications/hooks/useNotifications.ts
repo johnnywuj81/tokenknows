@@ -13,37 +13,42 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
 import type {
   WebNotification,
   WebNotificationListResponse,
 } from '@/types/api'
 
 const notificationKey = {
-  unreadCount: () => ['notifications', 'unread-count'] as const,
-  list: (unreadOnly?: boolean) =>
-    ['notifications', 'list', unreadOnly ?? false] as const,
+  unreadCount: (userId: string | null) =>
+    ['notifications', 'unread-count', userId ?? 'anon'] as const,
+  list: (userId: string | null, unreadOnly?: boolean) =>
+    ['notifications', 'list', userId ?? 'anon', unreadOnly ?? false] as const,
 }
 
-export function useUnreadCount(pollIntervalMs = 30_000) {
+export function useUnreadCount(pollIntervalMs = 60_000) {
+  const userId = useAuthStore((s) => s.user?.id ?? null)
   return useQuery({
-    queryKey: notificationKey.unreadCount(),
+    queryKey: notificationKey.unreadCount(userId),
     queryFn: async (): Promise<number> => {
       const res = await api.get<{ unread_count: number }>(
-        '/me/notifications/unread-count',
+        `/me/notifications/unread-count?user_id=${encodeURIComponent(userId!)}`,
       )
       return res.data.unread_count
     },
-    // SSE 不可用时, 用 polling 兜底
+    enabled: !!userId,
     refetchInterval: pollIntervalMs,
     refetchIntervalInBackground: false,
   })
 }
 
 export function useNotifications(unreadOnly = false, limit = 50) {
+  const userId = useAuthStore((s) => s.user?.id ?? null)
   return useQuery({
-    queryKey: notificationKey.list(unreadOnly),
+    queryKey: notificationKey.list(userId, unreadOnly),
     queryFn: async (): Promise<WebNotification[]> => {
       const params = new URLSearchParams()
+      params.set('user_id', userId!)
       params.set('limit', String(limit))
       if (unreadOnly) params.set('unread_only', 'true')
       const res = await api.get<WebNotificationListResponse>(
@@ -51,6 +56,7 @@ export function useNotifications(unreadOnly = false, limit = 50) {
       )
       return res.data.items
     },
+    enabled: !!userId,
   })
 }
 
@@ -68,9 +74,14 @@ export function useMarkNotificationRead() {
 
 export function useMarkAllNotificationsRead() {
   const qc = useQueryClient()
+  const userId = useAuthStore((s) => s.user?.id ?? null)
   return useMutation({
     mutationFn: async () => {
-      await api.post('/me/notifications/read-all', {})
+      if (!userId) return
+      await api.post(
+        `/me/notifications/read-all?user_id=${encodeURIComponent(userId)}`,
+        {},
+      )
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notifications'] })

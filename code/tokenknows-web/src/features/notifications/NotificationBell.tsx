@@ -20,16 +20,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/authStore'
 import {
   useMarkAllNotificationsRead,
   useNotifications,
   useUnreadCount,
 } from './hooks/useNotifications'
+import { useNotificationSSE } from './hooks/useNotificationSSE'
 import { NotificationList } from './NotificationList'
 
 export function NotificationBell() {
+  const userId = useAuthStore((s) => s.user?.id ?? null)
   const [open, setOpen] = useState(false)
-  const unreadQuery = useUnreadCount()
+  // SSE 主路径 (实时); 60s polling 兜底 (proxy 掐线时)
+  useNotificationSSE({ userId, enabled: !!userId })
+  const unreadQuery = useUnreadCount(60_000)
   const listQuery = useNotifications(false, 20)
   const markAllRead = useMarkAllNotificationsRead()
 

@@ -6,12 +6,13 @@
  * popover 内容 (NotificationList) 已单独测试 (见 NotificationList.test.tsx).
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import MockAdapter from 'axios-mock-adapter'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
 import { NotificationBell } from './NotificationBell'
 
 const mock = new MockAdapter(api)
@@ -27,8 +28,37 @@ function _render(ui: React.ReactNode) {
   )
 }
 
+function _setUser(id: string) {
+  useAuthStore.setState({
+    user: {
+      id,
+      email: `${id}@x`,
+      display_name: id,
+      is_instance_admin: false,
+      email_verified_at: null,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    },
+    accessToken: 'fake',
+    isAuthenticated: true,
+  })
+}
+
 beforeEach(() => {
   mock.reset()
+  _setUser('ou-alice')
+  // EventSource not in jsdom; stub to noop
+  // @ts-expect-error
+  globalThis.EventSource = class {
+    addEventListener() {}
+    close() {}
+  }
+})
+
+afterEach(() => {
+  // @ts-expect-error
+  delete globalThis.EventSource
+  useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false })
 })
 
 describe('NotificationBell', () => {
