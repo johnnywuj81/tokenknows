@@ -1,0 +1,28 @@
+{
+  "name": "tokenknows",
+  "description": "TokenKnows plugins · 把 Claude session 蒸馏成结构化文档 (周报 / ADR / KG / Skill 等)",
+  "owner": {
+    "name": "TokenKnows",
+    "url": "https://github.com/johnnywuj81/tokenknows"
+  },
+  "metadata": {
+    "version": "2.0.0",
+    "homepage": "https://github.com/johnnywuj81/tokenknows",
+    "license": "MIT"
+  },
+  "plugins": [
+    {
+      "name": "tokenknows",
+      "source": "./claude-code",
+      "description": "蒸馏当前 Claude session 成 7 类结构化文档 (周报/技术方案/ADR/复盘/书籍/Skill/知识图谱). 走 MCP 接 tokenknows-api 后端 5-stage LLM pipeline. 同时兼容 Claude Code 和 Cowork.",
+      "keywords": [
+        "knowledge-distill",
+        "weekly-report",
+        "adr",
+        "knowledge-graph",
+        "mcp",
+        "cowork"
+      ]
+    }
+  ]
+}
