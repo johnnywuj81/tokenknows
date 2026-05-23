@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 EventSourceType = Literal[
     "claude_code",
+    "claude_cowork",  # v2.0 T117 · Claude Cowork plugin 上报
     "cursor",
     "vscode",
     "github",
