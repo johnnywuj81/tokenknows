@@ -176,6 +176,66 @@ async def test_stage_evidence_embedding_fail_fallback(monkeypatch: pytest.Monkey
     assert result["evidence_total"] > 0
 
 
+# ─── T132 · time_window 透传到 db.list_events ─────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stage_evidence_respects_request_time_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T132 旧版硬编码 30 天忽略 req.time_window; 现在应根据 time_window
+    传不同 from_iso 给 db.list_events."""
+    _setup("a1", chapters=0)  # no chapters → 走早期 return, 只验 db 调用参数
+
+    captured: dict[str, str] = {}
+
+    class CapturingDb:
+        def list_events(self, **kw):
+            captured["from_iso"] = kw.get("from_iso", "")
+            captured["limit"] = kw.get("limit", 0)
+            # 必须返非空 events, 否则走 no_events fallback 不进 chapters 检查
+            return [{
+                "id": "ev-1", "source_type": "github",
+                "content": "x", "occurred_at": _now().isoformat(),
+                "title": "t", "trust_score": 0.9,
+                "source_ref": "o/r", "external_id": "ext",
+            }], 1
+
+    monkeypatch.setattr(gen, "get_db", lambda: CapturingDb())
+
+    # 跑 this_week (7 天窗口)
+    req_7d = GenerateAssetRequest(type="weekly_report", time_window="this_week")
+    await gen._stage_evidence("a1", req_7d)
+    iso_7d = captured["from_iso"]
+
+    # 跑 last_30_days (30 天窗口)
+    req_30d = GenerateAssetRequest(type="weekly_report", time_window="last_30_days")
+    await gen._stage_evidence("a1", req_30d)
+    iso_30d = captured["from_iso"]
+
+    # UTC ISO 字典序 = 时间序; 30 天前比 7 天前早 → 字符串更小
+    assert iso_30d < iso_7d, f"30d window should produce earlier from_iso: {iso_30d!r} >= {iso_7d!r}"
+    # limit 仍是 300 (没改业务参数)
+    assert captured["limit"] == 300
+
+
+@pytest.mark.asyncio
+async def test_stage_evidence_metadata_includes_time_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """所有 return path 都应在 metadata 带 time_window (debug 一致性)."""
+    _setup("a1", chapters=0)
+
+    class EmptyDb:
+        def list_events(self, **kw):
+            return [], 0
+
+    monkeypatch.setattr(gen, "get_db", lambda: EmptyDb())
+    req = GenerateAssetRequest(type="adr", time_window="last_14_days")
+    result = await gen._stage_evidence("a1", req)
+    assert result.get("time_window") == "last_14_days"
+
+
 # ─── _assess_slop_via_llm ────────────────────────────────────────
 
 

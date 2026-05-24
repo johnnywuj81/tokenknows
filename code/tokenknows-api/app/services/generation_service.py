@@ -1668,7 +1668,7 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     """阶段 4 · 证据链回填 · embedding cosine 重排.
 
     流程:
-        1. 拉 project 最近 30 天 events (limit 300)
+        1. 按 req.time_window 拉 project events (limit 300)
         2. 批量 embed (nomic-embed-text:latest, 768d): events + chapters
         3. 每章 cosine 排序, 取 top-4 (强制 ≥2 个 source_type 多样性)
         4. citation_strength = 真 cosine score (而非 random)
@@ -1676,22 +1676,31 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     fallback:
         - 没真 events → reason=no_events
         - embedding 调用失败 → 回退到跨源 round-robin (现 _pick_diverse_events)
+
+    T132 改: 旧版硬编码 30 天忽略 req.time_window, 与 collect/outline/content
+    阶段不一致 (e.g. 用户请求 this_week 蒸馏, evidence 却挂了 30 天前的引用).
+    改用统一 _time_window_from_iso() helper.
     """
     import random
     from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
 
     asset = _assets[asset_id]
     db = get_db()
-    week_ago_30 = (_now() - timedelta(days=30)).isoformat()
+    # T132: 与 _stage_collect 一致, 用 req.time_window 推算窗口; 未知值默认 30 天.
+    from_iso = _time_window_from_iso(req.time_window)
 
     all_events, _ = db.list_events(
         project_id=asset.project_id,
-        from_iso=week_ago_30,
+        from_iso=from_iso,
         limit=300,
     )
     if not all_events:
         logger.warning(
-            "evidence_stage_no_events", asset_id=asset_id, project_id=asset.project_id
+            "evidence_stage_no_events",
+            asset_id=asset_id,
+            project_id=asset.project_id,
+            time_window=req.time_window,
+            from_iso=from_iso,
         )
         return {
             "evidence_total": 0,
@@ -1699,11 +1708,17 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
             "fallback_used": True,
             "chapters_with_evidence": 0,
             "reason": "no events in project, run plugins first",
+            "time_window": req.time_window,
         }
 
     chapters = _chapters.get(asset_id, [])
     if not chapters:
-        return {"evidence_total": 0, "fallback_used": True, "chapters_with_evidence": 0}
+        return {
+            "evidence_total": 0,
+            "fallback_used": True,
+            "chapters_with_evidence": 0,
+            "time_window": req.time_window,
+        }
 
     # ── 1. 准备 embedding 文本 ─────────────────────────────
     event_texts = [_event_to_embed_text(e) for e in all_events]
@@ -1836,6 +1851,8 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
         "avg_cosine_per_chapter": avg_cos_per_chapter,
         "avg_final_per_chapter": avg_final_per_chapter,
         "weights": {"cosine": 0.6, "trust": 0.25, "recency": 0.15},
+        # T132: 记录实际用的窗口 (debug / 一致性自检)
+        "time_window": req.time_window,
     }
 
 
