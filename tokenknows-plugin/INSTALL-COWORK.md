@@ -12,8 +12,12 @@
 3. Sync → 然后从列表选 `tokenknows` 装
 
 > ⚠️ Cowork 严格在 repo root 找 `.claude-plugin/marketplace.json`,本仓库
-> 已经在 root 放好,plugin 实际位于 `code/tokenknows-plugins/claude-code/` 由
-> marketplace manifest 的 source 字段指向,Cowork 会自动处理。
+> 已经在 root 放好,plugin 实际位于 `tokenknows-plugin/` 由 marketplace manifest
+> 的 source 字段指向,Cowork 会自动处理。
+>
+> 历史教训: 早期 source 路径是 `./code/tokenknows-plugins/claude-code` (3 层),
+> Cowork sandbox sync 实测拉不到子目录文件 → plugin 看似装好但 .mcp.json
+> 没到本地, MCP server 永远启动不了. 改成 root 浅层路径后修复.
 
 或在 macOS terminal:
 
@@ -26,8 +30,8 @@ claude plugin install tokenknows
 ### 方式 2 · zip 上传 (离线/内网)
 
 ```bash
-cd code/tokenknows-plugins
-zip -r tokenknows-plugin.zip claude-code
+cd /path/to/tokenknows
+zip -r tokenknows-plugin.zip tokenknows-plugin
 # 上传 tokenknows-plugin.zip 到 claude.com/plugins
 ```
 

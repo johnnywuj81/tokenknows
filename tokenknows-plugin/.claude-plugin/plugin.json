@@ -6,7 +6,7 @@
     "name": "TokenKnows",
     "url": "https://github.com/johnnywuj81/tokenknows"
   },
-  "homepage": "https://github.com/johnnywuj81/tokenknows/tree/main/code/tokenknows-plugins/claude-code",
+  "homepage": "https://github.com/johnnywuj81/tokenknows/tree/main/tokenknows-plugin",
   "repository": "https://github.com/johnnywuj81/tokenknows",
   "license": "MIT",
   "keywords": [

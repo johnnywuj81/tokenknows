@@ -55,7 +55,7 @@ export TOKENKNOWS_DEFAULT_PROJECT="proj-demo-001"                      # 默认 
 export TOKENKNOWS_API_TOKEN=""                                         # JWT bearer (本地默认空)
 
 # 用 --plugin-dir 加载本 plugin
-cd /path/to/tokenknows/code/tokenknows-plugins/claude-code
+cd /path/to/tokenknows/tokenknows-plugin
 claude --plugin-dir .
 ```
 
