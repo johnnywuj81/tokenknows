@@ -1,7 +1,7 @@
 /**
  * useNotificationSSE · v0.5.2 T54 实时通知订阅.
  *
- * 订阅 GET /api/v1/me/notifications/stream?user_id= (EventSource).
+ * 订阅 GET /api/v1/me/notifications/stream?user_id= (SSE).
  * 服务端事件:
  *   - snapshot (订阅时一次, 携带当前 unread_count)
  *   - consent_request / consent_signed / consent_rejected / consent_expired
@@ -10,8 +10,9 @@
  * 行为:
  *   - 收到任意事件 → invalidate ['notifications', ...] queries
  *   - 收到 asset_chapter_rejected → 同时 invalidate todos / asset 详情 query
- *   - 浏览器原生 EventSource 不携带 Authorization 头, MVP 用 user_id query param
- *   - 自动重连 (浏览器原生); 不可恢复时会保留最后 known unread_count
+ *   - 用 @microsoft/fetch-event-source 替代浏览器原生 EventSource,
+ *     因原生 EventSource 不能带 Authorization header (T132 SSE auth 修复)
+ *   - 自动重连; 不可恢复时会保留最后 known unread_count
  *
  * 与 useUnreadCount 的关系:
  *   - useUnreadCount 仍跑 60s polling 作为兜底 (proxy 掐 SSE 时)
@@ -20,6 +21,8 @@
 
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { fetchEventSource, type EventSourceMessage } from '@microsoft/fetch-event-source'
+import { useAuthStore } from '@/stores/authStore'
 
 interface NotificationSSEEvent {
   event:
@@ -46,13 +49,23 @@ interface UseNotificationSSEOptions {
   onEvent?: (event: NotificationSSEEvent) => void
 }
 
+const KNOWN_EVENTS: NotificationSSEEvent['event'][] = [
+  'snapshot',
+  'consent_request',
+  'consent_signed',
+  'consent_rejected',
+  'consent_expired',
+  'asset_chapter_rejected',
+]
+
+class FatalAuthError extends Error {}
+
 export function useNotificationSSE({
   userId,
   enabled = true,
   onEvent,
 }: UseNotificationSSEOptions): void {
   const qc = useQueryClient()
-  const eventSourceRef = useRef<EventSource | null>(null)
   const onEventRef = useRef(onEvent)
 
   useEffect(() => {
@@ -62,74 +75,98 @@ export function useNotificationSSE({
   useEffect(() => {
     if (!enabled || !userId) return
 
-    const url = `/api/v1/me/notifications/stream?user_id=${encodeURIComponent(
-      userId,
-    )}`
-    const es = new EventSource(url)
-    eventSourceRef.current = es
+    const controller = new AbortController()
+    const url = `/api/v1/me/notifications/stream?user_id=${encodeURIComponent(userId)}`
 
-    function handle(eventName: NotificationSSEEvent['event']) {
-      return (e: MessageEvent): void => {
-        let parsed: NotificationSSEEvent
-        try {
-          parsed = { ...JSON.parse(e.data), event: eventName }
-        } catch {
-          // 心跳或非 JSON: 忽略, 但仍触发 invalidate (兜底)
-          parsed = {
-            event: eventName,
-            user_id: userId,
-            skill_id: null,
-            asset_id: null,
-            notification_id: null,
-            unread_count: null,
-            extra: {},
-            timestamp: new Date().toISOString(),
-          }
+    function dispatch(ev: EventSourceMessage): void {
+      const eventName = ev.event as NotificationSSEEvent['event']
+      if (!KNOWN_EVENTS.includes(eventName)) return  // 跳过 heartbeat / 未知
+
+      let parsed: NotificationSSEEvent
+      try {
+        parsed = { ...JSON.parse(ev.data), event: eventName }
+      } catch {
+        parsed = {
+          event: eventName,
+          user_id: userId,
+          skill_id: null,
+          asset_id: null,
+          notification_id: null,
+          unread_count: null,
+          extra: {},
+          timestamp: new Date().toISOString(),
         }
-        onEventRef.current?.(parsed)
+      }
+      onEventRef.current?.(parsed)
 
-        // 同步 query cache: 任何事件都 invalidate notifications
-        void qc.invalidateQueries({ queryKey: ['notifications'] })
+      void qc.invalidateQueries({ queryKey: ['notifications'] })
 
-        // consent_signed/rejected/expired 还可能影响 Skill 详情页
-        if (parsed.skill_id && parsed.event !== 'snapshot') {
+      if (parsed.skill_id && parsed.event !== 'snapshot') {
+        void qc.invalidateQueries({ queryKey: ['skills', 'detail', parsed.skill_id] })
+        void qc.invalidateQueries({ queryKey: ['skills'] })
+      }
+
+      // T129 · 章节退回事件 → 同步刷新 todos + 当前 asset 详情 + chapters
+      if (parsed.event === 'asset_chapter_rejected') {
+        void qc.invalidateQueries({ queryKey: ['projects'] })
+        if (parsed.asset_id) {
+          void qc.invalidateQueries({ queryKey: ['assets', parsed.asset_id] })
           void qc.invalidateQueries({
-            queryKey: ['skills', 'detail', parsed.skill_id],
+            queryKey: ['assets', parsed.asset_id, 'chapters'],
           })
-          // 项目级列表也 invalidate (不知道 project_id, 全 invalidate)
-          void qc.invalidateQueries({ queryKey: ['skills'] })
-        }
-
-        // T129 · 章节退回事件 → 同步刷新 todos + 当前 asset 详情 + chapters
-        // 让工作台 TodoList / DocumentPage banner 即时更新
-        if (parsed.event === 'asset_chapter_rejected') {
-          // 不知道作者当前在看哪个 project, 全 todos query 都 invalidate
-          // (queryKey 形如 ['projects', projectId, 'todos'])
-          void qc.invalidateQueries({ queryKey: ['projects'] })
-          if (parsed.asset_id) {
-            void qc.invalidateQueries({ queryKey: ['assets', parsed.asset_id] })
-            void qc.invalidateQueries({
-              queryKey: ['assets', parsed.asset_id, 'chapters'],
-            })
-          }
         }
       }
     }
 
-    es.addEventListener('snapshot', handle('snapshot'))
-    es.addEventListener('consent_request', handle('consent_request'))
-    es.addEventListener('consent_signed', handle('consent_signed'))
-    es.addEventListener('consent_rejected', handle('consent_rejected'))
-    es.addEventListener('consent_expired', handle('consent_expired'))
-    es.addEventListener('asset_chapter_rejected', handle('asset_chapter_rejected'))
-
-    es.onerror = () => {
-      // 浏览器自动重连; 长断时 polling (useUnreadCount) 兜底
+    // 与 axios interceptor 同样的 header 注入逻辑 (lib/api.ts)
+    function buildAuthHeaders(): Record<string, string> {
+      const state = useAuthStore.getState()
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+      }
+      if (state.accessToken) {
+        headers.Authorization = `Bearer ${state.accessToken}`
+      }
+      if (state.user?.id) {
+        headers['X-User-Id'] = state.user.id
+      }
+      return headers
     }
 
+    void fetchEventSource(url, {
+      signal: controller.signal,
+      headers: buildAuthHeaders(),
+      // 防止页面退入后台时主动关闭 (内置默认行为太激进)
+      openWhenHidden: true,
+      onopen: async (response) => {
+        if (response.ok && response.headers.get('content-type')?.startsWith('text/event-stream')) {
+          return
+        }
+        // 401/403 → 致命, 不重连; 其它 (5xx / 网络) 让 onerror 处理重连
+        if (response.status === 401 || response.status === 403) {
+          throw new FatalAuthError(`SSE auth failed: ${response.status}`)
+        }
+        throw new Error(`SSE open failed: ${response.status}`)
+      },
+      onmessage: dispatch,
+      onerror: (err) => {
+        if (err instanceof FatalAuthError) {
+          throw err  // 抛出去停止重连
+        }
+        // 其它错误: return undefined 让 fetch-event-source 退避重试 (默认 1s)
+        return undefined
+      },
+    }).catch((err) => {
+      if (err instanceof FatalAuthError) {
+        // polling (useUnreadCount) 会兜底, 这里只 debug log
+        // eslint-disable-next-line no-console
+        console.warn('[notification SSE] disabled due to auth failure; falling back to polling.', err.message)
+      }
+      // 其它非 fatal 错误已被库重连吞掉, 这里不到
+    })
+
     return () => {
-      es.close()
-      eventSourceRef.current = null
+      controller.abort()
     }
   }, [userId, enabled, qc])
 }

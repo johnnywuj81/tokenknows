@@ -13,11 +13,25 @@
  *   status / SSE / delete / clone 全部穿透到 Vite proxy → :8001.
  */
 
+import { http, HttpResponse } from 'msw'
 import { authHandlers } from './handlers/auth'
 import { projectHandlers } from './handlers/projects'
 import { eventHandlers } from './handlers/events'
 
+/**
+ * MSW worker liveness probe.
+ *
+ * main.tsx 的 watchdog 每 30s 打这个 URL:
+ *   - 200 + {msw:true}  → SW 健康
+ *   - 其它(真后端 404 / 网络错) → SW 死了, 自动 unregister + reload
+ * 见 MSW + Vite HMR 老 bug: SW 注册了但 fetch handler 未生效.
+ */
+const livenessProbe = http.get('/api/v1/__msw_health__', () =>
+  HttpResponse.json({ msw: true, ts: Date.now() }),
+)
+
 export const handlers = [
+  livenessProbe,
   ...authHandlers,
   ...projectHandlers,
   ...eventHandlers,
