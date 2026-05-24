@@ -56,4 +56,15 @@ export const fixtureTodos: TodoItem[] = [
     due_at: isoOffset(3, 18),
     created_at: isoOffset(-2, 15),
   },
+  // T128/T134 demo: 章节被退回需要作者修订. 现实里这条由 backend
+  // todo_service 从 asset.approval_state='rejected' 推导, 这里 fixture
+  // 模拟它的样子, 让 dev mode 也能预览红点/banner 效果.
+  {
+    id: 'todo-006',
+    type: 'pending_revision',
+    title: '修订: 2026 Q2 W21 周报 (审批人退回了 §4 风险与阻塞)',
+    asset_id: 'demo-wr-001',
+    due_at: isoOffset(1, 18),
+    created_at: isoOffset(0, 10),
+  },
 ]
