@@ -472,12 +472,25 @@ async def _run_stage(
         raise
 
 
+# T133 · collect 拉的事件池上限. 与 evidence stage cosine rerank 池一致 (300),
+# 让 evidence 能从 collect.metadata.events 直接复用, 跳过 db 二次调用.
+# 调大可提升 evidence 召回; 调小可省 SQLite blob 体积 (单 asset 多 ~150KB).
+_COLLECT_POOL_SIZE = 300
+
+
 async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
     """阶段 1 · 按时间窗从事件库选 TOP-N 候选.
 
     T126 改: 真查 db.list_events(project_id, from_iso=time_window 推算),
     把事件列表(dict)塞 stage metadata, 给后续 outline/content stage 用作
-    LLM grounding (旧版只返 candidates_count 占位, content 完全脱离真实事件).
+    LLM grounding.
+
+    T133 改: 拉 _COLLECT_POOL_SIZE=300 (与 evidence stage 一致) 而非 50.
+    evidence stage 现在优先从本 metadata.events 读, 跳过自己的 db 调用,
+    省一次 round-trip + 保证 "同一事件快照" 一致性.
+        - LLM grounding 仍走 _format_events_block 自动截前 25 条
+        - KG outline/content 自切 _KG_MAX_EVENTS_FOR_PROMPT=25
+        - evidence stage 全用 300 做 cosine rerank (覆盖率不缩水)
 
     KG 类型走专用 outline/content 分支自己读 events, 不依赖本 stage; 但
     本 stage 仍提供统一的事件 + trust 度量 (KG outline 仍可读 metadata).
@@ -489,7 +502,7 @@ async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
         raw_events, _ = db.list_events(
             project_id=asset.project_id,
             from_iso=from_iso,
-            limit=50,
+            limit=_COLLECT_POOL_SIZE,
         )
     except Exception as exc:
         # 持久层故障不应阻断流水线, 退化到旧占位行为
@@ -513,7 +526,10 @@ async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
         "candidates_count": len(events),
         "trust_score_avg": avg,
         "time_window": req.time_window,
-        # events 列表给后续 stage 用 (KG outline / content grounding).
+        # T133 · events 列表给后续 stage 用:
+        # - outline/content (grounding) 用 _format_events_block 截前 25
+        # - KG outline/content 截前 _KG_MAX_EVENTS_FOR_PROMPT
+        # - evidence stage 用全部 (T133 跳过自己的 db query)
         # 用 dict 而非 Event Pydantic, 与 KG 分支命名一致, 也好序列化进 SQLite.
         "events": events,
     }
@@ -1685,15 +1701,32 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
 
     asset = _assets[asset_id]
-    db = get_db()
     # T132: 与 _stage_collect 一致, 用 req.time_window 推算窗口; 未知值默认 30 天.
     from_iso = _time_window_from_iso(req.time_window)
 
-    all_events, _ = db.list_events(
-        project_id=asset.project_id,
-        from_iso=from_iso,
-        limit=300,
-    )
+    # T133 · 优先复用 collect.metadata.events (同一事件快照, 省一次 db 调用).
+    # collect 已拉 _COLLECT_POOL_SIZE=300 + trust_score desc 排序, 跟旧的 db
+    # 直拉行为等价 (cosine rerank 对入参顺序无敏感).
+    progress = _progress.get(asset_id)
+    events_source = "db_query"
+    all_events: list[dict] = []
+    if progress is not None:
+        collect_idx = _stage_index(progress, "collect")
+        meta = progress.stages[collect_idx].metadata or {}
+        cached = meta.get("events") or []
+        if cached:
+            all_events = list(cached)
+            events_source = "collect_metadata"
+
+    if not all_events:
+        # collect 没跑 / 异常时的兜底: 自己拉 db (保持向后兼容)
+        db = get_db()
+        all_events, _ = db.list_events(
+            project_id=asset.project_id,
+            from_iso=from_iso,
+            limit=_COLLECT_POOL_SIZE,
+        )
+
     if not all_events:
         logger.warning(
             "evidence_stage_no_events",
@@ -1701,6 +1734,7 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
             project_id=asset.project_id,
             time_window=req.time_window,
             from_iso=from_iso,
+            events_source=events_source,
         )
         return {
             "evidence_total": 0,
@@ -1709,6 +1743,7 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
             "chapters_with_evidence": 0,
             "reason": "no events in project, run plugins first",
             "time_window": req.time_window,
+            "events_source": events_source,
         }
 
     chapters = _chapters.get(asset_id, [])
@@ -1718,6 +1753,7 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
             "fallback_used": True,
             "chapters_with_evidence": 0,
             "time_window": req.time_window,
+            "events_source": events_source,
         }
 
     # ── 1. 准备 embedding 文本 ─────────────────────────────
@@ -1853,6 +1889,8 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
         "weights": {"cosine": 0.6, "trust": 0.25, "recency": 0.15},
         # T132: 记录实际用的窗口 (debug / 一致性自检)
         "time_window": req.time_window,
+        # T133: 记录 events 是从 collect.metadata 拿的 还是 evidence 自己 db 查的
+        "events_source": events_source,
     }
 
 

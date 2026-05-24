@@ -236,6 +236,66 @@ async def test_stage_evidence_metadata_includes_time_window(
     assert result.get("time_window") == "last_14_days"
 
 
+# ─── T133 · 复用 collect events ───────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stage_evidence_reuses_collect_metadata_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T133 · collect.metadata.events 有数据时, evidence 不应再调 db.list_events."""
+    _setup("a1", chapters=0)
+    # 模拟 collect 已经跑过, metadata.events 有 1 条
+    fake_event = {
+        "id": "ev-cached", "source_type": "github",
+        "content": "from collect cache", "occurred_at": _now().isoformat(),
+        "title": "t", "trust_score": 0.9,
+        "source_ref": "o/r", "external_id": "ext",
+    }
+    progress = gen._progress["a1"]
+    collect_idx = gen._stage_index(progress, "collect")
+    progress.stages[collect_idx].metadata = {"events": [fake_event]}
+
+    db_calls = {"count": 0}
+
+    class CountingDb:
+        def list_events(self, **kw):
+            db_calls["count"] += 1
+            return [], 0
+
+    monkeypatch.setattr(gen, "get_db", lambda: CountingDb())
+    result = await gen._stage_evidence("a1", _req())
+    # db.list_events 不应被调
+    assert db_calls["count"] == 0
+    # metadata 标记 events_source
+    assert result.get("events_source") == "collect_metadata"
+
+
+@pytest.mark.asyncio
+async def test_stage_evidence_falls_back_to_db_when_no_collect_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T133 · collect.metadata.events 缺失/空 → 退化到 db.list_events (向后兼容)."""
+    _setup("a1", chapters=0)
+    # collect metadata 故意不填 events (模拟旧 asset / collect 异常)
+    progress = gen._progress["a1"]
+    collect_idx = gen._stage_index(progress, "collect")
+    progress.stages[collect_idx].metadata = {"candidates_count": 0}  # no 'events' key
+
+    db_calls = {"count": 0}
+
+    class CountingDb:
+        def list_events(self, **kw):
+            db_calls["count"] += 1
+            return [], 0
+
+    monkeypatch.setattr(gen, "get_db", lambda: CountingDb())
+    result = await gen._stage_evidence("a1", _req())
+    # db.list_events 必须被调 (fallback)
+    assert db_calls["count"] == 1
+    assert result.get("events_source") == "db_query"
+
+
 # ─── _assess_slop_via_llm ────────────────────────────────────────
 
 
