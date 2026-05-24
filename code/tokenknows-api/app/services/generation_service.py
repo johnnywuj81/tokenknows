@@ -2837,7 +2837,37 @@ def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | Non
     _persist_asset(asset_id)   # P1
     _notify_skill_feedback(chapter, action="rejected")
     _publish_chapter_rejected_sse(asset, chapter, reason)
+    _publish_chapter_rejected_im(asset, chapter, reason)
     return chapter
+
+
+def _publish_chapter_rejected_im(
+    asset: "Asset | None", chapter: Chapter, reason: str
+) -> None:
+    """T130 MVP · 给作者发飞书 DM (best-effort, 不阻断主流程).
+
+    详细路由 + 守卫见 app.services.reject_notifier; 这里仅薄包装 + 日志.
+    """
+    if asset is None:
+        return
+    try:
+        from app.services import reject_notifier  # 延迟 import 避免循环
+        result = reject_notifier.notify_chapter_rejected(asset, chapter, reason)
+        logger.info(
+            "asset_chapter_rejected_im_dispatched",
+            asset_id=asset.id,
+            chapter_id=chapter.id,
+            sent=result.sent,
+            platform=result.platform,
+            skipped_reason=result.skipped_reason,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "asset_chapter_rejected_im_failed",
+            asset_id=asset.id,
+            chapter_id=chapter.id,
+            error=str(exc),
+        )
 
 
 def _publish_chapter_rejected_sse(
