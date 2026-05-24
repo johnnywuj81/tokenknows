@@ -2776,6 +2776,8 @@ def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | Non
     """T09 · 章节级退回. 任一章节退回时 asset.approval_state = 'rejected'.
 
     v0.2 · 反馈给应用的 skill: action=rejected 累加 rejection_count.
+    T129 · 同时推 SSE asset_chapter_rejected 给作者 (asset.created_by) 让
+    工作台 TodoList 即时刷新, 不依赖 60s polling.
     """
     chapter = _find_chapter(asset_id, chapter_id)
     if chapter is None:
@@ -2796,7 +2798,50 @@ def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | Non
         asset.updated_at = _now()
     _persist_asset(asset_id)   # P1
     _notify_skill_feedback(chapter, action="rejected")
+    _publish_chapter_rejected_sse(asset, chapter, reason)
     return chapter
+
+
+def _publish_chapter_rejected_sse(
+    asset: "Asset | None", chapter: Chapter, reason: str
+) -> None:
+    """T129 · 推 SSE 给 asset.created_by (作者). 作者未订阅时 silently
+    deliver=0; 异常完全 swallow 不影响主流程."""
+    if asset is None:
+        return
+    author = (asset.created_by or "").strip()
+    if not author or author == "anonymous":
+        # MVP 阶段未登录用户 asset, 推了也没人收
+        return
+    try:
+        from app.services import notification_sse  # 延迟 import 避免循环
+        event = notification_sse.SseNotificationEvent(
+            event="asset_chapter_rejected",
+            user_id=author,
+            asset_id=asset.id,
+            extra={
+                "chapter_id": chapter.id,
+                "chapter_title": chapter.title,
+                "order_index": chapter.order_index,
+                "reason": reason,
+                "project_id": asset.project_id,
+            },
+        )
+        delivered = notification_sse.publish_to_user(author, event)
+        logger.info(
+            "asset_chapter_rejected_sse_published",
+            asset_id=asset.id,
+            chapter_id=chapter.id,
+            author=author,
+            delivered=delivered,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "asset_chapter_rejected_sse_failed",
+            asset_id=asset.id,
+            chapter_id=chapter.id,
+            error=str(exc),
+        )
 
 
 def _notify_skill_feedback(chapter: Chapter, action: str) -> None:

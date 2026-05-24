@@ -45,6 +45,8 @@ SseNotificationEventType = Literal[
     "skill_review_request",
     "skill_review_approved",
     "skill_review_rejected",
+    # T129 · asset 章节退回 (作者侧实时收到)
+    "asset_chapter_rejected",
     # 控制类
     "snapshot",
 ]
@@ -58,11 +60,14 @@ class SseNotificationEvent:
     user_id: str
     """目标用户 (用于断言路由正确)."""
     skill_id: str | None = None
+    asset_id: str | None = None
+    """T129 · 关联的 asset; asset_chapter_rejected 用. skill 类事件留 None."""
     notification_id: str | None = None
     unread_count: int | None = None
     """snapshot / 关键 mark_read 时一同推, 省一次 HTTP."""
     extra: dict[str, Any] | None = None
-    """额外字段 (sign 的 signed_count/required_count 等)."""
+    """额外字段 (sign 的 signed_count/required_count 等; T129 asset 退回的
+    chapter_id / chapter_title / reason 等)."""
     timestamp: str = ""
 
     def __post_init__(self) -> None:
@@ -75,6 +80,7 @@ class SseNotificationEvent:
                 "event": self.event,
                 "user_id": self.user_id,
                 "skill_id": self.skill_id,
+                "asset_id": self.asset_id,
                 "notification_id": self.notification_id,
                 "unread_count": self.unread_count,
                 "extra": self.extra or {},

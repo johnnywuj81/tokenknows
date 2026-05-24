@@ -203,6 +203,70 @@ describe('useNotificationSSE', () => {
     expect(closeSpy).toHaveBeenCalled()
   })
 
+  // ── T129 · asset_chapter_rejected 事件 ─────────────────────────
+  it('asset_chapter_rejected 事件 → invalidate projects + asset detail + chapters', () => {
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const onEvent = vi.fn()
+    renderHook(
+      () => useNotificationSSE({ userId: 'ou-author', onEvent }),
+      { wrapper: _wrapper(qc) },
+    )
+    act(() => {
+      lastInstance!.fireEvent('asset_chapter_rejected', {
+        user_id: 'ou-author',
+        skill_id: null,
+        asset_id: 'asset-xyz',
+        notification_id: null,
+        unread_count: null,
+        extra: {
+          chapter_id: 'c4',
+          chapter_title: '风险与阻塞',
+          order_index: 3,
+          reason: '风险评估不够具体',
+          project_id: 'proj-demo-001',
+        },
+        timestamp: '2026-05-24T03:30:00Z',
+      })
+    })
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'asset_chapter_rejected',
+        asset_id: 'asset-xyz',
+      }),
+    )
+    const calls = invalidate.mock.calls.map(([arg]) => arg.queryKey)
+    // 整 projects 树都 invalidate (覆盖 ['projects', :id, 'todos'] 等)
+    expect(calls).toContainEqual(['projects'])
+    // asset 详情 + chapters
+    expect(calls).toContainEqual(['assets', 'asset-xyz'])
+    expect(calls).toContainEqual(['assets', 'asset-xyz', 'chapters'])
+  })
+
+  it('asset_chapter_rejected 缺 asset_id → 仍 invalidate projects 不抛', () => {
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    renderHook(
+      () => useNotificationSSE({ userId: 'ou-a' }),
+      { wrapper: _wrapper(qc) },
+    )
+    act(() => {
+      lastInstance!.fireEvent('asset_chapter_rejected', {
+        user_id: 'ou-a',
+        skill_id: null,
+        asset_id: null,
+        notification_id: null,
+        unread_count: null,
+        extra: {},
+        timestamp: '',
+      })
+    })
+    const calls = invalidate.mock.calls.map(([arg]) => arg.queryKey)
+    expect(calls).toContainEqual(['projects'])
+    // 没 asset_id → 不应触发 ['assets', ...] invalidate
+    expect(calls.some((k) => k[0] === 'assets')).toBe(false)
+  })
+
   it('userId 变化 → 新 EventSource', () => {
     const qc = new QueryClient()
     const { rerender } = renderHook(
