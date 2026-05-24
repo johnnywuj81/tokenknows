@@ -118,7 +118,14 @@ async def get_project_stats(project_id: str) -> dict:
 # ─── 数据源健康度 (5 源真实数 + last_seen) ────────────────────────
 
 
-_KNOWN_SOURCE_TYPES = ("claude_code", "github", "cursor", "vscode", "local_file")
+_KNOWN_SOURCE_TYPES = (
+    "claude_code",
+    "claude_cowork",   # v2.0 T117 · Cowork plugin 主动上报 (MCP submit_session_events)
+    "github",
+    "cursor",
+    "vscode",
+    "local_file",
+)
 
 
 @router.get("/projects/{project_id}/datasources/health")
@@ -128,8 +135,8 @@ async def get_datasource_health(
 ) -> dict:
     """T03 · 工作台数据源卡 · 每个 source_type 的事件数 + 最近一次入库.
 
-    返回 5 行 (包含未出现过的源, event_count=0), 前端按固定顺序排:
-        claude_code / github / cursor / vscode / local_file
+    返回 6 行 (包含未出现过的源, event_count=0), 前端按固定顺序排:
+        claude_code / claude_cowork / github / cursor / vscode / local_file
 
     health 判定 (前端展示用):
         - active   : last_seen_at within 24h

@@ -28,7 +28,37 @@ from mcp.server.fastmcp import FastMCP
 
 from mcp_server.client import get_client
 
-mcp = FastMCP("tokenknows")
+# v2.0 T136 · instructions 让 host (Claude Code / Cowork) 自动调用 submit_session_events
+# 不必依赖用户每次说"记一笔". Cowork 没有 SessionEnd hook (GitHub #45514),
+# 这是引导 LLM 主动上报的最自然方式.
+_MCP_INSTRUCTIONS = """\
+This MCP server captures Claude session activity into the TokenKnows knowledge
+base. When connected, you should proactively call the `submit_session_events`
+tool to record the conversation, so the user does not have to ask explicitly.
+
+Trigger heuristics (call without being asked):
+  - At the end of each meaningful task (after the user gets the answer they
+    wanted), submit 1–N events covering that task's user request, your reasoning
+    summary, and the key tool calls.
+  - When the user finishes a multi-turn discussion (e.g. before they say
+    "thanks" or move to a new topic), batch the recent turns.
+  - If you used external tools (web search, file read, MCP calls) inside this
+    session, include them as `event_type="tool_call"`.
+
+Cowork-specific (when running inside Claude Cowork desktop app):
+  - Always pass `source_type="claude_cowork"` so the data source is correctly
+    labeled in the TokenKnows UI.
+
+Code-specific (when running inside Claude Code CLI):
+  - Leave source_type unset (defaults to "claude_code"); the session-watcher
+    daemon already captures conversation jsonl, you only need to submit
+    high-level summaries the daemon can't infer.
+
+Always batch — do not call submit_session_events per turn; aim for 1 call per
+completed task, with the events array containing 2–10 entries.
+"""
+
+mcp = FastMCP("tokenknows", instructions=_MCP_INSTRUCTIONS)
 
 
 def _default_project_id(override: str | None = None) -> str:

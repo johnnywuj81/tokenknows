@@ -209,6 +209,8 @@ function defaultDatasourceName(type: DatasourceType): string {
   switch (type) {
     case 'claude_code':
       return 'Claude Code 插件'
+    case 'claude_cowork':
+      return 'Claude Cowork 插件'
     case 'cursor':
       return 'Cursor 扩展'
     case 'vscode':

@@ -24,6 +24,7 @@ interface DatasourcesCardProps {
 
 const SOURCE_LABEL: Record<DatasourceType, string> = {
   claude_code: 'Claude Code',
+  claude_cowork: 'Claude Cowork',
   github: 'GitHub',
   cursor: 'Cursor',
   vscode: 'VS Code',
@@ -33,6 +34,7 @@ const SOURCE_LABEL: Record<DatasourceType, string> = {
 // emoji 替代 icon, 减少额外依赖
 const SOURCE_EMOJI: Record<DatasourceType, string> = {
   claude_code: '🤖',
+  claude_cowork: '🤝',
   github: '🐙',
   cursor: '✏️',
   vscode: '🔵',
