@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""TokenKnows 本地文档插件 v0 · watchdog 监听 .md / .txt 文件入库.
+"""TokenKnows 本地文档插件 · watchdog 监听 .md / .txt / .pdf 文件入库.
 
 设计目标:
-- 监听用户指定目录 (默认 ~/Documents), 递归扫描 .md / .txt
+- 监听用户指定目录 (默认 ~/Documents), 递归扫描 .md / .txt / .pdf
 - 文件变更时 (created/modified): 2s 防抖, 合并连续编辑
 - 删除/重命名: 暂不处理 (避免误删已入库证据)
 - 投递: POST /api/v1/projects/:project_id/events, 单条/批量都走同一端点
-- 幂等: content_hash = sha256(file_path + mtime + size + first_4k) 服务端去重
-- 初始扫描: --bootstrap 全量遍历目录并推送 (用于首次启用)
+- 幂等: content_hash 服务端去重
+
+PDF 处理 (page-level chunking, NVIDIA benchmark 0.648 acc / 0.107 std):
+- 用 pdfplumber 抽文本, CJK 支持好
+- 一页 → 一条 event (source_ref = "name.pdf#page=N", payload.page = N)
+- 空白页 (<30 字符) 跳过
+- PDF 文件 >20MB 跳过 (parse 太慢)
 
 trust_score 公式 (与其它插件一致):
     trust = 0.6 × authority + 0.4 × confidence
@@ -20,7 +25,7 @@ trust_score 公式 (与其它插件一致):
         [--watch]       # 持续监听 (前台)
         [--bootstrap]   # 全量入库一次后退出 (适合首次启用)
 
-依赖: stdlib + requests + watchdog
+依赖: stdlib + requests + watchdog (+ pdfplumber 可选, 缺则跳过 .pdf)
 """
 
 from __future__ import annotations
@@ -50,16 +55,28 @@ except ImportError:  # pragma: no cover
     print("✗ 需安装 watchdog: pip install watchdog", file=sys.stderr)
     sys.exit(1)
 
+# pdfplumber 可选, 缺失时降级为只处理 .md/.txt
+try:
+    import pdfplumber  # type: ignore
+    _HAS_PDFPLUMBER = True
+except ImportError:  # pragma: no cover
+    pdfplumber = None  # type: ignore
+    _HAS_PDFPLUMBER = False
+
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
     level=os.environ.get("TK_LOG", "INFO"),
 )
 log = logging.getLogger("tk-local-docs")
 
-ALLOWED_EXTS = {".md", ".txt"}
+TEXT_EXTS = {".md", ".txt"}
+PDF_EXTS = {".pdf"}
+ALLOWED_EXTS = TEXT_EXTS | PDF_EXTS
 DEBOUNCE_SEC = 2.0
-MAX_FILE_BYTES = 2 * 1024 * 1024   # 2MB; 超过截断尾部, 防止整个 PDF 转 md 撑爆
-PREVIEW_BYTES = 4096                # content_hash 前 4KB; 防止"全文 hash 太慢"
+MAX_FILE_BYTES = 2 * 1024 * 1024        # 2MB; 文本类截断尾部
+MAX_PDF_BYTES = 20 * 1024 * 1024        # 20MB; 超过不 parse (太慢)
+MIN_PAGE_CHARS = 30                      # PDF 单页正文 < 30 字符跳过 (空白/封面)
+PREVIEW_BYTES = 4096                     # content_hash 前 4KB; 防止"全文 hash 太慢"
 BATCH_SIZE = 50
 STATE_FILE = Path.home() / ".tokenknows" / "local_docs_state.json"
 
@@ -91,8 +108,11 @@ def save_state(state: dict[str, float]) -> None:
 # ─── 文件 → Event ────────────────────────────────────────────
 
 
-def is_text_file(path: Path) -> bool:
-    if path.suffix.lower() not in ALLOWED_EXTS:
+def is_supported_file(path: Path) -> bool:
+    ext = path.suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        return False
+    if ext in PDF_EXTS and not _HAS_PDFPLUMBER:
         return False
     # 跳过 SKIP_DIRS 下的文件
     parts = set(path.parts)
@@ -104,71 +124,68 @@ def is_text_file(path: Path) -> bool:
     return True
 
 
-def file_to_event(
-    path: Path,
-    watch_root: Path,
-) -> dict[str, Any] | None:
-    """读文件, 转 EventCreate dict. 失败返回 None."""
-    try:
-        stat = path.stat()
-    except OSError:
-        return None
+# 兼容旧名 (保留 1 个 release 周期)
+is_text_file = is_supported_file
 
-    if stat.st_size == 0:
-        return None
 
-    try:
-        raw = path.read_bytes()
-    except OSError as e:
-        log.warning("read %s failed: %s", path, e)
-        return None
-
-    # 截断超大文件
-    truncated = False
-    if len(raw) > MAX_FILE_BYTES:
-        raw = raw[:MAX_FILE_BYTES]
-        truncated = True
-
-    try:
-        text = raw.decode("utf-8", errors="replace").strip()
-    except Exception:
-        return None
-    if not text:
-        return None
-
-    # content_hash 用文件路径 + 内容前 4KB hash, 不全文是为了 watch 模式快
-    h = hashlib.sha256()
-    h.update(str(path).encode("utf-8"))
-    h.update(raw[:PREVIEW_BYTES])
-    content_hash = h.hexdigest()
-
-    occurred = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
-    title = path.stem.replace("_", " ").replace("-", " ")
-    title = title[:80] + "…" if len(title) > 80 else title
-
-    # trust_score
-    #   authority: 本地文档 = 0.75 (用户主动 written, 但未经验证 / 未发布)
-    #   confidence: 按长度
-    if len(text) >= 500:
-        confidence = 1.0
-    elif len(text) >= 100:
-        confidence = 0.8
-    else:
-        confidence = 0.5
-    authority = 0.75
-    trust_score = round(0.6 * authority + 0.4 * confidence, 3)
-
-    # 相对路径作 source_ref, 便于在 UI 看到"哪个文件"
-    # macOS /tmp → /private/tmp symlink, 必须 resolve() 才能 relative_to
+def _rel_source_ref(path: Path, watch_root: Path) -> str:
+    """相对路径作 source_ref. macOS /tmp → /private/tmp 需 resolve()."""
     try:
         rel = path.resolve().relative_to(watch_root.resolve())
     except ValueError:
         rel = path
-    rel_str = str(rel)
+    return str(rel)
+
+
+def _confidence_by_length(text: str) -> float:
+    if len(text) >= 500:
+        return 1.0
+    if len(text) >= 100:
+        return 0.8
+    return 0.5
+
+
+def _build_event(
+    *,
+    path: Path,
+    watch_root: Path,
+    stat: os.stat_result,
+    text: str,
+    content_hash: str,
+    title: str,
+    source_ref: str,
+    extension: str,
+    extra_payload: dict[str, Any] | None = None,
+    extra_tags: list[str] | None = None,
+    truncated: bool = False,
+) -> dict[str, Any]:
+    """统一构造 EventCreate dict, 复用 trust_score / author / occurred_at 等."""
+    occurred = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+    confidence = _confidence_by_length(text)
+    authority = 0.75
+    trust_score = round(0.6 * authority + 0.4 * confidence, 3)
+
+    payload: dict[str, Any] = {
+        "file_path": str(path),
+        "watch_root": str(watch_root),
+        "size_bytes": stat.st_size,
+        "truncated": truncated,
+        "extension": extension,
+        "trust_components": {
+            "source_authority": authority,
+            "extraction_confidence": confidence,
+        },
+    }
+    if extra_payload:
+        payload.update(extra_payload)
+
+    tags = [extension.lstrip("."), "local"]
+    if extra_tags:
+        tags.extend(extra_tags)
 
     return {
         "source_type": "local_file",
-        "source_ref": rel_str,
+        "source_ref": source_ref,
         "external_id": f"local:{content_hash[:16]}",
         "version": 1,
         "event_type": "local_document",
@@ -181,23 +198,139 @@ def file_to_event(
         "title": title,
         "content": text,
         "content_hash": content_hash,
-        "payload": {
-            "file_path": str(path),
-            "watch_root": str(watch_root),
-            "size_bytes": stat.st_size,
-            "truncated": truncated,
-            "extension": path.suffix.lower(),
-            "trust_components": {
-                "source_authority": authority,
-                "extraction_confidence": confidence,
-            },
-        },
-        "tags": [
-            path.suffix.lower().lstrip("."),
-            "local",
-        ],
+        "payload": payload,
+        "tags": tags,
         "trust_score": trust_score,
     }
+
+
+def _text_file_to_event(
+    path: Path,
+    watch_root: Path,
+    stat: os.stat_result,
+) -> dict[str, Any] | None:
+    """.md / .txt → 1 条 event."""
+    if stat.st_size == 0:
+        return None
+    try:
+        raw = path.read_bytes()
+    except OSError as e:
+        log.warning("read %s failed: %s", path, e)
+        return None
+
+    truncated = False
+    if len(raw) > MAX_FILE_BYTES:
+        raw = raw[:MAX_FILE_BYTES]
+        truncated = True
+
+    text = raw.decode("utf-8", errors="replace").strip()
+    if not text:
+        return None
+
+    h = hashlib.sha256()
+    h.update(str(path).encode("utf-8"))
+    h.update(raw[:PREVIEW_BYTES])
+    content_hash = h.hexdigest()
+
+    title = path.stem.replace("_", " ").replace("-", " ")
+    title = title[:80] + "…" if len(title) > 80 else title
+
+    return _build_event(
+        path=path,
+        watch_root=watch_root,
+        stat=stat,
+        text=text,
+        content_hash=content_hash,
+        title=title,
+        source_ref=_rel_source_ref(path, watch_root),
+        extension=path.suffix.lower(),
+        truncated=truncated,
+    )
+
+
+def _pdf_to_events(
+    path: Path,
+    watch_root: Path,
+    stat: os.stat_result,
+) -> list[dict[str, Any]]:
+    """PDF → N 条 event (一页一条, page-level chunking)."""
+    if not _HAS_PDFPLUMBER:
+        return []
+    if stat.st_size == 0:
+        return []
+    if stat.st_size > MAX_PDF_BYTES:
+        log.warning("pdf %s skipped: size %d > %d", path, stat.st_size, MAX_PDF_BYTES)
+        return []
+
+    base_ref = _rel_source_ref(path, watch_root)
+    base_title = path.stem.replace("_", " ").replace("-", " ")
+
+    events: list[dict[str, Any]] = []
+    try:
+        with pdfplumber.open(str(path)) as pdf:
+            total_pages = len(pdf.pages)
+            for idx, page in enumerate(pdf.pages, start=1):
+                try:
+                    text = (page.extract_text() or "").strip()
+                except Exception as e:  # noqa: BLE001 - pdfplumber 内部异常种类多
+                    log.warning("pdf %s page %d extract failed: %s", path, idx, e)
+                    continue
+
+                if len(text) < MIN_PAGE_CHARS:
+                    continue
+
+                h = hashlib.sha256()
+                h.update(str(path).encode("utf-8"))
+                h.update(f"#page={idx}".encode("utf-8"))
+                h.update(text[:PREVIEW_BYTES].encode("utf-8", errors="replace"))
+                content_hash = h.hexdigest()
+
+                page_label = f"p.{idx}/{total_pages}"
+                title = f"{base_title} · {page_label}"
+                title = title[:80] + "…" if len(title) > 80 else title
+
+                events.append(_build_event(
+                    path=path,
+                    watch_root=watch_root,
+                    stat=stat,
+                    text=text,
+                    content_hash=content_hash,
+                    title=title,
+                    source_ref=f"{base_ref}#page={idx}",
+                    extension=".pdf",
+                    extra_payload={
+                        "page": idx,
+                        "total_pages": total_pages,
+                    },
+                    extra_tags=["pdf-page"],
+                ))
+    except Exception as e:  # noqa: BLE001
+        log.warning("pdf %s open failed: %s", path, e)
+        return []
+    return events
+
+
+def file_to_events(
+    path: Path,
+    watch_root: Path,
+) -> list[dict[str, Any]]:
+    """读文件, 转 N 条 EventCreate dict. text=1 条, pdf=按页 N 条."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return []
+
+    ext = path.suffix.lower()
+    if ext in PDF_EXTS:
+        return _pdf_to_events(path, watch_root, stat)
+    ev = _text_file_to_event(path, watch_root, stat)
+    return [ev] if ev else []
+
+
+# 兼容旧名 (单条返回, 保留 1 个 release 周期)
+def file_to_event(path: Path, watch_root: Path) -> dict[str, Any] | None:
+    evs = file_to_events(path, watch_root)
+    return evs[0] if evs else None
 
 
 # ─── 投递 ────────────────────────────────────────────────────
@@ -239,7 +372,7 @@ def discover_files(watch_dir: Path) -> list[Path]:
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for n in names:
             p = Path(root) / n
-            if is_text_file(p):
+            if is_supported_file(p):
                 files.append(p)
     return sorted(files)
 
@@ -254,9 +387,9 @@ def bootstrap_scan(
     log.info("bootstrap: %d files under %s", len(files), watch_dir)
     events: list[dict[str, Any]] = []
     for p in files:
-        ev = file_to_event(p, watch_dir)
-        if ev is not None:
-            events.append(ev)
+        file_events = file_to_events(p, watch_dir)
+        if file_events:
+            events.extend(file_events)
             state[str(p)] = p.stat().st_mtime
     ingested, skipped = post_events(backend_url, project_id, events)
     save_state(state)
@@ -301,7 +434,7 @@ class _DocHandler(FileSystemEventHandler):
 
     def _enqueue(self, raw_path: str) -> None:
         path = Path(raw_path)
-        if not is_text_file(path):
+        if not is_supported_file(path):
             return
         with self._lock:
             self._pending[str(path)] = time.time()
@@ -319,14 +452,16 @@ class _DocHandler(FileSystemEventHandler):
             if not ready:
                 continue
             events: list[dict[str, Any]] = []
+            files_processed = 0
             for raw in ready:
                 p = Path(raw)
                 if not p.exists():
                     continue
-                ev = file_to_event(p, self.watch_root)
-                if ev is None:
+                file_events = file_to_events(p, self.watch_root)
+                if not file_events:
                     continue
-                events.append(ev)
+                events.extend(file_events)
+                files_processed += 1
                 try:
                     self._state[str(p)] = p.stat().st_mtime
                 except OSError:
@@ -336,8 +471,8 @@ class _DocHandler(FileSystemEventHandler):
                     self.backend_url, self.project_id, events
                 )
                 log.info(
-                    "flushed %d file(s) → ingested=%d skipped=%d",
-                    len(events), ingested, skipped,
+                    "flushed %d file(s), %d event(s) → ingested=%d skipped=%d",
+                    files_processed, len(events), ingested, skipped,
                 )
                 save_state(self._state)
 
@@ -356,8 +491,10 @@ def run_watch(
     observer.start()
     flush_thread = threading.Thread(target=handler.flush_loop, daemon=True)
     flush_thread.start()
-    log.info("watching %s (debounce=%ds, extensions=%s)",
-             watch_dir, int(DEBOUNCE_SEC), sorted(ALLOWED_EXTS))
+    exts = sorted(TEXT_EXTS | (PDF_EXTS if _HAS_PDFPLUMBER else set()))
+    pdf_note = "" if _HAS_PDFPLUMBER else " (pdfplumber 未装, .pdf 将跳过)"
+    log.info("watching %s (debounce=%ds, extensions=%s)%s",
+             watch_dir, int(DEBOUNCE_SEC), exts, pdf_note)
     try:
         while True:
             time.sleep(1)

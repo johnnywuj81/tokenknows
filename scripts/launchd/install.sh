@@ -40,12 +40,18 @@ if [ ! -x "$PYTHON_BIN" ]; then
     exit 1
 fi
 
-# 检查依赖
+# 检查必需依赖
 "$PYTHON_BIN" -c "import requests, watchdog" 2>/dev/null || {
     echo "✗ python3 缺少 requests / watchdog 包, 请运行:"
     echo "  $PYTHON_BIN -m pip install requests watchdog"
     exit 1
 }
+
+# 检查可选依赖 (pdfplumber: local-docs 的 PDF 支持)
+if ! "$PYTHON_BIN" -c "import pdfplumber" 2>/dev/null; then
+    echo "  ⚠ pdfplumber 未装 — local-docs 将不能处理 .pdf (仅 .md/.txt 可用)"
+    echo "    如需 PDF 支持: $PYTHON_BIN -m pip install pdfplumber"
+fi
 
 # 检查脚本存在
 for f in plugins/claude-code/sync.py plugins/github/sync.py \
