@@ -694,13 +694,19 @@ class SqliteStore:
         project_id: str,
         source_type: str | None = None,
         min_trust: float = 0.0,
+        from_iso: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
+        """T131.2 · 加 from_iso (extracted_at >= from_iso) 让 collect/evidence
+        stage 能按时间窗过滤. extracted_at ≈ ingest 时刻, 对实时事件管线足够."""
         where = ["project_id = ?", "trust_score >= ?"]
         params: list[Any] = [project_id, min_trust]
         if source_type:
             where.append("source_type = ?")
             params.append(source_type)
+        if from_iso:
+            where.append("extracted_at >= ?")
+            params.append(from_iso)
         where_sql = " AND ".join(where)
         rows = self._query(
             f"""

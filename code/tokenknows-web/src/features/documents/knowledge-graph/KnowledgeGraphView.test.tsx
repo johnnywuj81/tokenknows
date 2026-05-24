@@ -159,6 +159,9 @@ describe('KnowledgeGraphView', () => {
     mock
       .onGet('/assets/a-kg-1/chapters/ch-kg-1/evidence')
       .reply(200, _evidences())
+    // KnowledgeGraphView 新挂了 EvidenceDrawer + PublishDialog (后者 usePublishRecords
+    // 会立即拉 publish-records) — 给个 200 空数组避免 axios-mock-adapter 拒绝
+    mock.onGet('/assets/a-kg-1/publish-records').reply(200, [])
 
     const onOpen = vi.fn()
     _render(
@@ -174,8 +177,14 @@ describe('KnowledgeGraphView', () => {
     await waitFor(() =>
       expect(screen.getByTestId('kg-page-mock')).toBeInTheDocument(),
     )
-    // 等 evidence load
-    await waitFor(() => expect(mock.history.get.length).toBe(1))
+    // 等 evidence URL 至少被请求一次 (PublishDialog 等其它挂件也会发请求, 不锁死总数)
+    await waitFor(() =>
+      expect(
+        mock.history.get.some((c) =>
+          (c.url ?? '').endsWith('/chapters/ch-kg-1/evidence'),
+        ),
+      ).toBe(true),
+    )
     // 触发匹配 click
     screen.getByTestId('trigger-node-with-event-1').click()
     await waitFor(() => expect(onOpen).toHaveBeenCalled())
@@ -186,6 +195,7 @@ describe('KnowledgeGraphView', () => {
     mock
       .onGet('/assets/a-kg-1/chapters/ch-kg-1/evidence')
       .reply(200, _evidences())
+    mock.onGet('/assets/a-kg-1/publish-records').reply(200, [])
 
     const onOpen = vi.fn()
     _render(
@@ -198,7 +208,13 @@ describe('KnowledgeGraphView', () => {
         onOpenEvidence={onOpen}
       />,
     )
-    await waitFor(() => expect(mock.history.get.length).toBe(1))
+    await waitFor(() =>
+      expect(
+        mock.history.get.some((c) =>
+          (c.url ?? '').endsWith('/chapters/ch-kg-1/evidence'),
+        ),
+      ).toBe(true),
+    )
     screen.getByTestId('trigger-node-no-match').click()
     await waitFor(() => expect(onOpen).toHaveBeenCalled())
     expect(onOpen).toHaveBeenCalledWith('ch-kg-1', undefined)

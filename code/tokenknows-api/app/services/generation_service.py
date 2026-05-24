@@ -481,39 +481,53 @@ _COLLECT_POOL_SIZE = 300
 async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
     """阶段 1 · 按时间窗从事件库选 TOP-N 候选.
 
-    T126 改: 真查 db.list_events(project_id, from_iso=time_window 推算),
-    把事件列表(dict)塞 stage metadata, 给后续 outline/content stage 用作
-    LLM grounding.
+    T126 改: 真查 db.list_events 不再 stub.
+    T133 改: limit=300 与 evidence 一致, evidence 复用本 metadata.events.
+    T131.2 改: 优先读 value_segments (统一蒸馏原子层), events 仅作 fallback.
+              value_segments 已脱敏 + 经过提炼 (trust 加权), 给 LLM 喂更
+              "干净"的内容; 缺 (老项目还没跑 events→segments 提炼) 时退化
+              到 events 保证向后兼容.
 
-    T133 改: 拉 _COLLECT_POOL_SIZE=300 (与 evidence stage 一致) 而非 50.
-    evidence stage 现在优先从本 metadata.events 读, 跳过自己的 db 调用,
-    省一次 round-trip + 保证 "同一事件快照" 一致性.
-        - LLM grounding 仍走 _format_events_block 自动截前 25 条
-        - KG outline/content 自切 _KG_MAX_EVENTS_FOR_PROMPT=25
-        - evidence stage 全用 300 做 cosine rerank (覆盖率不缩水)
-
-    KG 类型走专用 outline/content 分支自己读 events, 不依赖本 stage; 但
-    本 stage 仍提供统一的事件 + trust 度量 (KG outline 仍可读 metadata).
+    数据形态: 不论来自 value_segments 还是 events, 都转成 dict (key 兼容
+    _format_events_block + KG outline 等下游 consumer 读法).
     """
     asset = _assets[asset_id]
     db = get_db()
     from_iso = _time_window_from_iso(req.time_window)
+
+    # T131.2 · 先试 value_segments (统一抽象, 含 event-derived + im-derived)
+    events_source = "value_segments"
+    raw_pool: list[dict] = []
     try:
-        raw_events, _ = db.list_events(
+        segments = db.list_value_segments(
             project_id=asset.project_id,
+            min_trust=0.0,  # 排序按 trust desc, 不预过滤; 下游决定阈值
             from_iso=from_iso,
             limit=_COLLECT_POOL_SIZE,
         )
+        raw_pool = [_segment_to_event_dict(s) for s in segments]
     except Exception as exc:
-        # 持久层故障不应阻断流水线, 退化到旧占位行为
-        logger.warning("collect_stage_db_failed", asset_id=asset_id, error=str(exc))
-        raw_events = []
+        logger.warning("collect_value_segments_failed", asset_id=asset_id, error=str(exc))
+        raw_pool = []
 
-    # raw_events 已是 dict, db.list_events 内部按 occurred_at desc; 这里追加
-    # trust_score desc 作主排序 (稳定排序保持 occurred_at 次序), 给后续 stage
-    # 用 prefix 截断 (_MAX_EVENTS_FOR_PROMPT) 时优先保留可信度高的事件.
+    # value_segments 空 → fallback events (向后兼容: 老项目没跑提炼 worker)
+    if not raw_pool:
+        events_source = "events_fallback"
+        try:
+            raw_events, _ = db.list_events(
+                project_id=asset.project_id,
+                from_iso=from_iso,
+                limit=_COLLECT_POOL_SIZE,
+            )
+            raw_pool = list(raw_events)
+        except Exception as exc:
+            logger.warning("collect_stage_db_failed", asset_id=asset_id, error=str(exc))
+            raw_pool = []
+
+    # 排序 by trust_score desc (稳定排序保持入参次序, 即 list_*_segments
+    # 内部已按 extracted_at desc / occurred_at desc 排过)
     events = sorted(
-        raw_events,
+        raw_pool,
         key=lambda e: -(e.get("trust_score") or 0.5),
     )
     if not events:
@@ -526,12 +540,49 @@ async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
         "candidates_count": len(events),
         "trust_score_avg": avg,
         "time_window": req.time_window,
-        # T133 · events 列表给后续 stage 用:
-        # - outline/content (grounding) 用 _format_events_block 截前 25
-        # - KG outline/content 截前 _KG_MAX_EVENTS_FOR_PROMPT
-        # - evidence stage 用全部 (T133 跳过自己的 db query)
-        # 用 dict 而非 Event Pydantic, 与 KG 分支命名一致, 也好序列化进 SQLite.
+        # 给后续 stage 复用 (T133): outline/content grounding +
+        # evidence stage 跳过 db 二次拉.
+        # 字段名沿用 'events' 保持 v0/v1 测试兼容性, 实际内容可能来自
+        # value_segments (T131.2). 出处见 collect_source.
         "events": events,
+        "collect_source": events_source,
+    }
+
+
+def _segment_to_event_dict(seg: dict) -> dict:
+    """T131.2 · 把 value_segment dict 转成 event-shape dict, 让下游 consumer
+    (outline/content/KG/evidence stages) 无差别读.
+
+    映射:
+      segment.id              → id
+      segment.source.event_id → source_ref (用于 evidence drawer 跳转)
+      segment.source.type     → source_type (event / im_chat / im_thread)
+      segment.content         → content (已脱敏)
+      segment.trust_score     → trust_score
+      segment.extracted_at    → occurred_at (近似; events 原 occurred_at 在
+                                上游, MVP 用提炼时间近似)
+      segment.source.contributors[0] → author (取首个 contributor)
+    """
+    source = seg.get("source") or {}
+    contributors = source.get("contributors") or []
+    author = None
+    if contributors:
+        c0 = contributors[0]
+        author = {
+            "name": c0.get("name") or c0.get("user_id") or "?",
+            "email": c0.get("email"),
+        }
+    return {
+        "id": seg.get("id"),
+        "source_type": source.get("type") or "event",
+        "source_ref": source.get("event_id") or "",
+        "external_id": seg.get("id"),  # 占位; segment id 本身全局唯一
+        "occurred_at": seg.get("extracted_at"),
+        "author": author,
+        "title": None,  # value_segment 没有显式 title
+        "content": seg.get("content") or "",
+        "trust_score": seg.get("trust_score") or 0.5,
+        "payload": {},
     }
 
 

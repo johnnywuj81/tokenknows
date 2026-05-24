@@ -107,8 +107,9 @@ async def test_publish_event_no_subscriber_no_op() -> None:
 
 @pytest.mark.asyncio
 async def test_stage_collect_returns_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_stage_collect 真查 events (T126): mock db.list_events, 验证 metadata
-    含 candidates_count / trust_score_avg / events 列表."""
+    """_stage_collect (T131.2): 优先读 value_segments. 这个测试 mock value_segments
+    返非空, 验证 metadata 含 candidates_count / trust_score_avg / events +
+    collect_source='value_segments'."""
     monkeypatch.setattr(asyncio, "sleep", AsyncMock())
     gen._assets["a1"] = Asset(
         id="a1", project_id="p1", type="weekly_report", title="t",
@@ -117,15 +118,29 @@ async def test_stage_collect_returns_metadata(monkeypatch: pytest.MonkeyPatch) -
         redaction_state="any_unresolved",
         created_at=_now(), updated_at=_now(),
     )
-    fake_events = [
-        {"id": "e1", "title": "ev1", "content": "c1", "trust_score": 0.9},
-        {"id": "e2", "title": "ev2", "content": "c2", "trust_score": 0.5},
+    fake_segments = [
+        {
+            "id": "seg-1", "content": "c1", "trust_score": 0.9,
+            "extracted_at": "2026-05-24T00:00:00Z",
+            "source": {"type": "event", "event_id": "e1", "contributors": []},
+        },
+        {
+            "id": "seg-2", "content": "c2", "trust_score": 0.5,
+            "extracted_at": "2026-05-23T00:00:00Z",
+            "source": {"type": "event", "event_id": "e2", "contributors": []},
+        },
     ]
 
     class _FakeDb:
-        def list_events(self, project_id: str, from_iso: str, limit: int) -> tuple[list[dict], int]:
+        def list_value_segments(
+            self, project_id: str, min_trust: float = 0.0,
+            from_iso: str | None = None, limit: int = 100,
+        ) -> list[dict]:
             assert project_id == "p1"
-            return fake_events, len(fake_events)
+            return fake_segments
+
+        def list_events(self, **kw):
+            raise AssertionError("不应回退到 events (value_segments 非空)")
 
     monkeypatch.setattr(gen, "get_db", lambda: _FakeDb())
     req = GenerateAssetRequest(type="weekly_report", time_window="this_week")
@@ -133,7 +148,45 @@ async def test_stage_collect_returns_metadata(monkeypatch: pytest.MonkeyPatch) -
     assert metadata["candidates_count"] == 2
     assert metadata["time_window"] == "this_week"
     assert metadata["trust_score_avg"] == 0.7  # (0.9 + 0.5) / 2
-    # 排序后 trust 高的在前
+    assert metadata["collect_source"] == "value_segments"
+    # 排序后 trust 高的在前; seg-1 segments id 翻译进入 event dict 'id'
+    assert metadata["events"][0]["id"] == "seg-1"
+    assert metadata["events"][0]["source_ref"] == "e1"
+
+
+@pytest.mark.asyncio
+async def test_stage_collect_falls_back_to_events_when_segments_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T131.2 · value_segments 空 → 退化到 db.list_events (向后兼容)."""
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+    gen._assets["a1"] = Asset(
+        id="a1", project_id="p1", type="weekly_report", title="t",
+        status="generating", current_version=0, template_id="t",
+        created_by="anon", approval_state="pending",
+        redaction_state="any_unresolved",
+        created_at=_now(), updated_at=_now(),
+    )
+    fallback_events = [
+        {"id": "e1", "title": "ev1", "content": "c1", "trust_score": 0.8,
+         "occurred_at": "2026-05-24T00:00:00Z"},
+    ]
+    events_called = {"n": 0}
+
+    class _FakeDb:
+        def list_value_segments(self, **kw):
+            return []  # 触发 fallback
+
+        def list_events(self, **kw):
+            events_called["n"] += 1
+            return fallback_events, len(fallback_events)
+
+    monkeypatch.setattr(gen, "get_db", lambda: _FakeDb())
+    req = GenerateAssetRequest(type="weekly_report", time_window="this_week")
+    metadata = await gen._stage_collect("a1", req)
+    assert events_called["n"] == 1
+    assert metadata["collect_source"] == "events_fallback"
+    assert metadata["candidates_count"] == 1
     assert metadata["events"][0]["id"] == "e1"
 
 
