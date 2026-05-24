@@ -13,7 +13,7 @@
   "plugins": [
     {
       "name": "tokenknows",
-      "source": "./claude-code",
+      "source": "./code/tokenknows-plugins/claude-code",
       "description": "蒸馏当前 Claude session 成 7 类结构化文档 (周报/技术方案/ADR/复盘/书籍/Skill/知识图谱). 走 MCP 接 tokenknows-api 后端 5-stage LLM pipeline. 同时兼容 Claude Code 和 Cowork.",
       "keywords": [
         "knowledge-distill",

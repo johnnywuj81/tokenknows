@@ -7,20 +7,19 @@ Claude Code / Cowork plugins · 把 session 蒸馏成结构化文档。
 ### Claude Code
 
 ```bash
-# 添加 marketplace
+# marketplace manifest 在 repo root (.claude-plugin/marketplace.json)
 claude /plugin marketplace add johnnywuj81/tokenknows@main
-
-# 当 marketplace 在 monorepo 子目录时, 指定 path
-# (本仓库 marketplace 在 code/tokenknows-plugins/)
-claude /plugin marketplace add johnnywuj81/tokenknows@main:code/tokenknows-plugins
 
 # 装 plugin
 claude /plugin install tokenknows
 ```
 
+> 注: marketplace 单一 source of truth = repo root 的 `.claude-plugin/marketplace.json`。
+> 该文件里 `source: "./code/tokenknows-plugins/claude-code"` 指向真正的 plugin 目录。
+
 ### Claude Cowork
 
-在 Cowork 设置 → Plugins → "Add marketplace" 输入 `johnnywuj81/tokenknows` 即可。详见 [claude-code/INSTALL-COWORK.md](./claude-code/INSTALL-COWORK.md)。
+在 Cowork 设置 → Plugins → "Add marketplace" 输入 `johnnywuj81/tokenknows` 即可 (不要带子路径)。详见 [claude-code/INSTALL-COWORK.md](./claude-code/INSTALL-COWORK.md)。
 
 ### 本地 / 离线测试
 

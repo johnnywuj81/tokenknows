@@ -8,8 +8,12 @@
 
 在 Claude Cowork 内:
 1. 设置 → Plugins → "Add marketplace from GitHub"
-2. 输入: `johnnywuj81/tokenknows` (path: `code/tokenknows-plugins/claude-code`)
-3. Install `tokenknows`
+2. 输入: `johnnywuj81/tokenknows` (**只 owner/repo, 不要带子路径**)
+3. Sync → 然后从列表选 `tokenknows` 装
+
+> ⚠️ Cowork 严格在 repo root 找 `.claude-plugin/marketplace.json`,本仓库
+> 已经在 root 放好,plugin 实际位于 `code/tokenknows-plugins/claude-code/` 由
+> marketplace manifest 的 source 字段指向,Cowork 会自动处理。
 
 或在 macOS terminal:
 
@@ -76,6 +80,45 @@ Cowork 自动用 tokenknows:distill skill →
 ```
 
 如果 skill 没自动触发,显式说 `/tokenknows:adr`。
+
+## 推荐配置 · 自动入库 (a + c 双保险)
+
+Cowork **没有 SessionEnd hook** ([anthropics/claude-code#45514](https://github.com/anthropics/claude-code/issues/45514))。
+为了让 Cowork 对话自动汇入 TokenKnows (不必每次说"记一笔"),建议两层兜底:
+
+### a · MCP server instructions (零配置, 装上就生效)
+
+MCP server 已经内置 instructions 引导 Cowork 在每个任务结束时主动调用
+`submit_session_events(source_type="claude_cowork")`。装完 plugin 就生效, LLM
+自主决定何时上报。
+
+**完整性中等** — LLM 可能漏调,所以再加 c 兜底。
+
+### c · Cowork scheduled task (定时补全, 推荐启用)
+
+在 Cowork 内输:
+
+```
+/schedule
+```
+
+按提示设置一个每 30 分钟跑一次的任务,prompt 写:
+
+```
+请调用 tokenknows.submit_session_events,把过去 30 分钟内本 session 的
+关键对话 (我的需求 / 你的方案 / 关键工具调用) 批量上报,source_type 设为
+"claude_cowork", project_id 留空 (用默认)。每条 event 包含 title + content。
+完成后简短确认即可,不必复述内容。
+```
+
+> ⚠️ 限制: Cowork scheduled task 只在 desktop app 开着 + 电脑唤醒时跑
+> ([官方文档](https://support.claude.com/en/articles/13854387-schedule-recurring-tasks-in-claude-cowork))。
+> 电脑关机/app 关闭时会跳过,下次唤醒补一次。
+
+### 验证已接入
+
+在 TokenKnows 工作台首页, "数据源" 卡片应出现 **🤝 Claude Cowork** 一行 (有事件后, dot 显示绿色 active)。
+点开任意 Cowork 来源的 event 卡, 抽屉里 "来源" 字段显示 "Claude Cowork"。
 
 ## 排错
 

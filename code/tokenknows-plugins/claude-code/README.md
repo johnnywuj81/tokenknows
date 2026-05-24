@@ -63,12 +63,15 @@ claude --plugin-dir .
 
 启动后输入 `/help` 应该能看到 `/tokenknows:weekly` 等 8 个 slash command。
 
-**方式 2 · 从 marketplace 装 (待 T121 上架)**:
+**方式 2 · 从 marketplace 装** (推荐):
 
 ```
-/plugin marketplace add johnnywuj81/tokenknows#plugins
+/plugin marketplace add johnnywuj81/tokenknows@main
 /plugin install tokenknows
 ```
+
+> marketplace manifest 在 repo root (`.claude-plugin/marketplace.json`),Cowork
+> 也用同一份。Cowork UI 上直接输 `johnnywuj81/tokenknows` 即可。
 
 ## 用法
 
