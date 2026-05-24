@@ -13,36 +13,8 @@ import type { Asset, AssetStatus, AssetType } from '@/types/api'
 import { fixtureAssets } from '../fixtures/assets'
 
 const BASE = '/api/v1'
-const REAL_BACKEND = 'http://127.0.0.1:8001'
 
 const assets: Asset[] = [...fixtureAssets]
-
-/**
- * 透传到真后端 (dev demo 用) · 用于 fixtures 没的 asset/chapter 让真 backend
- * (seed 出来的 demo-wr-001 等) 也能渲染. fetch + 拷贝 status/headers, 别让
- * 浏览器以为是同源.
- */
-async function passthroughToBackend(request: Request): Promise<Response> {
-  const url = new URL(request.url)
-  const target = `${REAL_BACKEND}${url.pathname}${url.search}`
-  try {
-    const resp = await fetch(target, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-    })
-    const body = await resp.arrayBuffer()
-    return new Response(body, {
-      status: resp.status,
-      headers: resp.headers,
-    })
-  } catch {
-    return HttpResponse.json(
-      { code: 'NETWORK_ERROR', detail: '透传到 backend 失败' },
-      { status: 502 },
-    )
-  }
-}
 
 function genId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
@@ -100,13 +72,11 @@ export const assetHandlers = [
   }),
 
   // 单文档详情(T06 用)
-  http.get(`${BASE}/assets/:assetId`, async ({ params, request }) => {
+  http.get(`${BASE}/assets/:assetId`, async ({ params }) => {
     await delay(80)
     const a = assets.find((x) => x.id === params.assetId)
     if (!a) {
-      // demo: 真后端运行时 (e.g. seed 的 demo-wr-001) 也想读, fixtures 没的
-      // 透传到真后端, 别 404 直接挂. 真后端没就让它 404, frontend 一致处理.
-      return passthroughToBackend(request)
+      return HttpResponse.json({ code: 'NOT_FOUND', detail: '文档不存在' }, { status: 404 })
     }
     return HttpResponse.json(a)
   }),
