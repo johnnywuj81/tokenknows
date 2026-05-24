@@ -97,10 +97,10 @@ export default function ReviewPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => projectId && navigate(`/projects/${projectId}/documents/${docId}`)}
+            onClick={() => projectId && navigate(`/projects/${projectId}/documents`)}
             className="font-ui text-caption text-text-muted hover:text-text-primary"
           >
-            ← 返回文档
+            ← 返回文档列表
           </button>
           <h1 className="font-content text-h3 text-text-primary">
             审批 · {asset.title}

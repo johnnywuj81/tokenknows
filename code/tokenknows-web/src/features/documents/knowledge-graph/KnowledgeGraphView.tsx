@@ -16,6 +16,8 @@
 import { useCallback, useState } from 'react'
 import type { Asset, Chapter, KGNode } from '@/types/api'
 import { DocHeader } from '../page/components/DocHeader'
+import { EvidenceDrawer } from '../page/components/EvidenceDrawer'
+import { PublishDialog } from '../../publish/PublishDialog'
 import KnowledgeGraphPage from './KnowledgeGraphPage'
 import { useChapterEvidence } from '../hooks/useChapterEvidence'
 import { NodeCrossDocPanel } from './NodeCrossDocPanel'
@@ -80,6 +82,12 @@ export function KnowledgeGraphView({
           </div>
         ) : null}
       </div>
+
+      {/* T11 · 发布对话框 (KG 视图也得挂, 否则点 DocHeader "发布" 无反应) */}
+      <PublishDialog assetId={asset.id} />
+
+      {/* T07 · 证据抽屉 (KG 节点点击会 openEvidence, drawer 必须挂在 KG 视图里) */}
+      <EvidenceDrawer assetId={asset.id} />
     </div>
   )
 }
