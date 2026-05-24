@@ -26,10 +26,15 @@ def _now() -> datetime:
 def ingest_events(
     project_id: str, payload: list[EventCreate]
 ) -> EventIngestResponse:
-    """批量入库. 已存在 content_hash 跳过."""
+    """批量入库. 已存在 content_hash 跳过.
+
+    T131: 入库成功的 events 同步触发 → value_segment 提炼 (filter +
+    persist). 提炼失败不影响 ingest 主流程 (异常 swallow).
+    """
     db = get_db()
     now = _now().isoformat()
     ingested_ids: list[str] = []
+    ingested_events: list[Event] = []
     skipped = 0
 
     for ev in payload:
@@ -52,6 +57,7 @@ def ingest_events(
         )
         if added:
             ingested_ids.append(event_id)
+            ingested_events.append(full)
         else:
             skipped += 1
 
@@ -62,6 +68,22 @@ def ingest_events(
         skipped=skipped,
         total_incoming=len(payload),
     )
+
+    # T131 · 异步风格 (实为 sync 单线程, 失败 swallow): 触发提炼.
+    # 走延迟 import 避免在事件子系统启动早期就引入 value_segment 依赖.
+    if ingested_events:
+        try:
+            from app.services import event_value_segment_service
+            event_value_segment_service.process_events_to_segments(
+                project_id, ingested_events,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "event_value_segment_extraction_failed",
+                project_id=project_id,
+                error=str(exc),
+            )
+
     return EventIngestResponse(
         ingested=len(ingested_ids),
         skipped=skipped,
