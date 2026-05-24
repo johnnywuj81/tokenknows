@@ -2,9 +2,13 @@
  * TodoList · 右侧本周待办
  *
  * 排序: 按 due_at 升序;过期项目标红;无 due 排在最后。
+ *
+ * T134: SSE 推来的新 todo (asset_chapter_rejected 等) 第一次出现时打红点;
+ * 点击该 todo 或"全部已读"按钮后红点消失. Baseline 在挂载时取首批 todo IDs,
+ * 不持久化 (页面刷新 = 新 baseline, 简单足够 MVP).
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileCheck, Eye, Sparkles, Send, AlertTriangle, RotateCcw } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -39,18 +43,75 @@ export function TodoList({ todos, isLoading, error, onRetry, projectId }: TodoLi
     return () => clearInterval(id)
   }, [])
 
+  // T134 · "已读"集合: 挂载时首批 todos 自动入集, SSE/polling 后续新增 todos
+  // 不在集合内 → 红点. seenIds=null 表示还没挂载/首批未到, 此时不打任何红点
+  // (避免初始 loading 后所有 todos 都被当成"新").
+  const [seenIds, setSeenIds] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    // 首批 todos 到达时初始化 baseline (空数组也算"到了", 后续才能识别新增).
+    // setState-in-effect 是有意为之: 必须等异步 todos 到位才能取 baseline,
+    // 没有别的 React 钩子能在不阻塞渲染的同时做这件事; 一次性条件守卫
+    // (seenIds === null) 保证最多触发一次额外渲染.
+    if (seenIds === null && todos !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSeenIds(new Set(todos.map((t) => t.id)))
+    }
+  }, [todos, seenIds])
+
+  const newCount = useMemo(() => {
+    if (!todos || seenIds === null) return 0
+    return todos.filter((t) => !seenIds.has(t.id)).length
+  }, [todos, seenIds])
+
+  function markSeen(id: string): void {
+    setSeenIds((prev) => {
+      const next = new Set(prev ?? [])
+      next.add(id)
+      return next
+    })
+  }
+
+  function markAllSeen(): void {
+    setSeenIds(new Set(todos?.map((t) => t.id) ?? []))
+  }
+
   return (
     <aside
       className="flex h-full flex-col gap-3 rounded-lg border border-border-subtle bg-bg-card p-4"
       aria-label="本周待办"
     >
       <header className="flex items-center justify-between">
-        <h2 className="font-content text-h3 text-text-primary">本周待办</h2>
-        {todos?.length ? (
-          <span className="rounded bg-bg-warm px-1.5 py-0.5 font-ui text-micro font-medium text-text-secondary">
-            {todos.length}
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <h2 className="font-content text-h3 text-text-primary">本周待办</h2>
+          {/* T134 · 新到红点徽章, 显示新 todo 数量 */}
+          {newCount > 0 ? (
+            <span
+              data-testid="todo-new-count"
+              className="rounded-full bg-danger px-1.5 py-0.5 font-ui text-micro font-medium text-white"
+              title={`${newCount} 条新待办`}
+            >
+              {newCount} 新
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          {/* T134 · 全部已读 (只在有新待办时显示) */}
+          {newCount > 0 ? (
+            <button
+              type="button"
+              data-testid="todo-mark-all-seen"
+              onClick={markAllSeen}
+              className="font-ui text-micro text-text-muted hover:text-text-primary"
+            >
+              全部已读
+            </button>
+          ) : null}
+          {todos?.length ? (
+            <span className="rounded bg-bg-warm px-1.5 py-0.5 font-ui text-micro font-medium text-text-secondary">
+              {todos.length}
+            </span>
+          ) : null}
+        </div>
       </header>
 
       {error ? (
@@ -68,11 +129,22 @@ export function TodoList({ todos, isLoading, error, onRetry, projectId }: TodoLi
             const meta = TYPE_META[todo.type]
             const Icon = meta.icon
             const overdue = todo.due_at ? new Date(todo.due_at).getTime() < now : false
+            // T134 · 该 todo 是不是新到的 (不在 seenIds 集合内)
+            const isNew = seenIds !== null && !seenIds.has(todo.id)
             return (
-              <li key={todo.id}>
+              <li key={todo.id} className="relative">
+                {/* T134 · 红点角标, 绝对定位左上角避免干扰 hover/focus */}
+                {isNew ? (
+                  <span
+                    data-testid={`todo-new-dot-${todo.id}`}
+                    aria-label="新待办"
+                    className="absolute top-1.5 left-1.5 z-10 size-1.5 rounded-full bg-danger ring-2 ring-bg-card"
+                  />
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
+                    if (isNew) markSeen(todo.id)
                     if (!projectId) return
                     if (todo.asset_id) {
                       navigate(`/projects/${projectId}/documents/${todo.asset_id}`)
