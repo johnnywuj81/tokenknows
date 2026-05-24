@@ -141,6 +141,45 @@ def get_member(
     return ProjectMember.model_validate(raw)
 
 
+def update_im_binding(
+    *,
+    project_id: str,
+    user_id: str,
+    im_feishu_open_id: str | None,
+) -> ProjectMember:
+    """T130.4 · 自助绑定/解绑飞书 open_id.
+
+    空字符串 / None → 解绑. 非空时建议但不强制 'ou_' 前缀 (留给前端校验,
+    后端容忍格式以备其它 IM 平台未来扩展).
+
+    Raises ProjectMembershipError if member not found.
+    """
+    existing = get_member(project_id, user_id)
+    if existing is None:
+        raise ProjectMembershipError(
+            f"member not found: project={project_id} user={user_id}"
+        )
+    # 空字符串视为解绑
+    normalized = (im_feishu_open_id or "").strip() or None
+    updated = existing.model_copy(update={"im_feishu_open_id": normalized})
+    db = store_module.get_db()
+    db.upsert_project_member(
+        member_id=updated.id,
+        project_id=updated.project_id,
+        user_id=updated.user_id,
+        role=updated.role,
+        added_by=updated.added_by,
+        added_at=updated.added_at.isoformat(),
+        json_str=updated.model_dump_json(),
+    )
+    logger.info(
+        "project_member_im_binding_updated",
+        project_id=project_id, user_id=user_id,
+        bound=normalized is not None,
+    )
+    return updated
+
+
 # ─── ACL ─────────────────────────────────────────────────
 
 
@@ -206,5 +245,6 @@ __all__ = [
     "is_owner",
     "list_members",
     "remove_member",
+    "update_im_binding",
     "update_role",
 ]

@@ -395,3 +395,119 @@ def test_approve_owner_also_can_review(client, fresh_db):
         headers={"X-User-Id": "ou-alice"},
     )
     assert r.status_code == 200
+
+
+# ─── T130.4 · PATCH /members/:user_id/im-binding ──────────────
+
+
+def test_im_binding_self_can_bind(client: TestClient):
+    """成员自己可绑定自己 (actor_id == user_id)."""
+    # bootstrap owner
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "ou-owner", "role": "owner"},
+    )
+    # owner 添加 alice
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "alice@example.com", "role": "contributor"},
+    )
+    # alice 自助绑定
+    resp = client.patch(
+        "/projects/p1/members/alice@example.com/im-binding",
+        headers={"X-User-Id": "alice@example.com"},
+        json={"im_feishu_open_id": "ou_alice_open"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["im_feishu_open_id"] == "ou_alice_open"
+
+
+def test_im_binding_owner_can_bind_others(client: TestClient):
+    """owner 可代成员绑定 (e.g. admin 帮员工初始化)."""
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "ou-owner", "role": "owner"},
+    )
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "bob@example.com", "role": "contributor"},
+    )
+    resp = client.patch(
+        "/projects/p1/members/bob@example.com/im-binding",
+        headers={"X-User-Id": "ou-owner"},
+        json={"im_feishu_open_id": "ou_bob_open"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["im_feishu_open_id"] == "ou_bob_open"
+
+
+def test_im_binding_other_member_forbidden(client: TestClient):
+    """非 owner 不能改别人的 IM 绑定 → 403."""
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "ou-owner", "role": "owner"},
+    )
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "alice@example.com", "role": "contributor"},
+    )
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "carol@example.com", "role": "contributor"},
+    )
+    resp = client.patch(
+        "/projects/p1/members/alice@example.com/im-binding",
+        headers={"X-User-Id": "carol@example.com"},
+        json={"im_feishu_open_id": "ou_hijack"},
+    )
+    assert resp.status_code == 403
+
+
+def test_im_binding_clear_with_null(client: TestClient):
+    """显式传 None 解绑."""
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "ou-owner", "role": "owner"},
+    )
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "dave@example.com", "role": "contributor"},
+    )
+    # 先绑
+    client.patch(
+        "/projects/p1/members/dave@example.com/im-binding",
+        headers={"X-User-Id": "dave@example.com"},
+        json={"im_feishu_open_id": "ou_dave"},
+    )
+    # 解绑
+    resp = client.patch(
+        "/projects/p1/members/dave@example.com/im-binding",
+        headers={"X-User-Id": "dave@example.com"},
+        json={"im_feishu_open_id": None},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["im_feishu_open_id"] is None
+
+
+def test_im_binding_member_not_found_404(client: TestClient):
+    """非成员 → 404 (membership 服务抛 ProjectMembershipError)."""
+    client.post(
+        "/projects/p1/members",
+        headers={"X-User-Id": "ou-owner"},
+        json={"user_id": "ou-owner", "role": "owner"},
+    )
+    resp = client.patch(
+        "/projects/p1/members/ghost@example.com/im-binding",
+        headers={"X-User-Id": "ou-owner"},
+        json={"im_feishu_open_id": "ou_x"},
+    )
+    assert resp.status_code == 404

@@ -38,6 +38,14 @@ class ProjectMember(BaseModel):
     """添加者 user_id (审计追溯)."""
     added_at: datetime
     note: str | None = Field(default=None, max_length=200)
+    # T130.4 · 飞书 open_id 自助绑定 (放宽 reject_notifier 必须 author='ou_xxx' 限制).
+    # 现实里 asset.created_by 多是邮箱/用户名, 通过这个字段反查真实 IM 身份.
+    # 持久化在 ProjectMember JSON blob (无 schema 迁移).
+    im_feishu_open_id: str | None = Field(
+        default=None,
+        max_length=128,
+        description="飞书 open_id (形如 ou_xxx); 用于退回 DM 通知路由",
+    )
 
 
 # ─── 请求 / 响应 DTO ──────────────────────────────────────────────
@@ -51,6 +59,12 @@ class AddProjectMemberRequest(BaseModel):
 
 class UpdateProjectMemberRoleRequest(BaseModel):
     role: ProjectMemberRole
+
+
+class UpdateMemberImBindingRequest(BaseModel):
+    """T130.4 · 自助更新 IM 绑定. None / 空字符串 → 解绑."""
+
+    im_feishu_open_id: str | None = Field(default=None, max_length=128)
 
 
 class ProjectMembersResponse(BaseModel):

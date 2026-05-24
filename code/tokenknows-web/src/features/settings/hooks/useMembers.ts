@@ -74,3 +74,29 @@ export function useRemoveMember(projectId: string) {
     },
   })
 }
+
+
+/**
+ * T130.4 · 绑定/解绑成员的飞书 open_id.
+ *
+ * 后端 ACL: actor 必须是该成员本人, 或项目 owner.
+ * 传 null 或空字符串 → 解绑.
+ */
+export function useUpdateMemberImBinding(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      imFeishuOpenId,
+    }: { userId: string; imFeishuOpenId: string | null }) => {
+      const res = await api.patch<ProjectMember>(
+        `/projects/${projectId}/members/${userId}/im-binding`,
+        { im_feishu_open_id: imFeishuOpenId },
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: memberKey.list(projectId) })
+    },
+  })
+}

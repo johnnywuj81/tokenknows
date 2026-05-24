@@ -13,6 +13,7 @@ import {
   useAddMember,
   useProjectMembers,
   useRemoveMember,
+  useUpdateMemberImBinding,
   useUpdateMemberRole,
 } from '../hooks/useMembers'
 
@@ -95,6 +96,9 @@ export function MembersPanel({ projectId }: MembersPanelProps) {
               <tr className="text-left text-caption text-text-muted">
                 <th className="px-3 py-2">User ID</th>
                 <th className="px-3 py-2">角色</th>
+                <th className="px-3 py-2" title="T130.4 · 飞书 open_id 用于退回 DM 通知">
+                  飞书 open_id
+                </th>
                 <th className="px-3 py-2">加入时间</th>
                 <th className="px-3 py-2">操作</th>
               </tr>
@@ -262,6 +266,13 @@ function MemberRow({
           </span>
         )}
       </td>
+      <td className="px-3 py-2">
+        <ImBindingCell
+          member={member}
+          projectId={projectId}
+          canEdit={isSelf || iAmOwner}
+        />
+      </td>
       <td className="px-3 py-2 font-mono text-caption text-text-subtle">
         {new Date(member.added_at).toLocaleDateString('zh-CN')}
       </td>
@@ -343,5 +354,101 @@ function AddMemberForm({ projectId }: { projectId: string }) {
         </p>
       )}
     </form>
+  )
+}
+
+
+// ─── T130.4 · 飞书 open_id 自助绑定单元格 ────────────────────
+
+
+function ImBindingCell({
+  member,
+  projectId,
+  canEdit,
+}: {
+  member: ProjectMember
+  projectId: string
+  canEdit: boolean
+}) {
+  const update = useUpdateMemberImBinding(projectId)
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(member.im_feishu_open_id ?? '')
+
+  const bound = (member.im_feishu_open_id ?? '').trim()
+
+  if (!canEdit) {
+    // 非自己也非 owner → 只读展示, 解绑/隐藏 (保护隐私: 别的成员的 open_id 不应暴露)
+    return (
+      <span className="font-mono text-caption text-text-subtle">
+        {bound ? '已绑定' : '—'}
+      </span>
+    )
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span
+          className="font-mono text-caption text-text-secondary truncate max-w-[12rem]"
+          data-testid={`im-binding-display-${member.user_id}`}
+          title={bound || '未绑定'}
+        >
+          {bound || '未绑定'}
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setValue(bound)
+            setEditing(true)
+          }}
+          data-testid={`im-binding-edit-${member.user_id}`}
+        >
+          {bound ? '编辑' : '绑定'}
+        </Button>
+      </div>
+    )
+  }
+
+  async function handleSave(): Promise<void> {
+    const trimmed = value.trim()
+    await update.mutateAsync({
+      userId: member.user_id,
+      imFeishuOpenId: trimmed === '' ? null : trimmed,
+    })
+    setEditing(false)
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="ou_xxxxxxxx"
+        className="h-7 font-mono text-caption w-40"
+        data-testid={`im-binding-input-${member.user_id}`}
+        autoFocus
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleSave}
+        disabled={update.isPending}
+        data-testid={`im-binding-save-${member.user_id}`}
+      >
+        {update.isPending ? '...' : '存'}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setEditing(false)
+          setValue(bound)
+        }}
+      >
+        取消
+      </Button>
+    </div>
   )
 }

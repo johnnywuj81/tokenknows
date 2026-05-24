@@ -254,3 +254,70 @@ def test_list_user_project_memberships(fresh_db):
     assert len(rows) == 2
     projects = {r["project_id"]: r["role"] for r in rows}
     assert projects == {"p1": "owner", "p2": "contributor"}
+
+
+# ─── T130.4 · update_im_binding ──────────────────────────────
+
+
+def test_update_im_binding_set_and_clear(fresh_db):
+    """绑定 → 反查得到 open_id; 解绑 (None) → 反查 None."""
+    membership.add_member(
+        project_id="p1", user_id="alice@example.com", role="contributor",
+        added_by="ou-owner",
+    )
+    # 绑定
+    updated = membership.update_im_binding(
+        project_id="p1",
+        user_id="alice@example.com",
+        im_feishu_open_id="ou_alice_real",
+    )
+    assert updated.im_feishu_open_id == "ou_alice_real"
+    refetched = membership.get_member("p1", "alice@example.com")
+    assert refetched is not None
+    assert refetched.im_feishu_open_id == "ou_alice_real"
+
+    # 解绑 (None)
+    cleared = membership.update_im_binding(
+        project_id="p1", user_id="alice@example.com", im_feishu_open_id=None,
+    )
+    assert cleared.im_feishu_open_id is None
+
+
+def test_update_im_binding_empty_string_normalized_to_none(fresh_db):
+    """空字符串 / 全空白 → 视为解绑 (落 None)."""
+    membership.add_member(
+        project_id="p1", user_id="bob@example.com", role="contributor",
+        added_by="ou-owner",
+    )
+    membership.update_im_binding(
+        project_id="p1", user_id="bob@example.com",
+        im_feishu_open_id="ou_bob",
+    )
+    cleared = membership.update_im_binding(
+        project_id="p1", user_id="bob@example.com", im_feishu_open_id="   ",
+    )
+    assert cleared.im_feishu_open_id is None
+
+
+def test_update_im_binding_member_not_found_raises(fresh_db):
+    """成员不存在 → ProjectMembershipError."""
+    with pytest.raises(membership.ProjectMembershipError):
+        membership.update_im_binding(
+            project_id="p1", user_id="ghost@example.com",
+            im_feishu_open_id="ou_x",
+        )
+
+
+def test_update_im_binding_preserves_role_and_note(fresh_db):
+    """改 IM 绑定不应丢 role / note (T67 字段保留)."""
+    membership.add_member(
+        project_id="p1", user_id="carol@example.com", role="reviewer",
+        added_by="ou-owner", note="审核员-后端组",
+    )
+    updated = membership.update_im_binding(
+        project_id="p1", user_id="carol@example.com",
+        im_feishu_open_id="ou_carol",
+    )
+    assert updated.role == "reviewer"
+    assert updated.note == "审核员-后端组"
+    assert updated.im_feishu_open_id == "ou_carol"

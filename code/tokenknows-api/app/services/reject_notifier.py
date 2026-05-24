@@ -70,14 +70,17 @@ def notify_chapter_rejected(
 
 def _notify_inner(asset: Asset, chapter: Chapter, reason: str) -> NotifyResult:
     author = (asset.created_by or "").strip()
-    # MVP 守卫 1: 匿名 / 空作者 → 没人收
+    # 守卫 1: 匿名 / 空作者 → 没人收
     if not author or author == "anonymous":
         return NotifyResult(sent=False, skipped_reason="anonymous_author")
 
-    # MVP 守卫 2: 不是飞书 open_id 形态 → 当前 MVP 不做 user→open_id 映射,
-    # 留 SSE 通道兜底; 后续 T130.4 引入 ProjectMember 绑定后这里可放宽.
-    if not author.startswith(_FEISHU_OPENID_PREFIX):
-        return NotifyResult(sent=False, skipped_reason="author_not_feishu_openid")
+    # 解析作者 → Feishu open_id:
+    #   ① author 本身就是 'ou_xxx' 形态 → 直接当 open_id 用
+    #   ② T130.4 · 否则查 ProjectMember(project_id, author).im_feishu_open_id
+    #       (用户在设置页自助绑定的飞书身份)
+    open_id = _resolve_feishu_open_id(asset.project_id, author)
+    if open_id is None:
+        return NotifyResult(sent=False, skipped_reason="author_no_feishu_openid")
 
     # 找项目下 active 飞书连接
     conns = im_service.list_connections(asset.project_id, status="active")
@@ -101,7 +104,7 @@ def _notify_inner(asset: Asset, chapter: Chapter, reason: str) -> NotifyResult:
     card = build_reject_card_feishu(asset, chapter, reason)
     ok = _send_feishu_dm(
         access_token=access_token,
-        open_id=author,
+        open_id=open_id,
         card=card,
         asset_id=asset.id,
         chapter_id=chapter.id,
@@ -111,6 +114,36 @@ def _notify_inner(asset: Asset, chapter: Chapter, reason: str) -> NotifyResult:
         skipped_reason=None if ok else "feishu_http_error",
         platform="feishu",
     )
+
+
+def _resolve_feishu_open_id(project_id: str, author: str) -> str | None:
+    """T130.4 · author → Feishu open_id 解析.
+
+    优先级:
+      1. author 本身形如 'ou_xxx' → 直接返
+      2. 否则查 ProjectMember(project_id, author).im_feishu_open_id (自助绑定)
+      3. 都没有 → None (调用方走 skip)
+
+    成员查询任何异常返回 None (不要让 reject_notifier 因 ProjectMember
+    服务故障级联崩).
+    """
+    if author.startswith(_FEISHU_OPENID_PREFIX):
+        return author
+    try:
+        from app.services.project import membership  # 延迟 import 避免循环
+        member = membership.get_member(project_id, author)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "reject_notifier_membership_lookup_failed",
+            project_id=project_id,
+            author=author,
+            error=str(exc),
+        )
+        return None
+    if member is None:
+        return None
+    bound = (member.im_feishu_open_id or "").strip()
+    return bound or None
 
 
 def _send_feishu_dm(

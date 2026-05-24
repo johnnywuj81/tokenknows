@@ -723,6 +723,8 @@ export interface ProjectMember {
   added_by: string
   added_at: string
   note: string | null
+  /** T130.4 · 自助绑定的飞书 open_id (ou_xxx), 用于退回 DM 路由. */
+  im_feishu_open_id?: string | null
 }
 
 export interface ProjectMembersResponse {

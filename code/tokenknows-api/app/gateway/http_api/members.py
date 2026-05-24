@@ -23,6 +23,7 @@ from app.schemas.project_member import (
     AddProjectMemberRequest,
     ProjectMember,
     ProjectMembersResponse,
+    UpdateMemberImBindingRequest,
     UpdateProjectMemberRoleRequest,
 )
 from app.services.project import membership
@@ -121,6 +122,36 @@ async def update_role_endpoint(
         )
     except membership.ProjectMembershipError as e:
         raise HTTPException(409, detail=str(e)) from e
+
+
+@router.patch(
+    "/projects/{project_id}/members/{user_id}/im-binding",
+    response_model=ProjectMember,
+)
+async def update_member_im_binding_endpoint(
+    project_id: str,
+    user_id: str,
+    body: UpdateMemberImBindingRequest,
+    actor_id: str = Depends(require_user_id),
+) -> ProjectMember:
+    """T130.4 · 自助绑定 / 解绑飞书 open_id.
+
+    ACL: 用户自己改自己 (actor_id == user_id) OR owner 可代改.
+    传 None / 空字符串 → 解绑.
+    """
+    if actor_id != user_id and not membership.is_owner(actor_id, project_id):
+        raise HTTPException(
+            403,
+            detail="Only the member themself or project owner can update IM binding",
+        )
+    try:
+        return membership.update_im_binding(
+            project_id=project_id,
+            user_id=user_id,
+            im_feishu_open_id=body.im_feishu_open_id,
+        )
+    except membership.ProjectMembershipError as e:
+        raise HTTPException(404, detail=str(e)) from e
 
 
 @router.delete(

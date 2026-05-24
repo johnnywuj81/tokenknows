@@ -126,18 +126,135 @@ def test_notify_empty_author_skipped() -> None:
     assert result.skipped_reason == "anonymous_author"
 
 
-def test_notify_non_feishu_openid_author_skipped() -> None:
-    """MVP: author 不像 'ou_xxx' open_id → 跳过 (未来 T130.4 引入映射放宽)."""
+def test_notify_non_openid_author_without_binding_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T130.4 · author 不是 'ou_xxx' AND ProjectMember 没绑 → 跳过."""
+    # 没绑定 (get_member 返 None)
+    monkeypatch.setattr(
+        "app.services.project.membership.get_member",
+        lambda project_id, user_id: None,
+    )
     result = reject_notifier.notify_chapter_rejected(
         _mk_asset(author="alice@example.com"), _mk_chapter(), "r"
     )
     assert result.sent is False
-    assert result.skipped_reason == "author_not_feishu_openid"
+    assert result.skipped_reason == "author_no_feishu_openid"
+
+
+# ── T130.4 · ProjectMember 反查 ───────────────────────────────
+
+
+def _mk_member_with_binding(
+    user_id: str = "alice@example.com",
+    bound: str | None = "ou_alice_bound_xyz",
+):
+    """构造一个 ProjectMember dict (membership.get_member 返 ProjectMember)."""
+    from app.schemas.project_member import ProjectMember
+    return ProjectMember(
+        id="member-abc",
+        project_id="p1",
+        user_id=user_id,
+        role="contributor",
+        added_by="owner1",
+        added_at=_now(),
+        im_feishu_open_id=bound,
+    )
+
+
+def test_notify_resolves_openid_via_projectmember_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T130.4 · author 是邮箱, 但 ProjectMember 有 im_feishu_open_id 绑定
+    → reject_notifier 用绑定的 open_id 当 receive_id."""
+    monkeypatch.setattr(
+        "app.services.project.membership.get_member",
+        lambda project_id, user_id: _mk_member_with_binding(
+            user_id="alice@example.com", bound="ou_bound_via_member"
+        ),
+    )
+    _stub_conns_ok(monkeypatch)
+    _stub_decrypt_ok(monkeypatch)
+    fake_client = _FakeHttpxClient(
+        _FakeResp(200, {"code": 0, "data": {"message_id": "m_xxx"}})
+    )
+    monkeypatch.setattr(
+        "app.services.reject_notifier.httpx.Client",
+        lambda timeout: fake_client,
+    )
+    result = reject_notifier.notify_chapter_rejected(
+        _mk_asset(author="alice@example.com"), _mk_chapter(), "r"
+    )
+    assert result.sent is True
+    # receive_id 应是绑定的 open_id, 不是原 author
+    assert fake_client.last_body is not None
+    assert fake_client.last_body["receive_id"] == "ou_bound_via_member"
+
+
+def test_notify_member_lookup_exception_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ProjectMember 查询抛异常 → 安全降级到 skip, 不让 reject 流程崩."""
+    def _raise(*a, **kw):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(
+        "app.services.project.membership.get_member", _raise
+    )
+    result = reject_notifier.notify_chapter_rejected(
+        _mk_asset(author="alice@example.com"), _mk_chapter(), "r"
+    )
+    assert result.sent is False
+    assert result.skipped_reason == "author_no_feishu_openid"
+
+
+def test_notify_member_empty_binding_treated_as_unbound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ProjectMember 存在但 im_feishu_open_id 为空字符串 → 仍当未绑定."""
+    monkeypatch.setattr(
+        "app.services.project.membership.get_member",
+        lambda project_id, user_id: _mk_member_with_binding(
+            user_id="alice@example.com", bound="   "  # 全空格
+        ),
+    )
+    result = reject_notifier.notify_chapter_rejected(
+        _mk_asset(author="alice@example.com"), _mk_chapter(), "r"
+    )
+    assert result.sent is False
+    assert result.skipped_reason == "author_no_feishu_openid"
+
+
+def test_notify_openid_author_skips_member_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T130.4 · author 已经是 ou_xxx → 不走 ProjectMember 反查 (优化路径)."""
+    member_called = {"n": 0}
+    def _spy(project_id, user_id):
+        member_called["n"] += 1
+        return None
+    monkeypatch.setattr(
+        "app.services.project.membership.get_member", _spy
+    )
+    _stub_conns_ok(monkeypatch)
+    _stub_decrypt_ok(monkeypatch)
+    fake_client = _FakeHttpxClient(
+        _FakeResp(200, {"code": 0, "data": {"message_id": "m_xxx"}})
+    )
+    monkeypatch.setattr(
+        "app.services.reject_notifier.httpx.Client",
+        lambda timeout: fake_client,
+    )
+    result = reject_notifier.notify_chapter_rejected(
+        _mk_asset(author="ou_alice_already_openid"), _mk_chapter(), "r"
+    )
+    assert result.sent is True
+    assert member_called["n"] == 0  # 直接走快路径不查 member
 
 
 def test_notify_skipped_when_no_active_feishu_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # author 是 ou_xxx, 跳过 member 查询直接到 connection 检查
     monkeypatch.setattr(
         "app.services.reject_notifier.im_service.list_connections",
         lambda project_id, status=None: [],
