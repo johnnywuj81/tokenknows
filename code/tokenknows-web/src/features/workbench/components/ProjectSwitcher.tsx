@@ -80,7 +80,7 @@ export function ProjectSwitcher() {
         })}
         {(projects?.length ?? 0) > RECENT_LIMIT ? (
           <DropdownMenuItem
-            onSelect={() => navigate('/')}
+            onSelect={() => navigate('/projects')}
             className="font-ui text-caption text-text-muted"
           >
             查看全部 ({projects?.length})

@@ -34,6 +34,7 @@ const ResetPasswordPage = lazy(() => import('@/features/auth/ResetPasswordPage')
 
 // ── Business ───────────────────────────────────────────────────
 const NewProjectPage = lazy(() => import('@/features/projects/NewProjectPage'))
+const ProjectsListPage = lazy(() => import('@/features/projects/ProjectsListPage'))
 const WorkbenchPage = lazy(() => import('@/features/workbench/WorkbenchPage'))
 const DocumentListPage = lazy(() => import('@/features/documents/DocumentListPage'))
 const DocumentPage = lazy(() => import('@/features/documents/DocumentPage'))
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/',                                                   element: <Lazy variant="workbench"><WorkbenchPage /></Lazy> },
+      { path: '/projects',                                           element: <Lazy variant="list"><ProjectsListPage /></Lazy> },
       { path: '/projects/new',                                       element: <Lazy><NewProjectPage /></Lazy> },
       { path: '/projects/:id',                                       element: <Lazy variant="workbench"><WorkbenchPage /></Lazy> },
       { path: '/projects/:id/documents',                             element: <Lazy variant="list"><DocumentListPage /></Lazy> },
