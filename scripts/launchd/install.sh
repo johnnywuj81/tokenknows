@@ -14,7 +14,7 @@ set -euo pipefail
 # ─── 配置 (env 可覆盖) ────────────────────────────────────
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 PYTHON_BIN="${PYTHON_BIN:-$(which python3)}"
-BACKEND_URL="${TOKENKNOWS_BACKEND:-http://localhost:8001}"
+BACKEND_URL="${TOKENKNOWS_BACKEND:-http://127.0.0.1:8002}"
 PROJECT_ID="${TOKENKNOWS_PROJECT:-proj-demo-001}"
 GITHUB_REPO="${GITHUB_REPO:-johnnywuj81/tokenknows}"
 LOCAL_DOCS_DIR="${LOCAL_DOCS_DIR:-$HOME/Documents}"
@@ -22,6 +22,32 @@ LOCAL_DOCS_DIR="${LOCAL_DOCS_DIR:-$HOME/Documents}"
 LOG_DIR="$HOME/Library/Logs/tokenknows"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
 TEMPLATE_DIR="$REPO_ROOT/scripts/launchd"
+
+# ─── 输入校验 (T144) ────────────────────────────────────────
+# 防止 BACKEND_URL / PROJECT_ID / GITHUB_REPO 含 sed 分隔符 '|' 或者其它
+# XML-unsafe 字符 (& < >) 导致替换破坏 plist XML 结构, 进而注入额外的
+# launchd EnvironmentVariables. 在 single-user dev 场景威胁低, 但 install.sh
+# 也可能在 CI / 其他用户机器跑, 校验是廉价的防御.
+[[ "$BACKEND_URL"    =~ ^https?://[A-Za-z0-9._:/-]+$ ]] || {
+    echo "✗ BACKEND_URL 格式非法 (允许: http(s)://hostname[:port][/path]): $BACKEND_URL" >&2
+    exit 1
+}
+[[ "$PROJECT_ID"     =~ ^[A-Za-z0-9_-]+$ ]] || {
+    echo "✗ PROJECT_ID 格式非法 (允许 [A-Za-z0-9_-]): $PROJECT_ID" >&2
+    exit 1
+}
+[[ "$GITHUB_REPO"    =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
+    echo "✗ GITHUB_REPO 格式非法 (期望 owner/repo): $GITHUB_REPO" >&2
+    exit 1
+}
+# LOCAL_DOCS_DIR / LOG_DIR / REPO_ROOT 是路径, 不接受 '|' 这类特殊字符
+for var_name in LOCAL_DOCS_DIR LOG_DIR REPO_ROOT PYTHON_BIN; do
+    val="${!var_name}"
+    if [[ "$val" == *"|"* || "$val" == *"<"* || "$val" == *">"* || "$val" == *"&"* ]]; then
+        echo "✗ $var_name 含 sed/XML-unsafe 字符 (| < > &): $val" >&2
+        exit 1
+    fi
+done
 
 # ─── 预检 ─────────────────────────────────────────────────
 echo "─── TokenKnows LaunchAgent 安装 ───"

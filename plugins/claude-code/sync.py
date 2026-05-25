@@ -301,11 +301,19 @@ def run_once(
 
 
 def main() -> None:
+    # T141: default 从 env 读, 防止 plist hardcode URL 跟实际 backend 端口漂移.
+    # 优先级: CLI --backend > env TOKENKNOWS_API_BASE > 内置 8002.
     parser = argparse.ArgumentParser(description="TokenKnows Claude Code sync")
-    parser.add_argument("--backend", default="http://localhost:8001",
-                        help="后端基址 (默认 localhost:8001)")
-    parser.add_argument("--project", default="proj-demo-001",
-                        help="目标 project_id")
+    parser.add_argument(
+        "--backend",
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
+        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8002)",
+    )
+    parser.add_argument(
+        "--project",
+        default=os.environ.get("TOKENKNOWS_DEFAULT_PROJECT", "proj-demo-001"),
+        help="目标 project_id (默认从 env TOKENKNOWS_DEFAULT_PROJECT 读)",
+    )
     parser.add_argument("--projects-dir", type=Path,
                         default=DEFAULT_PROJECTS_DIR,
                         help="Claude 项目目录 (默认 ~/.claude/projects)")

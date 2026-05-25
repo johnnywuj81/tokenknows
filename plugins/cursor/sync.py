@@ -313,8 +313,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="TokenKnows Cursor sync")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB,
                         help="Cursor state.vscdb 路径")
-    parser.add_argument("--backend", default="http://localhost:8001")
-    parser.add_argument("--project", default="proj-demo-001")
+    # T141: default 从 env 读 (TOKENKNOWS_API_BASE / TOKENKNOWS_DEFAULT_PROJECT)
+    parser.add_argument(
+        "--backend",
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
+    )
+    parser.add_argument(
+        "--project",
+        default=os.environ.get("TOKENKNOWS_DEFAULT_PROJECT", "proj-demo-001"),
+    )
     parser.add_argument("--filter-cwd",
                         help="只采 workspaceRootUri 在该路径下的对话")
     parser.add_argument("--watch", action="store_true",

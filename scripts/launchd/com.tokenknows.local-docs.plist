@@ -9,10 +9,6 @@
     <array>
         <string>__PYTHON_BIN__</string>
         <string>__REPO_ROOT__/plugins/local-docs/sync.py</string>
-        <string>--backend</string>
-        <string>__BACKEND_URL__</string>
-        <string>--project</string>
-        <string>__PROJECT_ID__</string>
         <string>--watch-dir</string>
         <string>__LOCAL_DOCS_DIR__</string>
         <string>--watch</string>
@@ -45,6 +41,11 @@
         <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>TK_LOG</key>
         <string>INFO</string>
+        <!-- T141: backend URL / project_id 用 env 注入 (改端口只改这里 + reload) -->
+        <key>TOKENKNOWS_API_BASE</key>
+        <string>__BACKEND_URL__</string>
+        <key>TOKENKNOWS_DEFAULT_PROJECT</key>
+        <string>__PROJECT_ID__</string>
     </dict>
 </dict>
 </plist>
