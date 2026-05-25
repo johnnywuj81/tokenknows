@@ -9,8 +9,17 @@
  */
 
 import { useState, type ComponentType } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox, BarChart3, Globe, Network, ChevronRight } from 'lucide-react'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { LayoutDashboard, FileText, Sparkles, Plug, Settings, Shield, Inbox, BarChart3, Globe, Network, ChevronRight, ChevronDown, LogOut } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useProjectStore } from '@/stores/projectStore'
@@ -41,8 +50,19 @@ function isGroup(item: NavItem): item is NavGroup {
 }
 
 export function AppLayout() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
+
+  // T145: 顶栏退出登录入口. 之前 UI 不暴露 logout, 用户只能 console 删
+  // localStorage. 现在用 shadcn DropdownMenu 包 display_name, 下拉里加退出.
+  function handleLogout(): void {
+    logout()                          // 清 authStore (含 persist localStorage)
+    queryClient.clear()               // 清 TanStack Query cache, 防泄露上一用户数据
+    navigate('/login', { replace: true })
+  }
   const location = useLocation()
 
   // T123: Skills 类聚成嵌套 group (审批收件箱 / 治理 / 市场 都是 Skills 子项)
@@ -92,9 +112,33 @@ export function AppLayout() {
 
           {user ? (
             <div className="flex items-center gap-2">
-              <span className="font-ui text-body-sm text-text-secondary">
-                {user.display_name}
-              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 rounded-md px-2 py-1 font-ui text-body-sm text-text-secondary transition hover:bg-bg-warm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+                    aria-label="用户菜单"
+                  >
+                    {user.display_name}
+                    <ChevronDown className="size-3.5 text-text-muted" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel className="font-ui text-eyebrow uppercase tracking-wider text-text-muted">
+                    {user.display_name}
+                  </DropdownMenuLabel>
+                  {/* T145: 不放 '个人设置' 入口, 后端无对应路由, 加了点了 404.
+                      用户个人设置真要做时再加 /settings/profile 路由 + item. */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={handleLogout}
+                    className="font-ui text-body-sm text-danger focus:text-danger"
+                  >
+                    <LogOut className="size-3.5" />
+                    退出登录
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {user.is_instance_admin ? (
                 <Link
                   to="/admin"
