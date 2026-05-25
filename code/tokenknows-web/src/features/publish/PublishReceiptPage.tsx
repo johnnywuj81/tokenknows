@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   CheckCircle2,
   Copy,
@@ -111,7 +111,7 @@ export default function PublishReceiptPage() {
             <h3 className="mb-2 font-ui text-eyebrow uppercase tracking-wider text-text-muted">
               本次发布
             </h3>
-            <DestinationCard record={record} highlighted />
+            <DestinationCard record={record} projectId={projectId ?? ''} highlighted />
           </section>
 
           {/* 历史 */}
@@ -125,7 +125,7 @@ export default function PublishReceiptPage() {
                   .filter((h) => h.id !== record.id)
                   .map((h) => (
                     <li key={h.id}>
-                      <DestinationCard record={h} />
+                      <DestinationCard record={h} projectId={projectId ?? ''} />
                     </li>
                   ))}
               </ul>
@@ -182,10 +182,47 @@ export default function PublishReceiptPage() {
 
 interface DestinationCardProps {
   record: PublishRecord
+  projectId: string
   highlighted?: boolean
 }
 
-function DestinationCard({ record, highlighted }: DestinationCardProps) {
+/**
+ * T139 修: backend `record.url` 对 internal destination 是约定字符串
+ * `/internal/assets/{asset_id}/v{N}` (generation_service.py:3088),
+ * 既不是 backend 端点也不是前端路由 → 点 "打开" 会跳到 SPA fallback "/".
+ * 这里把它转译成真实的前端 DocumentPage 路由.
+ *
+ * T144 (CRITICAL): 对外部 URL 增加 scheme 白名单. backend 数据 drift 或者
+ * 被攻击者影响时, record.url 可能是 javascript:/data: URL, 直接放进 <a href>
+ * 会被点击触发 XSS. 只允许 http(s); 其它 scheme 返 '#' 让 UI 隐藏按钮.
+ */
+function resolveOpenHref(record: PublishRecord, projectId: string): string {
+  if (!record.url) return '#'
+  if (
+    record.destination === 'internal' &&
+    record.url.startsWith('/internal/assets/')
+  ) {
+    return projectId
+      ? `/projects/${projectId}/documents/${record.asset_id}`
+      : '#'
+  }
+  // 站内相对路径放行 (以 / 开头), 走 react-router Link
+  if (record.url.startsWith('/')) {
+    return record.url
+  }
+  // 外部 URL: 必须 http(s), 其它 scheme (javascript:/data:/file: 等) 一律拒绝
+  try {
+    const { protocol } = new URL(record.url)
+    if (protocol === 'http:' || protocol === 'https:') {
+      return record.url
+    }
+  } catch {
+    /* malformed URL → fall through to '#' */
+  }
+  return '#'
+}
+
+function DestinationCard({ record, projectId, highlighted }: DestinationCardProps) {
   const [copied, setCopied] = useState(false)
   const meta = DESTINATION_META[record.destination] ?? {
     label: record.destination,
@@ -273,20 +310,30 @@ function DestinationCard({ record, highlighted }: DestinationCardProps) {
                   </>
                 )}
               </Button>
-              {record.destination !== 'export_md' ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  asChild
-                  className="font-ui text-caption"
-                >
-                  <a href={record.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="size-3" />
-                    打开
-                  </a>
-                </Button>
-              ) : null}
+              {record.destination !== 'export_md' ? (() => {
+                const href = resolveOpenHref(record, projectId)
+                // T144 (MEDIUM-1): href === '#' 意味着 URL 缺失或 scheme 被
+                // 拒绝 (见 resolveOpenHref). 渲染按钮只会跳到页顶迷惑用户, 干脆隐藏.
+                if (href === '#') return null
+                // T140: 站内路径用 react-router Link (同 tab, 不重载 SPA, 不踩 SW timing 坑);
+                // 外部 URL 仍 <a target="_blank"> 新 tab.
+                const isInternal = href.startsWith('/')
+                return (
+                  <Button type="button" size="sm" variant="ghost" asChild className="font-ui text-caption">
+                    {isInternal ? (
+                      <Link to={href}>
+                        <ExternalLink className="size-3" />
+                        打开
+                      </Link>
+                    ) : (
+                      <a href={href} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="size-3" />
+                        打开
+                      </a>
+                    )}
+                  </Button>
+                )
+              })() : null}
             </>
           ) : (
             <Button type="button" size="sm" variant="ghost" disabled className="font-ui text-caption">
