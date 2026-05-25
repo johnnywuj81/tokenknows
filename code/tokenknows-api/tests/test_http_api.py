@@ -42,7 +42,7 @@ def test_readyz_returns_200(client: TestClient) -> None:
 
 
 def test_datasource_health_contract(client: TestClient) -> None:
-    """端点存在 + 返回 dict 含 items 数组 + 5 个固定源."""
+    """端点存在 + 返回 dict 含 items 数组 + 6 个固定源 (T136 加 claude_cowork)."""
     r = client.get(f"/api/v1/projects/{PROJECT_ID}/datasources/health")
     assert r.status_code == 200
     body = r.json()
@@ -50,9 +50,16 @@ def test_datasource_health_contract(client: TestClient) -> None:
     assert "window_days" in body
     assert "total_active" in body
     assert "total_events_all" in body
-    # 5 个固定源都返回 (即使 event_count=0)
+    # 6 个固定源都返回 (即使 event_count=0)
     types = {it["source_type"] for it in body["items"]}
-    assert {"claude_code", "github", "cursor", "vscode", "local_file"}.issubset(types)
+    assert {
+        "claude_code",
+        "claude_cowork",
+        "github",
+        "cursor",
+        "vscode",
+        "local_file",
+    }.issubset(types)
 
 
 def test_datasource_health_window_param(client: TestClient) -> None:
@@ -75,11 +82,11 @@ def test_datasource_health_each_item_has_required_fields(client: TestClient) -> 
 
 
 def test_datasource_health_unknown_project(client: TestClient) -> None:
-    """陌生 project_id 也不 500, 返回 5 个 inactive 源."""
+    """陌生 project_id 也不 500, 返回 6 个 inactive 源 (T136 加 claude_cowork)."""
     r = client.get("/api/v1/projects/proj-nonexistent-xxx/datasources/health")
     assert r.status_code == 200
     body = r.json()
-    assert len(body["items"]) == 5
+    assert len(body["items"]) == 6
     assert all(it["health"] == "inactive" for it in body["items"])
     assert body["total_events_all"] == 0
 

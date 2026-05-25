@@ -14,6 +14,7 @@ from app.gateway.http_api import (
     llm_preview,
     members,
     notifications,
+    projects,
     skills,
     webhooks,
 )
@@ -33,3 +34,4 @@ api_router.include_router(notifications.router)                        # v0.5.1 
 api_router.include_router(members.router)                              # v0.9.0 T66
 api_router.include_router(auth.router)                                 # v1.1.0 T74
 api_router.include_router(entities.router, tags=["entities"])          # v1.3.1 T96
+api_router.include_router(projects.router, tags=["projects"])          # v2.0 T141 (移出 MSW mock)

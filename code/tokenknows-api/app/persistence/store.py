@@ -323,23 +323,27 @@ class SqliteStore:
         """游标分页: cursor 是 occurred_at, 从该时间倒序往前.
         返回 (events_list, total_for_project_filtered).
         """
+        # T141: 用 datetime() 包装 ISO 时间, 让 SQLite 解析时区差异 (含 +08:00
+        # 等显式时区的 vs 无时区被当 naive UTC), 否则字符串字典序会把
+        # '2026-05-25T10:00+08:00' 排在 '2026-05-25T04:20Z' 前面 — 字符串前缀
+        # "10" > "04" 但实际时刻 cowork(02:00 UTC) < claude_code(04:20 UTC).
         where = ["project_id = ?"]
         params: list[Any] = [project_id]
         if source_type:
             where.append("source_type = ?")
             params.append(source_type)
         if from_iso:
-            where.append("occurred_at >= ?")
+            where.append("datetime(occurred_at) >= datetime(?)")
             params.append(from_iso)
         if to_iso:
-            where.append("occurred_at <= ?")
+            where.append("datetime(occurred_at) <= datetime(?)")
             params.append(to_iso)
         # total 不含 cursor 过滤
         total_where_sql = " AND ".join(where)
         total_params = tuple(params)
 
         if cursor:
-            where.append("occurred_at < ?")
+            where.append("datetime(occurred_at) < datetime(?)")
             params.append(cursor)
         where_sql = " AND ".join(where)
 
@@ -347,7 +351,7 @@ class SqliteStore:
             f"""
             SELECT json FROM events
             WHERE {where_sql}
-            ORDER BY occurred_at DESC
+            ORDER BY datetime(occurred_at) DESC
             LIMIT ?
             """,
             tuple(params + [limit]),
