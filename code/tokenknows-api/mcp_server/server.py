@@ -28,34 +28,31 @@ from mcp.server.fastmcp import FastMCP
 
 from mcp_server.client import get_client
 
-# v2.0 T136 · instructions 让 host (Claude Code / Cowork) 自动调用 submit_session_events
-# 不必依赖用户每次说"记一笔". Cowork 没有 SessionEnd hook (GitHub #45514),
-# 这是引导 LLM 主动上报的最自然方式.
+# T143 (2026-05-25) · 三改 · 改用 Anthropic Progressive Disclosure pattern.
+# 详细 "MUST call" 规则搬到 skills/session_capture/SKILL.md (L2 lazy load,
+# 只在 LLM 觉得 task 相关时才进 context), MCP server instructions 只留必要
+# 的 host 映射 + tool 清单, tool docstring 只剩 args/return.
+# 这样 startup 注入小 (节省 context), 但 LLM 调 skill 时拿到完整规则.
 _MCP_INSTRUCTIONS = """\
-This MCP server captures Claude session activity into the TokenKnows knowledge
-base. When connected, you should proactively call the `submit_session_events`
-tool to record the conversation, so the user does not have to ask explicitly.
+# TokenKnows MCP
 
-Trigger heuristics (call without being asked):
-  - At the end of each meaningful task (after the user gets the answer they
-    wanted), submit 1–N events covering that task's user request, your reasoning
-    summary, and the key tool calls.
-  - When the user finishes a multi-turn discussion (e.g. before they say
-    "thanks" or move to a new topic), batch the recent turns.
-  - If you used external tools (web search, file read, MCP calls) inside this
-    session, include them as `event_type="tool_call"`.
+This server bridges your session into the TokenKnows knowledge base.
 
-Cowork-specific (when running inside Claude Cowork desktop app):
-  - Always pass `source_type="claude_cowork"` so the data source is correctly
-    labeled in the TokenKnows UI.
+## Available tools
 
-Code-specific (when running inside Claude Code CLI):
-  - Leave source_type unset (defaults to "claude_code"); the session-watcher
-    daemon already captures conversation jsonl, you only need to submit
-    high-level summaries the daemon can't infer.
+- `submit_session_events` — persist conversation turns. **See the
+  `session_capture` skill in this plugin for when/how to call it.**
+- `distill_document(type, project_id?, time_window?)` — trigger backend
+  5-stage pipeline to produce 1 of 7 document types (weekly_report /
+  tech_design / adr / incident / book / agent_skill / knowledge_graph).
+  See `distill` skill for the full flow.
+- `list_assets` / `get_asset` / `get_asset_chapters` — read distilled output.
+- `search_entity(query, entity_type?)` — cross-document KG entity search.
 
-Always batch — do not call submit_session_events per turn; aim for 1 call per
-completed task, with the events array containing 2–10 entries.
+## Host source_type quick map
+
+- Cowork Chat / Cowork tab → pass `source_type="claude_cowork"`
+- Claude Code CLI → leave `source_type` unset (defaults `"claude_code"`)
 """
 
 mcp = FastMCP("tokenknows", instructions=_MCP_INSTRUCTIONS)
@@ -80,32 +77,21 @@ async def submit_session_events(
     events: list[dict],
     project_id: str | None = None,
 ) -> dict:
-    """把 Claude 当前 session 的关键事件提交到 TokenKnows backend.
+    """Persist conversation events into TokenKnows backend.
 
-    每个 event 必填字段 (其余可缺省, MCP 会兜底):
-        {
-          "external_id": "<同源唯一, e.g. claude session uuid + msg index>",
-          "source_ref": "<session_uuid 或 msg_id>",
-          "content": "<事件正文 / 对话片段; 用于蒸馏>",
-          "title": "<可选, 一句话标题>",
-          "author_name": "<用户名或 Claude>",
-          "event_type": "ai_conversation_turn" | "tool_call" | "code_change" | "manual_note",
-          "occurred_at": "<ISO 8601, 缺省 now()>",
-          "tags": ["<可选标签>"]
-        }
-
-    source_type 默认 "claude_code" (Cowork plugin 显式传 "claude_cowork").
+    See the `session_capture` skill in this plugin for full call-timing
+    rules and examples (lazy-loaded, ~50 tokens at startup, full body
+    only when LLM determines relevance).
 
     Args:
-        events: 1-100 条事件
-        project_id: 项目 id; 不传时用 TOKENKNOWS_DEFAULT_PROJECT
+        events: 1-100 events. Each item: {content (required), title?,
+            author_name?, event_type? (default "ai_conversation_turn"),
+            source_type? ("claude_cowork" in Cowork, default "claude_code"
+            elsewhere), source_ref?, external_id? (auto-hash), tags?}.
+        project_id: optional override; defaults TOKENKNOWS_DEFAULT_PROJECT.
 
     Returns:
-        {
-          "ingested": <新增>,
-          "skipped": <重复跳过>,
-          "project_id": "..."
-        }
+        {"ingested": <new>, "skipped": <dup>, "project_id": "..."}
     """
     import hashlib
     from datetime import datetime, timezone

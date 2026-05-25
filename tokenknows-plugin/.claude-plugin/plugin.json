@@ -1,6 +1,6 @@
 {
   "name": "tokenknows",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "把当前 Claude session 蒸馏成结构化文档 (周报 / 技术方案 / ADR / 复盘 / 书籍 / Skill / 知识图谱), 通过 MCP 接 tokenknows-api 后端 5-stage pipeline.",
   "author": {
     "name": "TokenKnows",
