@@ -1,8 +1,8 @@
 /**
  * EventFilter · 事件流筛选(source_type)
  *
- * MVP: 仅 source 维度 5 选 1(含"全部")。
  * 后续可扩展 author / event_type 等多维。
+ * T146: 加 claude_cowork (T136 时只改了 DatasourcesCard, 漏改这里).
  */
 
 import { Filter } from 'lucide-react'
@@ -23,6 +23,7 @@ interface EventFilterProps {
 
 const OPTIONS: { value: EventSourceType; label: string }[] = [
   { value: 'claude_code', label: 'Claude Code' },
+  { value: 'claude_cowork', label: 'Claude Cowork' },
   { value: 'cursor', label: 'Cursor' },
   { value: 'vscode', label: 'VS Code' },
   { value: 'github', label: 'GitHub' },
