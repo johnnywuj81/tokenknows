@@ -21,6 +21,19 @@ interface EventCardProps {
 
 const ICON_CLASS = 'size-4 mt-0.5 shrink-0 text-text-secondary'
 
+// T141: source 类型 chip 标签 (跟 DatasourcesCard / EventDrawer 对齐).
+// 之前 EventCard 只用 icon 区分 source, 用户分不清这条是 Claude Code 还是
+// Claude Cowork / Cursor / etc., 反复抱怨 "code 事件流没看到" → 加显式 chip.
+const SOURCE_LABEL: Record<EventSourceType, string> = {
+  claude_code: 'Claude Code',
+  claude_cowork: 'Claude Cowork',
+  cursor: 'Cursor',
+  vscode: 'VS Code',
+  github: 'GitHub',
+  local_file: '本地文档',
+  manual: '手动',
+}
+
 export function EventCard({ event, onClick }: EventCardProps) {
   const sideClass = sideColor(event.event_type)
   const iconNode = renderIcon(event.source_type, event.event_type)
@@ -49,6 +62,12 @@ export function EventCard({ event, onClick }: EventCardProps) {
             {event.title ?? eventTypeLabel(event.event_type)}
           </h3>
           <div className="flex items-center gap-2 text-text-subtle">
+            <span
+              className="rounded-sm bg-bg-warm px-1.5 py-0 font-ui text-micro text-text-secondary"
+              title={`source_type: ${event.source_type}`}
+            >
+              {SOURCE_LABEL[event.source_type] ?? event.source_type}
+            </span>
             {event.author ? (
               <span className="flex items-center gap-1.5">
                 <Avatar className="size-4">
@@ -60,7 +79,9 @@ export function EventCard({ event, onClick }: EventCardProps) {
               </span>
             ) : null}
             <span className="font-ui text-caption">·</span>
-            <span className="font-mono text-caption text-text-muted">{event.source_ref}</span>
+            <span className="truncate font-mono text-caption text-text-muted" title={event.source_ref}>
+              {event.source_ref}
+            </span>
             <span className="font-ui text-caption">·</span>
             <time className="font-mono text-caption">{time}</time>
           </div>

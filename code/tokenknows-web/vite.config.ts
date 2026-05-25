@@ -30,5 +30,25 @@ export default defineConfig({
       },
       '/sse': { target: API_TARGET, changeOrigin: true, ws: true },
     },
+    // T140: 启动时预编译热路由模块, 减少 cold tab 第一次访问 lazy chunk 时的
+    // 即时编译延迟 (https://vite.dev/guide/performance#warm-up-frequently-used-files).
+    // 选的都是最常进入的页面 + 它们的核心组件.
+    warmup: {
+      clientFiles: [
+        './src/main.tsx',
+        './src/routes/index.tsx',
+        './src/components/layouts/AppLayout.tsx',
+        './src/components/layouts/AuthLayout.tsx',
+        './src/components/guards/RequireAuth.tsx',
+        './src/lib/api.ts',
+        './src/mocks/browser.ts',
+        './src/mocks/handlers.ts',
+        './src/features/workbench/WorkbenchPage.tsx',
+        './src/features/documents/DocumentPage.tsx',
+        './src/features/documents/knowledge-graph/KnowledgeGraphView.tsx',
+        './src/features/publish/PublishDialog.tsx',
+        './src/features/publish/PublishReceiptPage.tsx',
+      ],
+    },
   },
 })

@@ -6,6 +6,17 @@
  *   - TaskTechDesign T02 关键决策(409 重名立即报错)
  *
  * 内存状态: 维护项目列表 + 数据源列表, T02 测试时持久。
+ *
+ * T141 (2026-05-25) 删除 GET /projects + GET /projects/:id mock —
+ * backend 已实现这两个真路径 (app/gateway/http_api/projects.py).
+ * 原因: 之前两个 endpoint 100% 靠 MSW SW mock, SW 一抖 UI 永远 loading
+ * (反复发生); 落到 backend 后不再依赖 dev-only mock.
+ *
+ * 还保留的 handler:
+ *   - POST /projects (backend 尚未实现 create, 待 T142 一起删)
+ *   - GET /projects/:id/datasources (backend 尚未实现 datasource CRUD)
+ *   - POST /projects/:id/datasources/:type (同上)
+ *   - GET /projects/:id/datasources/:dsId/health (同上)
  */
 
 import { http, HttpResponse, delay } from 'msw'
@@ -54,34 +65,11 @@ function genConnectionToken(projectId: string): string {
   return `${projectId}.${random}.${sig}`
 }
 
-const ERROR_MODE = new URLSearchParams(
-  typeof window !== 'undefined' ? window.location.search : '',
-).get('mock_error')
-
 export const projectHandlers = [
-  // 列表
-  http.get(`${BASE}/projects`, async () => {
-    await delay(120)
-    if (ERROR_MODE === 'projects') {
-      return HttpResponse.json(
-        { code: 'SERVER_ERROR', detail: 'mocked 500' },
-        { status: 500 },
-      )
-    }
-    return HttpResponse.json(projects)
-  }),
+  // T141: GET /projects + GET /projects/:id mock 已删, 走 backend 真路径.
+  // mock_error=projects 查询参数失效 (mock_error 现仅对 POST/datasource 有效).
 
-  // 详情
-  http.get(`${BASE}/projects/:id`, async ({ params }) => {
-    await delay(80)
-    const p = projects.find((x) => x.id === params.id)
-    if (!p) {
-      return HttpResponse.json({ code: 'NOT_FOUND', detail: '项目不存在' }, { status: 404 })
-    }
-    return HttpResponse.json(p)
-  }),
-
-  // 新建
+  // 新建 (backend 尚未实现, 暂保留 mock; create 不会持久化到 backend)
   http.post(`${BASE}/projects`, async ({ request }) => {
     await delay(180)
     const body = (await request.json()) as { name: string; description?: string }
