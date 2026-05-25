@@ -89,10 +89,10 @@ export function PublishDialog({ assetId }: PublishDialogProps) {
   const [confirmChecked, setConfirmChecked] = useState(false)
 
   const asset = assetQuery.data
-  const blocked = asset
-    ? asset.status !== 'approved' && asset.status !== 'draft'
-    : true
+  // T140: blocked 由 blockReason.severity 决定. severity='info' (如 published)
+  // 不 block submit, 只显示信息 banner; severity='block' (generating/in_review/archived/rejected) 才真禁.
   const blockReason = blockReasonFor(asset?.status, asset?.approval_state)
+  const blocked = asset ? blockReason?.severity === 'block' : true
   const canSubmit =
     !!assetId && !blocked && confirmChecked && !publish.isPending
 
@@ -148,8 +148,15 @@ export function PublishDialog({ assetId }: PublishDialogProps) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {blocked && blockReason ? (
-              <div className="flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-warning">
+            {blockReason ? (
+              <div
+                className={cn(
+                  'flex items-start gap-2 rounded-md border px-3 py-2',
+                  blockReason.severity === 'block'
+                    ? 'border-warning-border bg-warning-bg text-warning'
+                    : 'border-info-border bg-info-bg text-info',
+                )}
+              >
                 <ShieldAlert className="size-4 mt-0.5 shrink-0" />
                 <div className="space-y-0.5">
                   <p className="font-ui text-body-sm font-medium">{blockReason.title}</p>
@@ -338,25 +345,30 @@ export function PublishDialog({ assetId }: PublishDialogProps) {
   )
 }
 
-function blockReasonFor(
-  status?: string,
-  approval?: string,
-): { title: string; detail: string } | null {
+// T140: severity 区分 'block' (真禁) vs 'info' (提示但允许)
+// published 是 info, 允许 republish 创建新版本
+interface BlockReason {
+  title: string
+  detail: string
+  severity: 'block' | 'info'
+}
+
+function blockReasonFor(status?: string, approval?: string): BlockReason | null {
   if (!status) return null
   if (status === 'generating') {
-    return { title: '文档仍在生成中', detail: '请等待 5 阶段流水线完成后再发布。' }
+    return { title: '文档仍在生成中', detail: '请等待 5 阶段流水线完成后再发布。', severity: 'block' }
   }
   if (status === 'in_review') {
-    return { title: '文档正在审批', detail: '需所有章节通过审批后再发布。' }
+    return { title: '文档正在审批', detail: '需所有章节通过审批后再发布。', severity: 'block' }
   }
   if (status === 'archived') {
-    return { title: '文档已归档', detail: '归档后不可发布, 请克隆为新版本。' }
+    return { title: '文档已归档', detail: '归档后不可发布, 请克隆为新版本。', severity: 'block' }
   }
   if (status === 'published') {
-    return { title: '文档已发布', detail: '再次发布会创建新版本记录, 旧链接保留。' }
+    return { title: '文档已发布', detail: '再次发布会创建新版本记录, 旧链接保留。', severity: 'info' }
   }
   if (approval === 'rejected') {
-    return { title: '文档被退回', detail: '部分章节被审批退回, 需先调整。' }
+    return { title: '文档被退回', detail: '部分章节被审批退回, 需先调整。', severity: 'block' }
   }
   return null
 }
