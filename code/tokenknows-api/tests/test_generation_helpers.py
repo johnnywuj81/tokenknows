@@ -23,7 +23,9 @@ from app.services.generation_service import (
     _enforce_source_diversity,
     _enforce_source_diversity_scored,
     _event_to_embed_text,
+    _json_failure_window,
     _normalize_evidence_tags,
+    _parse_llm_json,
 )
 
 
@@ -274,3 +276,79 @@ class TestEnforceSourceDiversityScored:
         assert "claude_code" in types
         # 4 元组结构 (final, cos, trust, event)
         assert len(out[-1]) == 4
+
+
+# ─── _parse_llm_json · F 改造容错层 ─────────────────────────────────
+
+
+class TestParseLlmJson:
+    """覆盖 _parse_llm_json 4 层容错路径."""
+
+    def test_strict_valid_json(self) -> None:
+        """Layer 2: 严格 json.loads."""
+        assert _parse_llm_json('{"a": 1, "b": [2, 3]}') == {"a": 1, "b": [2, 3]}
+
+    def test_strips_markdown_json_fence(self) -> None:
+        """Layer 1: ```json ... ``` 包裹 (Anthropic Claude 常态)."""
+        wrapped = '```json\n{"chapters": ["a", "b"]}\n```'
+        assert _parse_llm_json(wrapped) == {"chapters": ["a", "b"]}
+
+    def test_strips_plain_fence_no_lang(self) -> None:
+        wrapped = '```\n{"x": 1}\n```'
+        assert _parse_llm_json(wrapped) == {"x": 1}
+
+    def test_extracts_block_from_preamble(self) -> None:
+        """Layer 3: 前后有解释文字时, 提取首个 {...} 块."""
+        msg = 'Here is the JSON:\n{"chapters": ["a"]}\nThat\'s it.'
+        assert _parse_llm_json(msg) == {"chapters": ["a"]}
+
+    def test_repairs_trailing_comma(self) -> None:
+        """Layer 4: 尾随逗号 (老 LLM 常见错)."""
+        assert _parse_llm_json('[1, 2, 3,]') == [1, 2, 3]
+
+    def test_repairs_missing_comma_between_objects(self) -> None:
+        """Layer 4: 缺逗号 (MiniMax abab6.5s 实测出错点)."""
+        bad = '{"nodes": [{"id": "n1"} {"id": "n2"}]}'
+        assert _parse_llm_json(bad) == {"nodes": [{"id": "n1"}, {"id": "n2"}]}
+
+    def test_repairs_unescaped_quote_in_string(self) -> None:
+        """Layer 4: 字符串内未转义引号."""
+        bad = '{"label": "He said "hello" loudly"}'
+        result = _parse_llm_json(bad)
+        # json-repair 能恢复 (具体修法是其内部选择, 至少 'hello' 该在某处)
+        assert "hello" in result["label"]
+
+    def test_raises_for_completely_garbled_input(self) -> None:
+        """全乱: 不带任何 JSON 结构 → 抛 JSONDecodeError."""
+        with pytest.raises(Exception):  # JSONDecodeError 或类似
+            _parse_llm_json("this is just plain text no json at all here")
+
+    def test_handles_empty_string(self) -> None:
+        with pytest.raises(Exception):
+            _parse_llm_json("")
+
+
+class TestJsonFailureWindow:
+    """_json_failure_window: JSONDecodeError 上下文 ±60 字符提取."""
+
+    def test_extracts_window_around_error_position(self) -> None:
+        import json
+        bad = '{"a": 1, "b": invalid_token}'
+        try:
+            json.loads(bad)
+            raise AssertionError("expected JSONDecodeError")
+        except json.JSONDecodeError as e:
+            window = _json_failure_window(bad, e)
+            # 失败 token 应在窗口里
+            assert "invalid_token" in window
+
+    def test_window_handles_short_text(self) -> None:
+        import json
+        bad = "x"
+        try:
+            json.loads(bad)
+            raise AssertionError
+        except json.JSONDecodeError as e:
+            window = _json_failure_window(bad, e)
+            # 短文本不加省略号头 (start == 0)
+            assert not window.startswith("…")

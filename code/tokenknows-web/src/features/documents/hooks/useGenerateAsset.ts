@@ -16,6 +16,13 @@ export interface GeneratePayload {
   model_override?: string
   /** T106 · 显式 provider, 后端优先用 (rather than guess from model name). */
   provider_override?: string
+  /**
+   * A 改造 · 用户在 dialog 输入的主题提示.
+   * - 后端 collect 阶段用关键词过滤 events
+   * - distill prompt 里告知 LLM "只围绕该主题"
+   * 对 agent_skill 类型尤其重要 (避免多主题混在一份 skill 里).
+   */
+  topic_hint?: string
 }
 
 async function generateAssetRequest(payload: GeneratePayload): Promise<Asset> {
@@ -25,6 +32,7 @@ async function generateAssetRequest(payload: GeneratePayload): Promise<Asset> {
     source_filter: payload.source_filter,
     model_override: payload.model_override,
     provider_override: payload.provider_override,
+    topic_hint: payload.topic_hint,
   })
   return data
 }

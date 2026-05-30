@@ -300,6 +300,39 @@ def _build_sources_digest(chapters: list[dict[str, Any]]) -> str:
 
 
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.DOTALL)
+_CODE_FENCE_OPEN_RE = re.compile(r"^```(?:[a-zA-Z][a-zA-Z0-9_+-]*)?\s*\n")
+_CODE_FENCE_CLOSE_RE = re.compile(r"\n?```\s*$")
+
+
+def _normalize_skill_md_text(text: str) -> str:
+    """剥 LLM 输出里的常见污染层, 拿到干净 SKILL.md.
+
+    实际 LLM (尤其 MiniMax / GPT-3.5 这类老一代模型) 经常违反 prompt 约束, 输出:
+      1. 用 ```markdown ... ``` / ``` ... ``` 把整段 SKILL.md 包起来
+      2. 前面加 preamble: "好的, 以下是您要的 SKILL.md:"
+      3. 末尾加 epilogue: "希望这对您有帮助!"
+
+    规则:
+      - 先 strip 空白
+      - 若以 ``` 开头, 剥首尾 fence
+      - 若 strip 后 *仍不以 `---\\n` 起头*, 在前 20 行内找首个独占 `---` 行,
+        从它开始切 (preamble 丢弃); 找不到原样返回, 让 _parse_skill_md 抛错
+    """
+    s = (text or "").strip()
+    # 1) 剥首尾 ``` 代码 fence (可带语言标签)
+    if s.startswith("```"):
+        s = _CODE_FENCE_OPEN_RE.sub("", s, count=1)
+        s = _CODE_FENCE_CLOSE_RE.sub("", s)
+        s = s.strip()
+    # 2) 若不是 `---` 开头, 容忍前 ≤20 行的 preamble: 找首个独占 `---` 行
+    if not s.startswith("---\n") and not s.startswith("---\r\n"):
+        lines = s.split("\n")
+        # 限定前 20 行扫描 (preamble 不应该这么长; 超过认为是格式错)
+        for i, line in enumerate(lines[:20]):
+            if line.strip() == "---":
+                s = "\n".join(lines[i:])
+                break
+    return s
 
 
 def _parse_skill_md(
@@ -310,6 +343,7 @@ def _parse_skill_md(
     Raises:
         ValueError: 缺 frontmatter, 或缺 name 字段又无 fallback.
     """
+    text = _normalize_skill_md_text(text)
     m = _FRONTMATTER_RE.match(text)
     if not m:
         if fallback_name:

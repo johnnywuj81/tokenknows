@@ -35,6 +35,16 @@ class GenerateAssetRequest(BaseModel):
         default=None,
         description="None = 用 task 默认",
     )
+    topic_hint: str | None = Field(
+        default=None,
+        description=(
+            "用户主题提示, 用于:\n"
+            "  1) collect 阶段对 events 做关键词预过滤 (大小写不敏感子串匹配)\n"
+            "  2) outline / distill prompt 中明确告知 LLM '仅围绕该主题展开'.\n"
+            "对 agent_skill 类型尤其重要 (单一主题才能蒸馏出可用 SKILL.md)."
+        ),
+        max_length=200,
+    )
 
 
 # ─── 进度跟踪 ────────────────────────────────────────────────────

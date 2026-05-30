@@ -17,6 +17,7 @@ import type { Chapter } from '@/types/api'
 import { ChapterFooter } from './ChapterFooter'
 import { useChapterAutosave, type AutosaveState } from '../../hooks/useChapterAutosave'
 import { LazyChapterEditor } from './LazyChapterEditor'
+import { SkillMdView } from './SkillMdView'
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -63,6 +64,14 @@ export function ChapterBlock({
   )
   const editable = !readOnly && !regenerating
 
+  // agent_skill 蒸馏出的 SKILL.md 用专属渲染器:
+  //   - frontmatter (---...---) 解析成元数据卡 (chips)
+  //   - body 单独渲染 markdown
+  // 避免 frontmatter 被通用 markdown-it 当作 <hr> 渲染崩坏.
+  const isSkillMd = (chapter.layout as { format?: string } | null)?.format === 'skill_md'
+  const skillParseError =
+    ((chapter.layout as { parse_error?: string | null } | null)?.parse_error) ?? null
+
   return (
     <article
       id={`chapter-anchor-${chapter.id}`}
@@ -101,16 +110,21 @@ export function ChapterBlock({
       {/* T128 · 章节被 reviewer 退回时显示退回理由 (从 regeneration_history 抽 [REJECT] 那条) */}
       <RejectReasonBanner chapter={chapter} />
 
-      {/* A3 · 长文档懒挂载: content > 20KB 默认预览, 点击展开才挂 TipTap */}
-      <LazyChapterEditor
-        chapterId={chapter.id}
-        initialHTML={initialHTML}
-        rawLength={savedContent.length}
-        editable={editable}
-        onEdit={handleEdit}
-        onViewEvidence={onViewEvidence}
-        autosaveState={state}
-      />
+      {/* SKILL.md 走专属渲染器 (只读) · 其它类型走通用 TipTap 编辑器 */}
+      {isSkillMd ? (
+        <SkillMdView content={savedContent} backendParseError={skillParseError} />
+      ) : (
+        /* A3 · 长文档懒挂载: content > 20KB 默认预览, 点击展开才挂 TipTap */
+        <LazyChapterEditor
+          chapterId={chapter.id}
+          initialHTML={initialHTML}
+          rawLength={savedContent.length}
+          editable={editable}
+          onEdit={handleEdit}
+          onViewEvidence={onViewEvidence}
+          autosaveState={state}
+        />
+      )}
 
       <ChapterFooter
         chapter={chapter}

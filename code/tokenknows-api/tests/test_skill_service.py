@@ -160,6 +160,81 @@ body"""
         skill_service._parse_skill_md(md)
 
 
+def test_normalize_skill_md_strips_markdown_code_fence() -> None:
+    """LLM (e.g. MiniMax abab6.5s) 常违反 prompt 约束, 用 ```markdown ... ``` 包整段."""
+    polluted = """```markdown
+---
+name: docker-deploy
+description: short
+---
+
+# body
+```"""
+    cleaned = skill_service._normalize_skill_md_text(polluted)
+    assert cleaned.startswith("---\nname: docker-deploy")
+    # 解析也能跑通
+    name, _ = skill_service._parse_skill_md(polluted)
+    assert name == "docker-deploy"
+
+
+def test_normalize_skill_md_strips_plain_code_fence_no_lang() -> None:
+    """不带语言标签的 ``` 也要剥."""
+    polluted = "```\n---\nname: x\n---\nbody\n```"
+    cleaned = skill_service._normalize_skill_md_text(polluted)
+    assert cleaned.startswith("---\nname: x")
+
+
+def test_normalize_skill_md_strips_preamble() -> None:
+    """LLM 加 '好的, 下面是您要的 SKILL.md:' 前缀也要丢."""
+    polluted = (
+        "好的, 以下是您要的 SKILL.md 内容:\n"
+        "\n"
+        "---\n"
+        "name: pr-review\n"
+        "description: code review SOP\n"
+        "---\n"
+        "\n"
+        "## 适用场景\n"
+        "review PRs\n"
+    )
+    cleaned = skill_service._normalize_skill_md_text(polluted)
+    assert cleaned.startswith("---\nname: pr-review")
+    name, _ = skill_service._parse_skill_md(polluted)
+    assert name == "pr-review"
+
+
+def test_normalize_skill_md_preserves_already_clean_input() -> None:
+    """正确格式输入应该原样返回 (除了 trim)."""
+    clean = "---\nname: x\n---\nbody"
+    assert skill_service._normalize_skill_md_text(clean) == clean
+    assert skill_service._normalize_skill_md_text(f"  {clean}  \n") == clean
+
+
+def test_normalize_skill_md_does_not_strip_inline_backticks_in_body() -> None:
+    """body 里的单/双反引号 (例: `docker build`) 必须保留, 只剥包裹用的 ```."""
+    polluted = (
+        "```\n"
+        "---\n"
+        "name: x\n"
+        "---\n"
+        "\n"
+        "用 `docker build` 命令构建, 然后 `docker run`\n"
+        "```"
+    )
+    cleaned = skill_service._normalize_skill_md_text(polluted)
+    assert "`docker build`" in cleaned, "inline backtick 被误剥"
+    assert "`docker run`" in cleaned
+    assert not cleaned.endswith("```"), "末尾 fence 没剥干净"
+
+
+def test_normalize_skill_md_gives_up_when_no_frontmatter_in_first_20_lines() -> None:
+    """前 20 行内都没 `---` 行 → 不做切片, 让 _parse_skill_md 抛错."""
+    polluted = "\n".join(["just some text"] * 30) + "\n---\nname: deep\n---\nbody"
+    cleaned = skill_service._normalize_skill_md_text(polluted)
+    # 没切, 仍以 "just some text" 开头
+    assert cleaned.startswith("just some text")
+
+
 def test_compute_trust_score_no_data_returns_low() -> None:
     s = skill_service._compute_trust_score(
         acceptance=0, rejection=0, usage=0, last_used_at=None

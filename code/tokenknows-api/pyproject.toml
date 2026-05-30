@@ -22,6 +22,9 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.49b0",
     # 实用
     "orjson>=3.10.0",
+    # F · LLM JSON 输出容错 (MiniMax abab6.5s 等老模型常输出缺逗号 / 未转义引号 / 尾逗号)
+    # _parse_llm_json 严格 json.loads 失败后 fallback 到 json-repair, 修复后再 parse
+    "json-repair>=0.30.0",
     # v0.3 IM 集成 · OAuth token Fernet 加密 (T16+)
     "cryptography>=44.0.0",
     # v0.4 自动触发 · APScheduler 3.x (T27+); in-process AsyncIO, 无 Celery/Redis 重依赖

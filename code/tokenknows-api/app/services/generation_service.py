@@ -280,11 +280,17 @@ def _parse_llm_json(text: str) -> Any:
     """v1.8 T112 · 容错解析 LLM JSON 输出.
 
     LLM 经常把 JSON 包在 markdown ```json ... ``` 里, 或前后加说明文字 (Anthropic
-    Claude 尤其爱这样). 直接 json.loads 会挂. 这里 3 层容错:
+    Claude 尤其爱这样). 直接 json.loads 会挂.
+
+    F 升级 (MiniMax abab6.5s 等老模型常违反 json_mode 输出非法 JSON: 缺逗号 /
+    未转义引号 / 尾随逗号), 升级到 4 层容错:
         1. strip + 去 markdown code fence (```json...```/```...```)
-        2. 提取第一个完整 {...} 或 [...] 块
-        3. json.loads
-    任一步失败上抛 json.JSONDecodeError.
+        2. 严格 json.loads
+        3. 提取第一个完整 {...} 或 [...] 块, 再 json.loads
+        4. 用 json-repair 库自动修复后再 json.loads
+    全失败才上抛 json.JSONDecodeError (调用方决定 fallback 行为).
+
+    日志: 任一中间步骤 fallback 都会 log, 让运维知道当前 LLM 输出质量.
     """
     s = (text or "").strip()
     # 1) markdown code fence
@@ -292,17 +298,64 @@ def _parse_llm_json(text: str) -> Any:
         s = re.sub(r"^```(?:json|JSON)?\s*\n?", "", s)
         s = re.sub(r"\n?```\s*$", "", s)
         s = s.strip()
-    # 2) 直接 try, 失败再提取首个 JSON 块
+    # 2) 直接 try
     try:
         return json.loads(s)
-    except json.JSONDecodeError:
-        pass
-    # 找首个 { 或 [ 起的最大 JSON 块 (greedy)
+    except json.JSONDecodeError as e1:
+        first_err = e1
+
+    # 3) 提取首个 JSON 块
+    block: str | None = None
     m = re.search(r"(\{.*\}|\[.*\])", s, re.DOTALL)
     if m:
-        return json.loads(m.group(1))
-    # 没法救, 抛原始错
-    return json.loads(s)
+        block = m.group(1)
+        try:
+            return json.loads(block)
+        except json.JSONDecodeError:
+            pass
+
+    # 4) json-repair fallback (大杀器: 处理缺逗号 / 未转义引号 / 尾逗号 / 等)
+    # 仅当文本里确实有 { 或 [ 才尝试修复 — 纯散文 json_repair 会返回 ''
+    # (它的 "give-up" 信号), 我们要把它视为失败, 不能把空串当成 valid 结果传下游.
+    target = block or s
+    has_json_shape = "{" in target or "[" in target
+    if has_json_shape:
+        try:
+            import json_repair  # type: ignore[import-not-found]
+            repaired = json_repair.loads(target)
+            # json_repair 修不动时返回 '' (字符串), 跟合法空对象/数组不同
+            if isinstance(repaired, str) and repaired == "":
+                raise ValueError("json_repair returned empty string (give-up signal)")
+            logger.warning(
+                "llm_json_repaired",
+                original_error=str(first_err),
+                text_head=target[:120],
+                failure_window=_json_failure_window(target, first_err),
+            )
+            return repaired
+        except ImportError:
+            logger.warning("llm_json_repair_unavailable", reason="json_repair not installed")
+        except Exception as repair_err:  # noqa: BLE001
+            logger.warning(
+                "llm_json_repair_failed",
+                original_error=str(first_err),
+                repair_error=str(repair_err),
+                text_head=target[:120],
+                failure_window=_json_failure_window(target, first_err),
+            )
+
+    # 5) 全挂, 抛原始错给 caller (带位置信息)
+    raise first_err
+
+
+def _json_failure_window(text: str, err: json.JSONDecodeError) -> str:
+    """提取 JSONDecodeError 位置周围 ±60 字符, 方便排错."""
+    pos = getattr(err, "pos", None) or 0
+    start = max(0, pos - 60)
+    end = min(len(text), pos + 60)
+    prefix = "…" if start > 0 else ""
+    suffix = "…" if end < len(text) else ""
+    return f"{prefix}{text[start:end]}{suffix}"
 
 
 def _now() -> datetime:
@@ -354,6 +407,41 @@ def _format_events_block(events: list[dict]) -> str:
         # 单事件用 1 行 + 缩进的 content 子段, LLM 读起来分界清楚
         lines.append(f"[{idx}] {author} · {title}\n    {content}")
     return "\n\n".join(lines)
+
+
+def _filter_events_by_topic(events: list[dict], topic_hint: str | None) -> list[dict]:
+    """T+ · 按用户给的 topic_hint 过滤 events.
+
+    匹配规则:
+    - topic_hint 拆成 token (按空格 / 中文逗号 / 顿号 / 斜杠 / 加号), 去空白小写化
+    - 任一 token 命中 event.title 或 event.content (大小写不敏感子串) → 保留
+    - 没 token / 没 events → 原样返回 (不收缩)
+    - 过滤后为空 → 返回空列表 (上游需容错 · 让 LLM 基于通用最佳实践写骨架)
+
+    设计动机:
+    SKILL.md 蒸馏必须围绕单一主题. 用户在 UI 输入 'docker 部署' / 'PR review',
+    我们在 collect 阶段就把无关 event 剔掉, 避免 LLM 把多个主题混到一份 skill.
+    """
+    if not topic_hint or not events:
+        return events
+    # 多分隔符切 token (空格 / 中英文逗号 / 顿号 / 斜杠 / 加号)
+    tokens = [
+        t.strip().lower()
+        for t in re.split(r"[\s,，、/\+]+", topic_hint)
+        if t.strip()
+    ]
+    if not tokens:
+        return events
+    kept: list[dict] = []
+    for e in events:
+        haystack = (
+            (e.get("title") or "")
+            + " "
+            + (e.get("content") or "")
+        ).lower()
+        if any(tok in haystack for tok in tokens):
+            kept.append(e)
+    return kept
 
 
 def _initial_progress(asset_id: str) -> GenerationProgress:
@@ -530,6 +618,24 @@ async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
         raw_pool,
         key=lambda e: -(e.get("trust_score") or 0.5),
     )
+
+    # T+ · topic_hint 预过滤 (A 改造): 用户指定主题时, 提前剔掉无关 events,
+    # 让下游 outline / content / distill 的 LLM 只看到主题相关的源材料.
+    # 过滤前先记 raw 总数, 用于诊断 "为什么 SKILL 蒸馏空了".
+    raw_count = len(events)
+    filtered_out = 0
+    if req.topic_hint:
+        filtered = _filter_events_by_topic(events, req.topic_hint)
+        filtered_out = raw_count - len(filtered)
+        events = filtered
+        logger.info(
+            "collect_topic_filter_applied",
+            asset_id=asset_id,
+            topic_hint=req.topic_hint,
+            kept=len(events),
+            dropped=filtered_out,
+        )
+
     if not events:
         avg = 0.0
     else:
@@ -546,6 +652,10 @@ async def _stage_collect(asset_id: str, req: GenerateAssetRequest) -> dict:
         # value_segments (T131.2). 出处见 collect_source.
         "events": events,
         "collect_source": events_source,
+        # T+ · 让 progress UI 能解释 "为什么候选少" (调试 + 信任建设)
+        "topic_hint": req.topic_hint,
+        "topic_filtered_out": filtered_out,
+        "topic_raw_count": raw_count,
     }
 
 
@@ -600,6 +710,19 @@ async def _stage_outline(asset_id: str, req: GenerateAssetRequest) -> dict:
         return await _stage_outline_book(asset_id, req)
     if req.type == "knowledge_graph":
         return await _stage_outline_knowledge_graph(asset_id, req)
+    if req.type == "agent_skill":
+        # B 改造: agent_skill 不走通用 5 章大纲. 真正的 SKILL.md 在
+        # _stage_content 里一次性蒸馏出来 (含 frontmatter), 这里只占一个
+        # 单章节标题作为容器. 名字会在 content 阶段被 SKILL.md frontmatter
+        # 的 'name' 字段覆盖.
+        placeholder = "SKILL"
+        if req.topic_hint:
+            placeholder = f"SKILL · {req.topic_hint[:32]}"
+        return {
+            "chapters_total": 1,
+            "titles": [placeholder],
+            "skill_single_chapter": True,
+        }
 
     asset = _assets[asset_id]
     type_label = {
@@ -858,6 +981,8 @@ async def _stage_content(asset_id: str, req: GenerateAssetRequest) -> dict:
         return await _stage_content_book(asset_id, req)
     if req.type == "knowledge_graph":
         return await _stage_content_knowledge_graph(asset_id, req)
+    if req.type == "agent_skill":
+        return await _stage_content_agent_skill(asset_id, req)
 
     from app.services import skill_service  # avoid circular import at module load
 
@@ -1049,6 +1174,183 @@ async def _call_chapter_llm(
         }
 
 
+# ─── B 改造 · agent_skill 专用 content 分支 ──────────────────────
+
+
+async def _stage_content_agent_skill(asset_id: str, req: GenerateAssetRequest) -> dict:
+    """B 改造 · agent_skill 走 SKILL.md 蒸馏路径 (单章节, markdown).
+
+    与通用 _stage_content 的关键差异:
+    1. 1 次 LLM 调用 (而不是按 outline 5 次), 用 distill/skill_distill 模板
+    2. 输出是完整 SKILL.md (含 frontmatter), 直接写入 chapter.content
+       下游 evidence stage 跳过 (markdown 内不混 HTML evidence-badge)
+    3. chapter.title 取 SKILL.md frontmatter 的 name, 失败 fallback 占位标题
+    4. asset.title 也同步更新成 "Skill · {name}", 让列表卡能看到主题
+    5. 不调用 select_skills_for_chapter (本身就在蒸馏 skill, 自循环)
+
+    失败兜底: LLM 出错 → chapter.content 写出可见错误说明 + fallback_used=True;
+    pipeline 不挂, 让用户能在 UI 看到失败原因 (而不是黑屏 spinner).
+    """
+    from app.services import skill_service  # lazy 避免 circular
+
+    asset = _assets[asset_id]
+    settings = get_settings()
+    progress = _progress[asset_id]
+    provider = req.provider_override or settings.task_provider(req.type)
+    model = req.model_override or settings.task_model(req.type)
+
+    # 从 collect stage 拿 (已被 topic 过滤的) events
+    collect_idx = _stage_index(progress, "collect")
+    collect_meta = progress.stages[collect_idx].metadata or {}
+    events: list[dict] = collect_meta.get("events") or []
+    sources_digest = _format_events_block(events)
+    if not sources_digest:
+        sources_digest = (
+            "(无与主题相关的源材料 · 请基于通用最佳实践写一份骨架, "
+            "在 description 注明 '材料不足'.)"
+        )
+
+    project_label = asset.project_id  # MVP: 项目 ID 当 label, 后面再换 project.name
+    name_hint = req.topic_hint or None
+
+    tpl = PromptTemplate.load("distill/skill_distill")
+    rendered = tpl.render({
+        "project_label": project_label,
+        "source_count": len(events),
+        "sources_digest": sources_digest,
+        "name_hint": name_hint,
+        "topic_hint": req.topic_hint,
+    })
+
+    router = await get_router()
+    skill_md: str = ""
+    usage: dict = {}
+    latency_ms: int = 0
+    fallback_used = False
+    parsed_name: str = ""
+    parse_error: str | None = None
+
+    try:
+        response = await router.generate(
+            task="agent_skill",
+            messages=[
+                LLMMessage(role="system", content=rendered.system),
+                LLMMessage(role="user", content=rendered.user),
+            ],
+            options=LLMOptions(**rendered.options),
+            project_id=asset.project_id,
+            provider_override=provider,
+            model_override=model,
+        )
+        # 规范化: 剥 ```markdown ... ``` 代码 fence + preamble (老一代 LLM 常无视 prompt 约束)
+        skill_md = skill_service._normalize_skill_md_text(response.text)
+        usage = response.usage or {}
+        latency_ms = response.latency_ms or 0
+        fallback_used = bool(response.fallback_used)
+
+        # 解析 frontmatter 拿 name; 解析失败不 fail pipeline, 只记录错误
+        try:
+            parsed_name, _ = skill_service._parse_skill_md(
+                skill_md, fallback_name=req.topic_hint or "unnamed-skill"
+            )
+        except Exception as e:  # noqa: BLE001
+            parse_error = f"SKILL.md frontmatter 解析失败: {e}"
+            logger.warning(
+                "agent_skill_frontmatter_parse_failed",
+                asset_id=asset_id,
+                error=str(e),
+                raw_text_head=(response.text or "")[:200],
+            )
+            parsed_name = skill_service._sanitize_name(
+                req.topic_hint or "unnamed-skill"
+            )
+    except Exception as exc:
+        logger.warning(
+            "agent_skill_distill_llm_failed",
+            asset_id=asset_id,
+            error=str(exc),
+        )
+        skill_md = (
+            f"---\n"
+            f"name: {skill_service._sanitize_name(req.topic_hint or 'unnamed-skill')}\n"
+            f"description: 蒸馏失败 · {exc}\n"
+            f"triggers: []\n"
+            f"scope: project\n"
+            f"category: other\n"
+            f"---\n\n"
+            f"## 蒸馏失败\n\n"
+            f"LLM 调用出错: `{exc}`\n\n"
+            f"可能原因:\n"
+            f"- LLM provider 不可用 / quota 不足\n"
+            f"- 上游网络问题\n"
+            f"- 主题 '{req.topic_hint or '(无)'}' 没有任何相关源材料\n\n"
+            f"删除本 asset 后重新生成即可.\n"
+        )
+        fallback_used = True
+        parsed_name = skill_service._sanitize_name(req.topic_hint or "unnamed-skill")
+
+    # 写入单个 chapter (content 直接是 markdown SKILL.md, 不混 HTML)
+    chapter_title = f"SKILL · {parsed_name}"
+    if req.topic_hint:
+        chapter_title = f"SKILL · {parsed_name} · {req.topic_hint[:24]}"
+    chapter_id = f"chapter-{uuid4().hex[:8]}"
+    chapters: list[Chapter] = [
+        Chapter(
+            id=chapter_id,
+            asset_id=asset_id,
+            asset_version=1,
+            order_index=0,
+            title=chapter_title,
+            content=skill_md,
+            applied_skills=[],
+            generated_by=ChapterGeneratedBy(
+                model=model,
+                provider=provider,
+                latency_ms=latency_ms,
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+            ),
+            layout={
+                "format": "skill_md",          # 前端可据此切换 markdown 渲染
+                "skill_name": parsed_name,
+                "topic_hint": req.topic_hint,
+                "parse_error": parse_error,
+            },
+        ),
+    ]
+    _chapters[asset_id] = chapters
+
+    # 同步更新 asset.title 让列表卡能看到主题
+    new_title = f"Skill · {parsed_name}"
+    if req.topic_hint:
+        new_title = f"Skill · {parsed_name} · {req.topic_hint[:32]}"
+    asset.title = new_title
+    asset.updated_at = _now()
+
+    await _publish_event(
+        asset_id,
+        SseEvent(
+            event="chapter_completed",
+            asset_id=asset_id,
+            stage="content",
+            payload={"order_index": 0, "title": chapter_title, "total": 1},
+            ts=_now(),
+        ),
+    )
+
+    return {
+        "chapters_completed": 1,
+        "provider_used": provider,
+        "model_used": model,
+        "fallback_used_count": 1 if fallback_used else 0,
+        "skill_applications_count": 0,
+        "skill_name": parsed_name,
+        "topic_hint": req.topic_hint,
+        "parse_error": parse_error,
+        "events_used": len(events),
+    }
+
+
 # ─── v1.2 · Knowledge Graph 3 个 stage 分支 (T83) ─────────────
 
 
@@ -1147,8 +1449,18 @@ async def _stage_outline_knowledge_graph(
         nodes, _, _ = dedup_nodes(nodes, [])
         layout.nodes = nodes
     except Exception as e:  # noqa: BLE001
+        # F · 加 raw_text_head + failure_window 帮排错 (json-repair 都救不回时给运维线索)
+        raw_text = (resp.text if "resp" in locals() and resp else "") or ""
+        failure_ctx = ""
+        if isinstance(e, json.JSONDecodeError):
+            failure_ctx = _json_failure_window(raw_text, e)
         logger.warning(
-            "kg_outline_llm_failed", asset_id=asset_id, error=str(e)
+            "kg_outline_llm_failed",
+            asset_id=asset_id,
+            error=str(e),
+            raw_text_head=raw_text[:200],
+            raw_text_len=len(raw_text),
+            failure_window=failure_ctx,
         )
         layout.parse_error = f"outline_stage: {type(e).__name__}: {e}"
         # 兜底: 仅创建 contributors 的 person 节点 (零 LLM 兜底也能跑)
@@ -1279,8 +1591,18 @@ async def _stage_content_knowledge_graph(
                         update={"summary": summary_map[n.id]}
                     )
         except Exception as e:  # noqa: BLE001
+            # 给运维 / 用户看清楚 LLM 抽风的现场 (前 200 + 失败窗口附近)
+            raw_text = getattr(resp, "text", "") or ""
+            failure_ctx = ""
+            if isinstance(e, json.JSONDecodeError):
+                failure_ctx = _json_failure_window(raw_text, e)
             logger.warning(
-                "kg_content_llm_failed", asset_id=asset_id, error=str(e)
+                "kg_content_llm_failed",
+                asset_id=asset_id,
+                error=str(e),
+                raw_text_head=raw_text[:200],
+                raw_text_len=len(raw_text),
+                failure_window=failure_ctx,
             )
             layout.parse_error = (layout.parse_error or "") + (
                 f" | content_stage: {type(e).__name__}: {e}"
@@ -1751,6 +2073,19 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     import random
     from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
 
+    # B 改造: agent_skill 是单章节 markdown SKILL.md, 不需要 evidence-badge
+    # ([N] 引用占位也无 — distill_skill prompt 明确禁止). 直接返回 no-op 元数据
+    # 让 pipeline 继续 (后面 _stage_assess 也走 skill 分支只填基本指标).
+    if req.type == "agent_skill":
+        return {
+            "evidence_total": 0,
+            "evidence_stale": 0,
+            "fallback_used": False,
+            "chapters_with_evidence": 0,
+            "skipped_for_skill_md": True,
+            "time_window": req.time_window,
+        }
+
     asset = _assets[asset_id]
     # T132: 与 _stage_collect 一致, 用 req.time_window 推算窗口; 未知值默认 30 天.
     from_iso = _time_window_from_iso(req.time_window)
@@ -2165,6 +2500,39 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
     """
     if req.type == "knowledge_graph":
         return await _stage_assess_knowledge_graph(asset_id, req)
+
+    # B 改造: agent_skill SKILL.md 没有 chapter-level 引用 / slop 概念,
+    # 跑通用 4 指标会得到误导性数字 (coverage=0 显示蒸馏失败但其实正常).
+    # 这里给一组语义明确的固定指标 + 标 skipped, UI 可识别后改文案.
+    if req.type == "agent_skill":
+        asset = _assets[asset_id]
+        chapters = _chapters.get(asset_id, [])
+        first_layout = (chapters[0].layout if chapters else {}) or {}
+        parse_error = first_layout.get("parse_error")
+        skill_name = first_layout.get("skill_name") or "unnamed-skill"
+        metrics = AssetMetrics(
+            coverage=1.0 if not parse_error else 0.0,
+            citation_density=0.0,
+            slop_score=0.0,
+            similarity=0.0,
+            consistency_score=None,
+        )
+        asset.metrics = metrics
+        asset.status = "draft"
+        asset.current_version = 1
+        asset.updated_at = _now()
+        logger.info(
+            "assess_done_agent_skill",
+            asset_id=asset_id,
+            skill_name=skill_name,
+            parse_error=parse_error,
+        )
+        return {
+            "metrics": metrics.model_dump(),
+            "skipped_for_skill_md": True,
+            "skill_name": skill_name,
+            "parse_error": parse_error,
+        }
 
     asset = _assets[asset_id]
     chapters = _chapters.get(asset_id, [])

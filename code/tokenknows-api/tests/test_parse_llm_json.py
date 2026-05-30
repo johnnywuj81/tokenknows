@@ -73,6 +73,14 @@ def test_garbage_raises():
         _parse_llm_json("this is not JSON at all")
 
 
-def test_partial_json_raises():
-    with pytest.raises(json.JSONDecodeError):
-        _parse_llm_json('{"a": ')
+def test_partial_json_salvaged_by_repair():
+    """F 改造后行为变更:
+    截断 JSON (LLM 中途断流) 走 json-repair 层尽力恢复, 比 crash 给上游更多信息.
+    上游 caller 应再用 pydantic / 业务校验拦不完整的结构.
+
+    旧行为: raises JSONDecodeError
+    新行为: returns {'a': ''} 之类 (json-repair 补齐缺的 value)
+    """
+    result = _parse_llm_json('{"a": ')
+    assert isinstance(result, dict)
+    assert "a" in result

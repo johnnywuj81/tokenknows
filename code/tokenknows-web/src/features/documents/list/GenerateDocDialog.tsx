@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
@@ -64,7 +65,7 @@ const TYPES: { value: AssetType; label: string; description: string }[] = [
   {
     value: 'agent_skill',
     label: 'Agent 专家技能',
-    description: 'v0.2 · 从已批准章节蒸馏可复用 skill (建议改用 /skills 页面)',
+    description: '蒸馏一份可执行的 SKILL.md (Anthropic 风格), 需要主题',
   },
   {
     value: 'knowledge_graph',
@@ -98,10 +99,18 @@ export function GenerateDocDialog({
   const [type, setType] = useState<AssetType>('weekly_report')
   const [timeWindow, setTimeWindow] = useState('this_week')
   const [model, setModel] = useState('auto')
+  const [topicHint, setTopicHint] = useState('')
   const generate = useGenerateAsset()
+
+  // A 改造 · agent_skill 必须有主题, 否则 LLM 会蒸出"30 天纪事"型废 skill.
+  const trimmedTopic = topicHint.trim()
+  const topicRequired = type === 'agent_skill'
+  const topicMissing = topicRequired && trimmedTopic.length === 0
+  const submitDisabled = generate.isPending || topicMissing
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (topicMissing) return
     // T106 · 找到对应 provider, 一并传给后端 (避免 anthropic+gpt-4o 错配)
     const selected = MODELS.find((m) => m.value === model)
     generate.mutate(
@@ -111,10 +120,13 @@ export function GenerateDocDialog({
         time_window: timeWindow,
         model_override: model === 'auto' ? undefined : model,
         provider_override: model === 'auto' ? undefined : selected?.provider,
+        topic_hint: trimmedTopic ? trimmedTopic : undefined,
       },
       {
         onSuccess: () => {
           onOpenChange(false)
+          // 关闭后清理本地 state, 下次再打开时是干净表单
+          setTopicHint('')
         },
       },
     )
@@ -158,6 +170,39 @@ export function GenerateDocDialog({
               ))}
             </RadioGroup>
           </fieldset>
+
+          {/* A 改造 · 主题提示: 所有类型都可填, agent_skill 必填.
+                 - agent_skill: 决定 SKILL.md 的范围 + 名字
+                 - 其它类型: 在 collect 阶段对 events 做关键词预过滤 */}
+          <div className="space-y-1.5">
+            <Label htmlFor="topic-hint" className="font-ui">
+              主题 / 关键词
+              {topicRequired ? (
+                <span className="ml-1 text-danger" aria-hidden>*</span>
+              ) : (
+                <span className="ml-1 text-text-muted text-caption">(可选)</span>
+              )}
+            </Label>
+            <Input
+              id="topic-hint"
+              value={topicHint}
+              onChange={(e) => setTopicHint(e.target.value)}
+              placeholder={
+                type === 'agent_skill'
+                  ? '例: PR review 风格 / docker 部署 / 故障复盘'
+                  : '可空 · 仅按时间窗范围生成'
+              }
+              maxLength={200}
+              className="font-ui text-body-sm"
+              aria-invalid={topicMissing}
+              aria-describedby="topic-hint-help"
+            />
+            <p id="topic-hint-help" className="text-caption text-text-muted">
+              {type === 'agent_skill'
+                ? '蒸馏出的 SKILL.md 将围绕该主题 (必填)'
+                : '提供主题后, 收集阶段会按关键词过滤 events'}
+            </p>
+          </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -221,12 +266,14 @@ export function GenerateDocDialog({
             >
               取消
             </Button>
-            <Button type="submit" className="font-ui" disabled={generate.isPending}>
+            <Button type="submit" className="font-ui" disabled={submitDisabled}>
               {generate.isPending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
                   提交中...
                 </>
+              ) : topicMissing ? (
+                '请填写主题'
               ) : (
                 '开始生成'
               )}
