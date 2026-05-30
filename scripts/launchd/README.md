@@ -104,3 +104,38 @@ plutil -lint ~/Library/LaunchAgents/com.tokenknows.claude-code.plist
 如果你用 `docker-compose up` 起后端, 它会绑 `host.docker.internal:8001` →
 **本机环境下**仍可走 `http://localhost:8001`,
 **Linux 环境**需要把 plist 中 `BACKEND_URL` 替换为 host IP。
+
+---
+
+# 应用服务 LaunchAgent (api + web)
+
+> 上面 4 个是「数据采集插件」(install.sh 管)。下面是「应用本体」两个服务,
+> **手写 plist, 不走 install.sh**,因为路径 / 端口是单机特定的。
+
+| Label | 作用 | 端口 | plist 来源 |
+|-------|------|------|-----------|
+| `com.tokenknows.api` | FastAPI 后端 (uvicorn) | 8002 | 手写 `~/Library/LaunchAgents/com.tokenknows.api.plist` |
+| `com.tokenknows.web` | Vite dev server | 5173 | 由 `web.sh` 自动生成 |
+
+## web.sh — 管 Vite LaunchAgent
+
+**为什么单独一个脚本**:launchd 无登录 shell,plist 里 node 必须是绝对路径;
+而 nvm 的 node 路径带版本号 (`.../v23.10.0/bin/node`),nvm 一升级旧目录被删,
+plist 就失效 (launchd 报 ENOENT,Vite 起不来)。`web.sh` 每次 install/reload
+都**自动探测当前 node** 重渲染 plist,把这个脆弱点自动化掉。
+
+```bash
+./scripts/launchd/web.sh install     # 首次安装 (探测 node + 渲染 + load)
+./scripts/launchd/web.sh reload      # nvm 升级 node 后跑这个 (重探测 + 重渲染 + 重载)
+./scripts/launchd/web.sh status      # launchctl 状态 + 端口 + 双栈 HTTP 健康检查
+./scripts/launchd/web.sh uninstall   # 卸载 (日志保留)
+```
+
+node 探测优先级:`NODE_BIN` env > `command -v node`(用户 nvm use 的版本) >
+nvm 目录里最新 mtime 的 node > Homebrew/系统 node。
+
+**关键约定**:web.sh 用 `--host 127.0.0.1` 显式绑 IPv4。Node 18+ 默认把
+`localhost` 解析为 IPv6 `[::1]`,Chrome 走 IPv4 path 会 `Connection refused` —
+这是「localhost:5173 时通时不通」的根因。`package.json` 的 `dev` 脚本也已带此 flag。
+
+env 覆盖:`TOKENKNOWS_WEB_DIR` / `TOKENKNOWS_WEB_PORT` / `NODE_BIN`。

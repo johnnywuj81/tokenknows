@@ -1,17 +1,23 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 /**
  * Vite dev server
- * - /api → 本地 FastAPI 后端 (tokenknows-api) on :8001
- *   (8000 被 ai-cnc 项目占用; 用 VITE_API_TARGET 覆盖)
+ * - /api → 本地 FastAPI 后端 (tokenknows-api) on :8002
+ *   (8000/8001 被 ai-cnc 项目占用; 在 .env.local 用 VITE_API_TARGET 覆盖)
  * - SSE 友好: configure proxyReq 关闭 nginx-style buffering
+ *
+ * 注意: vite.config 跑在 Node, `.env.local` 不会自动进 process.env, 必须
+ * 用 loadEnv 显式加载, 否则 VITE_API_TARGET 静默失效, 代理打到默认端口。
  */
-const API_TARGET = process.env.VITE_API_TARGET ?? 'http://localhost:8001'
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const API_TARGET =
+    env.VITE_API_TARGET ?? process.env.VITE_API_TARGET ?? 'http://localhost:8002'
 
-export default defineConfig({
+  return {
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
@@ -51,4 +57,5 @@ export default defineConfig({
       ],
     },
   },
+  }
 })
