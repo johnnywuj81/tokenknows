@@ -1,0 +1,20 @@
+{
+  "name": "tokenknows",
+  "interface": {
+    "displayName": "TokenKnows"
+  },
+  "plugins": [
+    {
+      "name": "tokenknows",
+      "source": {
+        "source": "local",
+        "path": "./plugins/tokenknows"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
