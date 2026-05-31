@@ -11,13 +11,18 @@ import path from 'path'
  *
  * 注意: vite.config 跑在 Node, `.env.local` 不会自动进 process.env, 必须
  * 用 loadEnv 显式加载, 否则 VITE_API_TARGET 静默失效, 代理打到默认端口。
+ *
+ * ⚠ 必须导出 object 形式 (非 callback): vitest.config.ts 用 mergeConfig 合并
+ * 本配置, 而 mergeConfig 无法合并 callback-form config (会抛
+ * "Cannot merge config in form of callback"). 所以 loadEnv 在模块顶层跑,
+ * mode 用 NODE_ENV (dev server / build 都正确; vitest 不关心 proxy target).
  */
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-  const API_TARGET =
-    env.VITE_API_TARGET ?? process.env.VITE_API_TARGET ?? 'http://localhost:8002'
+const _mode = process.env.NODE_ENV || 'development'
+const _env = loadEnv(_mode, process.cwd(), '')
+const API_TARGET =
+  _env.VITE_API_TARGET ?? process.env.VITE_API_TARGET ?? 'http://localhost:8002'
 
-  return {
+export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
@@ -57,5 +62,4 @@ export default defineConfig(({ mode }) => {
       ],
     },
   },
-  }
 })
