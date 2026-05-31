@@ -35,26 +35,30 @@ const queryClient = new QueryClient({
 })
 
 /**
- * MSW disable 开关 (T141 二阶段):
- * - 自愈失败后 watchdog 会持久化设这个 flag → 下次启动彻底不 register SW
- * - URL 加 ?msw=0 也能临时禁
- * - URL 加 ?msw=1 可强制重新启用 (clear flag)
- * - 走 backend 真路径 (/projects, /projects/:id, /stats, /todos, etc. 都已落 backend)
+ * MSW 开关 (v2.1 · mock 零容忍 · 改为 opt-in):
+ * - **默认关闭** mock — 一律走 backend 真路径. 没有任何 mock 数据混进 UI.
+ * - URL 加 ?msw=1 才显式启用 mock (持久化, 给特殊调试场景)
+ * - URL 加 ?msw=0 关闭并清掉持久标记
+ * - watchdog 自愈失败也走"清掉 enable 标记 → 回到默认 no-MSW"
+ *
+ * 历史: 之前是 opt-out (默认开 mock), 导致 demo/mock 数据混进真实工作台.
+ * 用户对 mock 零容忍, 翻成 opt-in.
  */
-const MSW_DISABLED_KEY = 'tk-msw-disabled'
+const MSW_ENABLED_KEY = 'tk-msw-enabled'
 
 function isMSWDisabled(): boolean {
-  if (typeof window === 'undefined') return false
+  if (typeof window === 'undefined') return true
   const url = new URLSearchParams(window.location.search)
-  if (url.get('msw') === '0') {
-    localStorage.setItem(MSW_DISABLED_KEY, '1')
-    return true
-  }
   if (url.get('msw') === '1') {
-    localStorage.removeItem(MSW_DISABLED_KEY)
+    localStorage.setItem(MSW_ENABLED_KEY, '1')
     return false
   }
-  return localStorage.getItem(MSW_DISABLED_KEY) === '1'
+  if (url.get('msw') === '0') {
+    localStorage.removeItem(MSW_ENABLED_KEY)
+    return true
+  }
+  // 默认禁用 (零容忍); 仅当之前显式 ?msw=1 opt-in 过才启用
+  return localStorage.getItem(MSW_ENABLED_KEY) !== '1'
 }
 
 async function enableMocking(): Promise<void> {
@@ -83,7 +87,7 @@ async function enableMocking(): Promise<void> {
  * 解法分层 (上层失败往下降):
  *   L1. 30s 探测 /api/v1/__msw_health__ 看 MSW 是否 alive.
  *   L2. 连续 2 次失败 → unregister SW + reload (一次性自愈).
- *   L3. 自愈后仍失败 → 设 tk-msw-disabled flag + reload, **从此 session 不用 MSW**,
+ *   L3. 自愈后仍失败 → 清掉 tk-msw-enabled flag + reload, **回到默认 no-MSW**,
  *       走 backend 真路径 (/projects /stats /todos 等已落 backend, mock-only 端点
  *       如 POST /projects 会 404, 用户能看到错误而不是 skeleton 卡死).
  *
@@ -143,7 +147,7 @@ function startMSWWatchdog(): void {
       '[MSW watchdog] SW unrecoverable; switching to no-MSW mode permanently for this session. ' +
         'Backend 真路径会接管. 加 ?msw=1 可强制重启 MSW.',
     )
-    localStorage.setItem(MSW_DISABLED_KEY, '1')
+    localStorage.removeItem(MSW_ENABLED_KEY)  // 回到默认 no-MSW
     try {
       const regs = await navigator.serviceWorker.getRegistrations()
       await Promise.all(regs.map((reg) => reg.unregister()))
