@@ -25,6 +25,7 @@ interface DatasourcesCardProps {
 const SOURCE_LABEL: Record<DatasourceType, string> = {
   claude_code: 'Claude Code',
   claude_cowork: 'Claude Cowork',
+  codex: 'Codex',
   github: 'GitHub',
   cursor: 'Cursor',
   vscode: 'VS Code',
@@ -35,6 +36,7 @@ const SOURCE_LABEL: Record<DatasourceType, string> = {
 const SOURCE_EMOJI: Record<DatasourceType, string> = {
   claude_code: '🤖',
   claude_cowork: '🤝',
+  codex: '🧩',
   github: '🐙',
   cursor: '✏️',
   vscode: '🔵',

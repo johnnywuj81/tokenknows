@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 EventSourceType = Literal[
     "claude_code",
     "claude_cowork",  # v2.0 T117 · Claude Cowork plugin 上报
+    "codex",          # v2.1 · OpenAI Codex CLI/Desktop rollout 采集
     "cursor",
     "vscode",
     "github",

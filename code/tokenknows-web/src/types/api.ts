@@ -160,6 +160,7 @@ export interface ProjectMember {
 export type DatasourceType =
   | 'claude_code'
   | 'claude_cowork'   // v2.0 T117 · Cowork plugin 主动上报 (MCP submit_session_events)
+  | 'codex'           // v2.1 · OpenAI Codex CLI/Desktop rollout 采集
   | 'cursor'
   | 'vscode'
   | 'github'

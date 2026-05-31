@@ -237,6 +237,7 @@ const SOURCE_LABEL: Record<string, string> = {
   github: 'GitHub',
   claude_code: 'Claude Code',
   claude_cowork: 'Claude Cowork',
+  codex: 'Codex',
   cursor: 'Cursor',
   vscode: 'VS Code',
   local_file: '本地文档',

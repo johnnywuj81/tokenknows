@@ -82,11 +82,12 @@ def test_datasource_health_each_item_has_required_fields(client: TestClient) -> 
 
 
 def test_datasource_health_unknown_project(client: TestClient) -> None:
-    """陌生 project_id 也不 500, 返回 6 个 inactive 源 (T136 加 claude_cowork)."""
+    """陌生 project_id 也不 500, 返回全部已知源的 inactive 行 (含 v2.1 codex)."""
+    from app.gateway.http_api.events import _KNOWN_SOURCE_TYPES
     r = client.get("/api/v1/projects/proj-nonexistent-xxx/datasources/health")
     assert r.status_code == 200
     body = r.json()
-    assert len(body["items"]) == 6
+    assert len(body["items"]) == len(_KNOWN_SOURCE_TYPES)
     assert all(it["health"] == "inactive" for it in body["items"])
     assert body["total_events_all"] == 0
 

@@ -27,6 +27,7 @@ const ICON_CLASS = 'size-4 mt-0.5 shrink-0 text-text-secondary'
 const SOURCE_LABEL: Record<EventSourceType, string> = {
   claude_code: 'Claude Code',
   claude_cowork: 'Claude Cowork',
+  codex: 'Codex',
   cursor: 'Cursor',
   vscode: 'VS Code',
   github: 'GitHub',

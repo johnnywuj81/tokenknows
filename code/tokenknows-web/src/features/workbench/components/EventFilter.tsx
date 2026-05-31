@@ -24,6 +24,7 @@ interface EventFilterProps {
 const OPTIONS: { value: EventSourceType; label: string }[] = [
   { value: 'claude_code', label: 'Claude Code' },
   { value: 'claude_cowork', label: 'Claude Cowork' },
+  { value: 'codex', label: 'Codex' },
   { value: 'cursor', label: 'Cursor' },
   { value: 'vscode', label: 'VS Code' },
   { value: 'github', label: 'GitHub' },

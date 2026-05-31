@@ -2184,7 +2184,7 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     for e in all_events:
         t = e.get("trust_score")
         if t is None:
-            t = {"github": 0.85, "claude_code": 0.75, "cursor": 0.70}.get(
+            t = {"github": 0.85, "claude_code": 0.75, "codex": 0.75, "cursor": 0.70}.get(
                 e.get("source_type", ""), 0.60
             )
         event_trust.append(float(t))
@@ -2443,7 +2443,7 @@ def _build_evidence_from_event(
     trust_score = event.get("trust_score")
     if trust_score is None:
         st = event.get("source_type", "")
-        trust_score = {"github": 0.85, "claude_code": 0.75, "cursor": 0.70}.get(st, 0.60)
+        trust_score = {"github": 0.85, "claude_code": 0.75, "codex": 0.75, "cursor": 0.70}.get(st, 0.60)
     # citation_strength: 用真 cosine 优先 (0-1), 没有则按 trust_score × 噪声
     if cosine_score is not None:
         citation_strength = round(max(0.0, min(1.0, cosine_score)), 3)

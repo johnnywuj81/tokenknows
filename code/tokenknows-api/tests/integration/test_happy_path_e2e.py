@@ -301,8 +301,9 @@ async def test_llm_egress_preview_endpoint(app) -> None:
 
 @pytest.mark.asyncio
 async def test_datasources_health_endpoint(app) -> None:
-    """GET /projects/:id/datasources/health 返回 5 行."""
+    """GET /projects/:id/datasources/health 返回全部已知 source_type 行."""
     from httpx import ASGITransport, AsyncClient
+    from app.gateway.http_api.events import _KNOWN_SOURCE_TYPES
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -310,5 +311,5 @@ async def test_datasources_health_endpoint(app) -> None:
         assert resp.status_code == 200
         body = resp.json()
         assert "items" in body
-        # 5 个已知 source_type
-        assert len(body["items"]) == 5
+        # 每个已知 source_type 一行 (含 codex; 跟 _KNOWN_SOURCE_TYPES 同步, 避免硬编码数字漂移)
+        assert len(body["items"]) == len(_KNOWN_SOURCE_TYPES)

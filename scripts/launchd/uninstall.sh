@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 卸载 TokenKnows 4 个插件 LaunchAgent.
+# 卸载 TokenKnows 5 个插件 LaunchAgent.
 # 日志保留在 ~/Library/Logs/tokenknows/ 供事后排查.
 
 set -euo pipefail
@@ -8,7 +8,7 @@ LAUNCH_DIR="$HOME/Library/LaunchAgents"
 
 echo "─── TokenKnows LaunchAgent 卸载 ───"
 
-for label in claude-code github cursor local-docs; do
+for label in claude-code github cursor local-docs codex; do
     plist="$LAUNCH_DIR/com.tokenknows.$label.plist"
     if [ -f "$plist" ]; then
         launchctl unload "$plist" 2>/dev/null || true

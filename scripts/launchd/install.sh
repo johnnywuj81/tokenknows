@@ -81,7 +81,8 @@ fi
 
 # 检查脚本存在
 for f in plugins/claude-code/sync.py plugins/github/sync.py \
-         plugins/cursor/sync.py plugins/local-docs/sync.py; do
+         plugins/cursor/sync.py plugins/local-docs/sync.py \
+         plugins/codex/sync.py; do
     if [ ! -f "$REPO_ROOT/$f" ]; then
         echo "✗ 缺少: $REPO_ROOT/$f" >&2
         exit 1
@@ -100,7 +101,7 @@ echo ""
 mkdir -p "$LOG_DIR"
 mkdir -p "$LAUNCH_DIR"
 
-for label in claude-code github cursor local-docs; do
+for label in claude-code github cursor local-docs codex; do
     src="$TEMPLATE_DIR/com.tokenknows.$label.plist"
     dst="$LAUNCH_DIR/com.tokenknows.$label.plist"
     if [ ! -f "$src" ]; then
