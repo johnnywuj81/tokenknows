@@ -1,6 +1,8 @@
 # TokenKnows · launchd 单元
 
-把 4 个 Python 插件 (claude-code / github / cursor / local-docs) 装成 macOS LaunchAgent,
+> **macOS only** — Linux 用户请直接 `python3 plugins/<x>/sync.py --watch` 手动跑采集器。
+
+把 5 个 Python 插件 (claude-code / codex / github / cursor / local-docs) 装成 macOS LaunchAgent,
 后台跑 + 崩溃自动重启 + 系统重启自动拉起。
 
 ## 快速上手

@@ -1,73 +1,42 @@
-# React + TypeScript + Vite
+# tokenknows-web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+TokenKnows 前端 —— React 19 SPA。完整产品说明见 [仓库根 README](../../README.md)。
 
-Currently, two official plugins are available:
+## 技术栈
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+React 19 · TypeScript · Vite 8 · Tailwind CSS v4 · shadcn/ui · TanStack Query(server state)· Zustand(client state)· React Router v7 · TipTap v3(富文本/证据角标)· @xyflow/react(知识图谱)· MSW(可选 mock)· Vitest + Playwright
 
-## React Compiler
+## 命令
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev            # Vite dev server · http://127.0.0.1:5173
+npm run build          # tsc -b + vite build
+npm run lint           # ESLint (CI 严格执行, 0 error)
+npx tsc --noEmit       # 类型检查
+npm run test           # Vitest 单测
+npm run test:coverage  # 带覆盖率
+npm run test:visual    # Playwright 视觉回归
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 配置
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp .env.local.example .env.local
+# VITE_API_TARGET=http://localhost:8001   ← /api 代理目标 (后端地址)
 ```
+
+`vite.config.ts` 用 `loadEnv` 读 `.env.local`;不配置时默认代理到 `http://localhost:8001`。
+
+## Mock(MSW)· 默认关闭
+
+前端**默认直连真后端**。只有显式 opt-in 才启用 MSW mock:
+
+- URL 加 `?msw=1` → 启用并持久(localStorage `tk-msw-enabled`)
+- URL 加 `?msw=0` → 关闭并清掉标记
+
+mock handler 在 `src/mocks/`,仅覆盖部分端点(未覆盖的 bypass 到真后端)。
+
+## 目录约定
+
+每个业务屏一个 feature 目录(`src/features/<屏>/`,含 components/hooks/types);共享 UI 在 `src/components/`(shadcn 原件在 `ui/`);服务端数据一律 TanStack Query,禁止塞 Zustand。详见 [CLAUDE.md](CLAUDE.md)。

@@ -5,8 +5,8 @@ import path from 'path'
 
 /**
  * Vite dev server
- * - /api → 本地 FastAPI 后端 (tokenknows-api) on :8002
- *   (8000/8001 被 ai-cnc 项目占用; 在 .env.local 用 VITE_API_TARGET 覆盖)
+ * - /api → 本地 FastAPI 后端 (tokenknows-api), 默认 :8001
+ *   (端口被占时在 .env.local 用 VITE_API_TARGET 覆盖)
  * - SSE 友好: configure proxyReq 关闭 nginx-style buffering
  *
  * 注意: vite.config 跑在 Node, `.env.local` 不会自动进 process.env, 必须
@@ -20,7 +20,7 @@ import path from 'path'
 const _mode = process.env.NODE_ENV || 'development'
 const _env = loadEnv(_mode, process.cwd(), '')
 const API_TARGET =
-  _env.VITE_API_TARGET ?? process.env.VITE_API_TARGET ?? 'http://localhost:8002'
+  _env.VITE_API_TARGET ?? process.env.VITE_API_TARGET ?? 'http://localhost:8001'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
