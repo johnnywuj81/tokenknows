@@ -88,7 +88,10 @@ describe('LoginPage', () => {
   it('already authenticated: redirects (returns null in test)', () => {
     useAuthStore.setState({
       isAuthenticated: true,
-      user: { id: 'u1', email: 'a@b.com', display_name: 'A', role: 'editor' },
+      user: {
+        id: 'u1', email: 'a@b.com', display_name: 'A',
+        is_instance_admin: false, created_at: '', updated_at: '',
+      },
       accessToken: 'tk',
     })
     const { container } = render(withWrappers(<LoginPage />))

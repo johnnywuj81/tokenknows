@@ -121,6 +121,9 @@ function _evidences(): Evidence[] {
       stale: false,
       event_preview: {
         event_id: 'evt-1',
+        title: null,
+        author_name: null,
+        author_email: null,
         source_type: 'github_pr',
         source_ref: 'github.com/x/repo/pull/127',
         occurred_at: '',
@@ -140,6 +143,9 @@ function _evidences(): Evidence[] {
       stale: false,
       event_preview: {
         event_id: 'evt-2',
+        title: null,
+        author_name: null,
+        author_email: null,
         source_type: 'im_message',
         source_ref: '',
         occurred_at: '',

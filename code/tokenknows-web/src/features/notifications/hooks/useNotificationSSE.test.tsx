@@ -133,7 +133,7 @@ describe('useNotificationSSE', () => {
         timestamp: '2026-05-23',
       })
     })
-    const calls = invalidate.mock.calls.map(([arg]) => arg.queryKey)
+    const calls = invalidate.mock.calls.map(([arg]) => arg!.queryKey)
     expect(calls).toContainEqual(['notifications'])
     expect(calls).toContainEqual(['skills', 'detail', 'skill-1'])
     expect(calls).toContainEqual(['skills'])
@@ -211,7 +211,7 @@ describe('useNotificationSSE', () => {
     expect(onEvent).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'asset_chapter_rejected', asset_id: 'asset-xyz' }),
     )
-    const calls = invalidate.mock.calls.map(([arg]) => arg.queryKey)
+    const calls = invalidate.mock.calls.map(([arg]) => arg!.queryKey)
     expect(calls).toContainEqual(['projects'])
     expect(calls).toContainEqual(['assets', 'asset-xyz'])
     expect(calls).toContainEqual(['assets', 'asset-xyz', 'chapters'])
@@ -233,9 +233,9 @@ describe('useNotificationSSE', () => {
         timestamp: '',
       })
     })
-    const calls = invalidate.mock.calls.map(([arg]) => arg.queryKey)
+    const calls = invalidate.mock.calls.map(([arg]) => arg!.queryKey)
     expect(calls).toContainEqual(['projects'])
-    expect(calls.some((k) => k[0] === 'assets')).toBe(false)
+    expect(calls.some((k) => k?.[0] === 'assets')).toBe(false)
   })
 
   it('userId 变化 → 新连接 (abort 旧 + 启新)', async () => {

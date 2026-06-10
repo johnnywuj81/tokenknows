@@ -25,6 +25,7 @@ const mkChapter = (id: string, order: number): Chapter => ({
   id, asset_id: 'a1', asset_version: 1, order_index: order,
   title: `章节 ${order + 1}`, content: '内容', layout: {},
   generated_by: null, regeneration_history: [], approval_state: 'pending',
+  redacted_spans: [],
   created_at: '', updated_at: '',
 })
 

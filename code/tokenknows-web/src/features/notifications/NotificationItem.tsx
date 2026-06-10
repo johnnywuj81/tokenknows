@@ -15,6 +15,10 @@ const TYPE_EMOJI: Record<WebNotification['type'], string> = {
   consent_signed: '✅',
   consent_rejected: '❌',
   consent_expired: '⏰',
+  // v0.6.0 review
+  skill_review_request: '📝',
+  skill_review_approved: '✅',
+  skill_review_rejected: '❌',
 }
 
 function timeAgo(iso: string): string {

@@ -68,9 +68,9 @@ describe('wizardReducer', () => {
     })
 
     it('removes when present', () => {
-      const s: WizardState = { ...initialState, selectedTypes: ['github', 'slack'] }
+      const s: WizardState = { ...initialState, selectedTypes: ['github', 'cursor'] }
       const next = wizardReducer(s, { type: 'TOGGLE_DATASOURCE', ds: 'github' })
-      expect(next.selectedTypes).toEqual(['slack'])
+      expect(next.selectedTypes).toEqual(['cursor'])
     })
 
     it('two toggles → empty', () => {

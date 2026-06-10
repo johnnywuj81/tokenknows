@@ -31,7 +31,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit --progress=false
 
       - name: TypeScript check
-        run: npx tsc --noEmit
+        run: npx tsc -b --force   # 根 tsconfig 是 solution-style, --noEmit 是空检查; -b --force 绕过 tsbuildinfo 缓存
 
       - name: ESLint (strict)
         run: npm run lint

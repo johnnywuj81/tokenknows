@@ -6,8 +6,9 @@
  * insertContent 不一定触发 InputRule, 改为模拟键入: 写好"[5"再 type "]".
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
+import type { ChainedCommands, CanCommands } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { EvidenceBadge } from './EvidenceBadge'
 
@@ -100,11 +101,10 @@ describe('EvidenceBadge InputRule', () => {
       state,
       range: { from: 7, to: 10 },
       match: ['[3]', '3'],
-      chain,
+      // 测试 mock 只实现 handler 用到的子集, 断言为 Tiptap 命令类型
+      chain: chain as unknown as () => ChainedCommands,
       commands: editor.commands,
-      can: () => ({}),
-      tr: state.tr,
-      view: editor.view,
+      can: () => ({} as unknown as CanCommands),
     })
     expect(insertContentSpy).toHaveBeenCalledWith({
       type: 'evidenceBadge',
@@ -133,11 +133,10 @@ describe('EvidenceBadge InputRule', () => {
       state,
       range: { from: 0, to: 3 },
       match: ['[0]', '0'],
-      chain,
+      // 同上: mock 子集断言为 Tiptap 命令类型
+      chain: chain as unknown as () => ChainedCommands,
       commands: editor.commands,
-      can: () => ({}),
-      tr: state.tr,
-      view: editor.view,
+      can: () => ({} as unknown as CanCommands),
     })
     expect(insertContentSpy).not.toHaveBeenCalled()
     editor.destroy()

@@ -2,6 +2,7 @@
  * Auth components · AuthCard + PasswordInput.
  */
 
+import { createRef } from 'react'
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { AuthCard } from './AuthCard'
@@ -67,15 +68,11 @@ describe('PasswordInput', () => {
   })
 
   it('forwards ref', () => {
-    let inputRef: HTMLInputElement | null = null
-    render(
-      <PasswordInput
-        ref={(el) => { inputRef = el }}
-        placeholder="pw"
-      />,
-    )
-    expect(inputRef).not.toBeNull()
-    expect(inputRef?.tagName).toBe('INPUT')
+    // createRef 提供正确的 HTMLInputElement 泛型, 避免闭包赋值被 TS 窄化成 never
+    const inputRef = createRef<HTMLInputElement>()
+    render(<PasswordInput ref={inputRef} placeholder="pw" />)
+    expect(inputRef.current).not.toBeNull()
+    expect(inputRef.current?.tagName).toBe('INPUT')
   })
 
   it('custom labels via props', () => {

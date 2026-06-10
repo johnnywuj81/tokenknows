@@ -25,6 +25,7 @@ const mkChapter = (): Chapter => ({
   title: '亮点', content: '段落 [1] 提到 PR.',
   layout: {}, generated_by: null,
   regeneration_history: [], approval_state: 'pending',
+  redacted_spans: [],
   created_at: '', updated_at: '',
 })
 

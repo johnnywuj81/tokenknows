@@ -21,6 +21,7 @@ const mkChapter = (overrides: Partial<Chapter> = {}): Chapter => ({
   generated_by: null,
   regeneration_history: [],
   approval_state: 'pending',
+  redacted_spans: [],
   created_at: '',
   updated_at: '',
   ...overrides,

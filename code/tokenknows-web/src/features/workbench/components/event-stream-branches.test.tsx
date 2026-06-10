@@ -42,7 +42,8 @@ describe('EventStream remaining branches', () => {
   })
 
   it('refetch shows RefreshCw indicator (aria-label="刷新中")', async () => {
-    let resolveSecond: ((v: unknown) => void) | null = null
+    // 初始化为 no-op 避免 TS 把闭包内赋值的变量窄化成 null (TS2349)
+    let resolveSecond: (v: unknown) => void = () => {}
     let callCount = 0
     vi.spyOn(api, 'get').mockImplementation(() => {
       callCount += 1
@@ -57,14 +58,15 @@ describe('EventStream remaining branches', () => {
     await waitFor(() => expect(screen.getByText('事件')).toBeInTheDocument())
     fireEvent.click(screen.getByLabelText('立即刷新'))
     await waitFor(() => expect(screen.getByLabelText('刷新中')).toBeInTheDocument())
-    resolveSecond?.({
+    resolveSecond({
       data: { data: [mkEvent()], meta: { total: 1, cursor: null, has_more: false } },
     })
   })
 
   it('isFetchingNextPage: 加载中 spinner inside button', async () => {
     let callCount = 0
-    let resolveSecond: ((v: unknown) => void) | null = null
+    // 初始化为 no-op 避免 TS 把闭包内赋值的变量窄化成 null (TS2349)
+    let resolveSecond: (v: unknown) => void = () => {}
     vi.spyOn(api, 'get').mockImplementation(() => {
       callCount += 1
       if (callCount === 1) {
@@ -78,7 +80,7 @@ describe('EventStream remaining branches', () => {
     await waitFor(() => expect(screen.getByText('加载更早')).toBeInTheDocument())
     fireEvent.click(screen.getByText('加载更早'))
     await waitFor(() => expect(screen.getByText('加载中')).toBeInTheDocument())
-    resolveSecond?.({
+    resolveSecond({
       data: { data: [], meta: { total: 99, cursor: null, has_more: false } },
     })
   })

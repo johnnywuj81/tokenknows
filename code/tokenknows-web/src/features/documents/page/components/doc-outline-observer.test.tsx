@@ -43,6 +43,7 @@ const mkChapter = (id: string, title: string, order_index = 0): Chapter => ({
   id, asset_id: 'a1', asset_version: 1, order_index,
   title, content: '', layout: {}, generated_by: null,
   regeneration_history: [], approval_state: 'pending',
+  redacted_spans: [],
   created_at: '', updated_at: '',
 })
 

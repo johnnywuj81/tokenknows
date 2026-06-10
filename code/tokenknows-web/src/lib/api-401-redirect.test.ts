@@ -19,7 +19,10 @@ describe('api 401 redirect branch', () => {
     mock = new MockAdapter(api)
     useAuthStore.setState({
       accessToken: 'tk',
-      user: { id: 'u1', email: 'a@b.com', display_name: 'A', role: 'editor' },
+      user: {
+        id: 'u1', email: 'a@b.com', display_name: 'A',
+        is_instance_admin: false, created_at: '', updated_at: '',
+      },
       isAuthenticated: true,
     })
     originalLocation = window.location

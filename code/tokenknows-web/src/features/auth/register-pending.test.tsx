@@ -29,7 +29,8 @@ describe('RegisterPage pending state', () => {
   })
 
   it('shows 注册中... while mutation is pending', async () => {
-    let resolveFn: ((v: unknown) => void) | null = null
+    // 初始化为 no-op 避免 TS 把闭包内赋值的变量窄化成 null (TS2349)
+    let resolveFn: (v: unknown) => void = () => {}
     vi.spyOn(api, 'post').mockReturnValueOnce(
       new Promise((res) => { resolveFn = res }),
     )
@@ -47,6 +48,6 @@ describe('RegisterPage pending state', () => {
     const submitBtn = screen.getAllByText('注册').find((b) => b.tagName === 'BUTTON')
     fireEvent.click(submitBtn!)
     await waitFor(() => expect(screen.getByText(/注册中/)).toBeInTheDocument())
-    resolveFn?.({ data: { id: 'u1', email: 'new@example.com' } })
+    resolveFn({ data: { id: 'u1', email: 'new@example.com' } })
   })
 })

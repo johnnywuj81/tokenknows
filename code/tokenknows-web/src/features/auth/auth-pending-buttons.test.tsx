@@ -30,13 +30,14 @@ describe('ForgotPasswordPage pending', () => {
   })
 
   it('shows 发送中... while pending', async () => {
-    let resolveFn: ((v: unknown) => void) | null = null
+    // 初始化为 no-op 避免 TS 把闭包内赋值的变量窄化成 null (TS2349)
+    let resolveFn: (v: unknown) => void = () => {}
     vi.spyOn(api, 'post').mockReturnValue(new Promise((res) => { resolveFn = res }))
     render(withWrappers(<ForgotPasswordPage />))
     fireEvent.change(screen.getByLabelText(/邮箱/), { target: { value: 'a@b.com' } })
     fireEvent.click(screen.getByText('发送重置链接'))
     await waitFor(() => expect(screen.getByText(/发送中/)).toBeInTheDocument())
-    resolveFn?.({ data: { ok: true } })
+    resolveFn({ data: { ok: true } })
   })
 })
 
@@ -47,7 +48,8 @@ describe('ResetPasswordPage pending + error code', () => {
   })
 
   it('shows 提交中... while pending', async () => {
-    let resolveFn: ((v: unknown) => void) | null = null
+    // 初始化为 no-op 避免 TS 把闭包内赋值的变量窄化成 null (TS2349)
+    let resolveFn: (v: unknown) => void = () => {}
     vi.spyOn(api, 'post').mockReturnValue(new Promise((res) => { resolveFn = res }))
     render(withWrappers(<ResetPasswordPage />, '/reset-password?token=abc'))
     const pwInputs = document.querySelectorAll('input[type="password"]')
@@ -55,7 +57,7 @@ describe('ResetPasswordPage pending + error code', () => {
     fireEvent.change(pwInputs[1], { target: { value: 'StrongP@ss1' } })
     fireEvent.click(screen.getByText('重置密码'))
     await waitFor(() => expect(screen.getByText(/提交中/)).toBeInTheDocument())
-    resolveFn?.({ data: { ok: true } })
+    resolveFn({ data: { ok: true } })
   })
 
   it('shows error code badge when ApiError', async () => {

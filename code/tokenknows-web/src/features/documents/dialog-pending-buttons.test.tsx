@@ -35,6 +35,7 @@ const mkChapter = (): Chapter => ({
   id: 'c1', asset_id: 'a1', asset_version: 1, order_index: 0,
   title: 'T', content: '', layout: {}, generated_by: null,
   regeneration_history: [], approval_state: 'pending',
+  redacted_spans: [],
   created_at: '', updated_at: '',
 })
 
@@ -56,7 +57,8 @@ describe('RegenerateDialog pending', () => {
 
   it('shows 重生成中… while POST pending', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({ data: [mkChapter()] })
-    let resolvePost: ((v: unknown) => void) | null = null
+    // 不能初始化为 null: 闭包内赋值不参与 narrowing, 调用处会推成 never (TS2349)
+    let resolvePost: (v: unknown) => void = () => {}
     vi.spyOn(api, 'post').mockReturnValueOnce(
       new Promise((res) => { resolvePost = res }),
     )
@@ -67,7 +69,7 @@ describe('RegenerateDialog pending', () => {
     })
     fireEvent.click(screen.getByText('提交重生成'))
     await waitFor(() => expect(screen.getByText(/重生成中/)).toBeInTheDocument())
-    resolvePost?.({ data: {} })
+    resolvePost({ data: {} })
   })
 })
 
@@ -80,7 +82,8 @@ describe('PublishDialog pending', () => {
 
   it('shows 发布中… while POST pending', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({ data: mkAsset() })
-    let resolvePost: ((v: unknown) => void) | null = null
+    // 同上: 避免 null 初始化导致调用处 narrow 成 never
+    let resolvePost: (v: unknown) => void = () => {}
     vi.spyOn(api, 'post').mockReturnValueOnce(
       new Promise((res) => { resolvePost = res }),
     )
@@ -89,7 +92,7 @@ describe('PublishDialog pending', () => {
     fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.click(screen.getByText('确认发布'))
     await waitFor(() => expect(screen.getByText(/发布中/)).toBeInTheDocument())
-    resolvePost?.({
+    resolvePost({
       data: [{ id: 'rec1', destination: 'internal', url: '/r/x', published_at: '' }],
     })
   })

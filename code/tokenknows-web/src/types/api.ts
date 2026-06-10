@@ -92,7 +92,8 @@ export interface RegisterRequest {
 // 项目
 // ────────────────────────────────────────────────────────────────────
 
-export type ProjectRole = 'owner' | 'editor' | 'reviewer' | 'viewer'
+// v0.9 与后端对齐后的项目内角色 (老 'editor'/'viewer' 已废弃)
+export type ProjectRole = ProjectMemberRole
 
 export interface BrandTheme {
   primary?: string
@@ -145,13 +146,7 @@ export interface DatasourceHealthResponse {
   total_events_all: number
 }
 
-export interface ProjectMember {
-  project_id: string
-  user_id: string
-  role: ProjectRole
-  added_at: string
-  user?: Pick<User, 'id' | 'email' | 'display_name'>
-}
+// (v0.9 起 ProjectMember 的权威声明在下方 T65 段, role 用 ProjectMemberRole)
 
 // ────────────────────────────────────────────────────────────────────
 // 数据源
@@ -204,7 +199,7 @@ export interface Event {
   event_type: EventType
   occurred_at: string
   ingested_at: string
-  author: { name: string; email?: string; external_id?: string } | null
+  author: { name: string; email?: string | null; external_id?: string | null } | null
   title: string | null
   content: string
   payload: Record<string, unknown>
@@ -398,6 +393,9 @@ export interface Chapter {
   applied_skills?: AppliedSkill[]   // v0.2: 该章节生成时注入的 skill 列表
   approval_state: 'pending' | 'approved' | 'rejected'
   redacted_spans: RedactedSpan[]
+  // API 总是返回; UI 暂无读者且历史测试夹具未含, 故 optional
+  created_at?: string
+  updated_at?: string
 }
 
 export interface EvidencePreview {

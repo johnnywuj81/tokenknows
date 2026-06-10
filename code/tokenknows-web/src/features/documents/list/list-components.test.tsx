@@ -77,7 +77,7 @@ const mockAsset: Asset = {
 describe('DocumentCard', () => {
   it('renders title + status + metrics with similarity column', () => {
     render(withRouterQuery(
-      <DocumentCard asset={mockAsset} projectId="p1" />,
+      <DocumentCard asset={mockAsset} projectId="p1" onClone={() => {}} onDelete={() => {}} />,
     ))
     expect(screen.getByText('周报 · 2026-W21')).toBeInTheDocument()
     expect(screen.getByText('草稿')).toBeInTheDocument()
@@ -90,7 +90,7 @@ describe('DocumentCard', () => {
 
   it('similarity 100% rendered as red text', () => {
     const { container } = render(withRouterQuery(
-      <DocumentCard asset={mockAsset} projectId="p1" />,
+      <DocumentCard asset={mockAsset} projectId="p1" onClone={() => {}} onDelete={() => {}} />,
     ))
     // 找含 100% 的 strong (similarity 字段)
     const strongElts = container.querySelectorAll('strong')
@@ -101,7 +101,7 @@ describe('DocumentCard', () => {
   it('generating status shows progress UI', () => {
     const gen = { ...mockAsset, status: 'generating' as const, metrics: null }
     render(withRouterQuery(
-      <DocumentCard asset={gen} projectId="p1" />,
+      <DocumentCard asset={gen} projectId="p1" onClone={() => {}} onDelete={() => {}} />,
     ))
     // 生成中文案可能出现多处 (badge + body), 任一即可
     const all = screen.getAllByText(/生成中/)
@@ -111,7 +111,7 @@ describe('DocumentCard', () => {
   it('approved status badge color', () => {
     const approved = { ...mockAsset, status: 'approved' as const }
     render(withRouterQuery(
-      <DocumentCard asset={approved} projectId="p1" />,
+      <DocumentCard asset={approved} projectId="p1" onClone={() => {}} onDelete={() => {}} />,
     ))
     expect(screen.getByText('已通过')).toBeInTheDocument()
   })
@@ -119,7 +119,7 @@ describe('DocumentCard', () => {
   it('published status', () => {
     const pub = { ...mockAsset, status: 'published' as const }
     render(withRouterQuery(
-      <DocumentCard asset={pub} projectId="p1" />,
+      <DocumentCard asset={pub} projectId="p1" onClone={() => {}} onDelete={() => {}} />,
     ))
     expect(screen.getByText('已发布')).toBeInTheDocument()
   })
