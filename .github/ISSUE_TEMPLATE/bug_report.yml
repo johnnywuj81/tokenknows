@@ -1,0 +1,49 @@
+name: Bug report
+description: Something broken? 报个 bug
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component / 组件
+      options:
+        - api (FastAPI backend)
+        - web (React frontend)
+        - collector plugin (claude-code / codex / cursor / github / local-docs)
+        - Claude Code plugin
+        - Codex plugin
+        - VS Code extension
+        - docs / other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / 现象
+      description: What did you see? Paste errors/logs. 看到了什么, 贴报错/日志
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 期望行为
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment / 环境
+      description: OS, Python, Node, LLM provider (e.g. Ollama model)
+      placeholder: |
+        OS: macOS 15 / Ubuntu 24.04
+        Python: 3.11.x · Node: 20.x
+        LLM: ollama minimax-m2:cloud
+    validations:
+      required: true

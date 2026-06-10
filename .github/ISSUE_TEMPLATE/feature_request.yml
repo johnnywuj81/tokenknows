@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest an idea · 提个想法
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 想解决什么
+      description: What's missing or painful today? 现在缺什么/哪里难受
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal / 设想的做法
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered / 考虑过的替代方案
