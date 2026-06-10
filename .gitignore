@@ -84,3 +84,6 @@ code/tokenknows-web/data/
 
 # One-off bootstrap log
 bootstrap.log
+
+# 整个 data 目录兜底 (含 *.bak 等任意后缀的 DB 备份)
+code/tokenknows-api/data/
