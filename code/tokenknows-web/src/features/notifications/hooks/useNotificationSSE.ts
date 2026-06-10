@@ -75,8 +75,10 @@ export function useNotificationSSE({
   useEffect(() => {
     if (!enabled || !userId) return
 
+    // 捕获已窄化的 userId (string); 嵌套闭包内 TS 不会保留窄化
+    const uid = userId
     const controller = new AbortController()
-    const url = `/api/v1/me/notifications/stream?user_id=${encodeURIComponent(userId)}`
+    const url = `/api/v1/me/notifications/stream?user_id=${encodeURIComponent(uid)}`
 
     function dispatch(ev: EventSourceMessage): void {
       const eventName = ev.event as NotificationSSEEvent['event']
@@ -88,7 +90,7 @@ export function useNotificationSSE({
       } catch {
         parsed = {
           event: eventName,
-          user_id: userId,
+          user_id: uid,
           skill_id: null,
           asset_id: null,
           notification_id: null,

@@ -21,6 +21,7 @@ const mkChapter = (overrides: Partial<Chapter> = {}): Chapter => ({
   generated_by: null,
   regeneration_history: [],
   approval_state: 'pending',
+  redacted_spans: [],
   created_at: '',
   updated_at: '',
   ...overrides,
@@ -48,7 +49,10 @@ describe('ChapterBlock', () => {
 
   it('renders generated_by provider/model when present', () => {
     render(withQuery(<ChapterBlock chapter={mkChapter({
-      generated_by: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+      generated_by: {
+        provider: 'anthropic', model: 'claude-sonnet-4-6',
+        latency_ms: 0, prompt_tokens: 0, completion_tokens: 0,
+      },
     })} />))
     expect(screen.getByText(/anthropic · claude/)).toBeInTheDocument()
   })

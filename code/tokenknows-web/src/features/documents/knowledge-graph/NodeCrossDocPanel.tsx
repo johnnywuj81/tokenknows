@@ -56,7 +56,7 @@ export function NodeCrossDocPanel({
   const globalEntity = globalQuery.data ?? null
 
   function handleSplit() {
-    if (!entity || !nodeId) return
+    if (!entity || !nodeId || !node) return
     splitMutation.mutate({
       entityId: entity.id,
       assetId,

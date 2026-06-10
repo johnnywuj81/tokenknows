@@ -24,7 +24,6 @@ vi.mock('./GraphCanvas', () => ({
 beforeEach(() => {
   // ResizeObserver polyfill 兜底 (即使被 mock 也以防 React Flow 间接引用)
   if (!globalThis.ResizeObserver) {
-    // @ts-expect-error - jsdom 缺
     globalThis.ResizeObserver = class {
       observe() {}
       unobserve() {}

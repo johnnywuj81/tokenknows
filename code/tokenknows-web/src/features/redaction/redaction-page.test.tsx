@@ -45,11 +45,10 @@ const mkItem = (overrides: Partial<RedactionItem> = {}): RedactionItem => ({
 })
 
 const mkJob = (items: RedactionItem[] = []): RedactionScanJob => ({
-  id: 'job1',
+  job_id: 'job1',
   asset_id: 'a1',
-  asset_version: 1,
-  scan_at: new Date().toISOString(),
-  status: 'completed',
+  status: 'done',
+  progress: 1,
   items,
 })
 

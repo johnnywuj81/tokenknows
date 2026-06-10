@@ -16,6 +16,8 @@ import { isApiError } from '@/lib/api'
 
 interface ErrorStateProps {
   title?: string
+  /** 无 error 对象时的补充说明文案 (有 error 时优先显示 error message) */
+  description?: string
   error?: unknown
   onRetry?: () => void
   variant?: 'inline' | 'fullscreen'
@@ -35,13 +37,14 @@ function getErrorMessage(error: unknown): string {
 
 export function ErrorState({
   title = '加载失败',
+  description,
   error,
   onRetry,
   variant = 'inline',
   className,
   action,
 }: ErrorStateProps) {
-  const message = error ? getErrorMessage(error) : undefined
+  const message = error ? getErrorMessage(error) : description
   const isFullscreen = variant === 'fullscreen'
 
   return (

@@ -29,6 +29,9 @@ const TITLE_TEMPLATES: Record<AssetType, (window: string) => string> = {
   tech_design: (w) => `技术方案 · ${w}`,
   adr: () => 'ADR · 新决策记录(待补主题)',
   incident: () => '问题复盘 · 新事件',
+  book: (w) => `技术手册 · ${w}`,
+  agent_skill: (w) => `Skill 草稿 · ${w}`,
+  knowledge_graph: (w) => `知识图谱 · ${w}`,
 }
 
 export const assetHandlers = [

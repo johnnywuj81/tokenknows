@@ -23,6 +23,7 @@ const mkChapter = (id: string, order: number, state: Chapter['approval_state'] =
   id, asset_id: 'a1', asset_version: 1, order_index: order,
   title: `章节 ${order + 1}`, content: 'x', layout: {},
   generated_by: null, regeneration_history: [], approval_state: state,
+  redacted_spans: [],
   created_at: '', updated_at: '',
 })
 

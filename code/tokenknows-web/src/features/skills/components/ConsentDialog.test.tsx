@@ -46,6 +46,10 @@ function _baseSkill(): Skill {
     consent_signed_by: [],
     consent_rejected_by: null,
     consent_expires_at: now,
+    review_state: 'not_submitted',
+    review_history: [],
+    last_reviewer_id: null,
+    last_reviewed_at: null,
     created_at: now,
     updated_at: now,
   }

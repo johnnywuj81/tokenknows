@@ -61,14 +61,13 @@ describe('MembersPanel · T130.4 ImBindingCell', () => {
   })
   afterEach(() => {
     mock.reset()
-    useAuthStore.setState({ user: null, accessToken: null, refreshToken: null })
+    useAuthStore.setState({ user: null, accessToken: null })
   })
 
   it('自己: 未绑定 → 显示 "未绑定" + "绑定" 按钮', async () => {
     useAuthStore.setState({
       user: { id: 'alice@example.com', email: 'alice@example.com', display_name: 'Alice' } as never,
       accessToken: 't',
-      refreshToken: null,
     })
     _stubMembers([
       _mkMember({ user_id: 'ou-owner', role: 'owner' }),
@@ -89,7 +88,6 @@ describe('MembersPanel · T130.4 ImBindingCell', () => {
     useAuthStore.setState({
       user: { id: 'alice@example.com', email: 'a@x.com', display_name: 'A' } as never,
       accessToken: 't',
-      refreshToken: null,
     })
     _stubMembers([
       _mkMember({ user_id: 'ou-owner', role: 'owner' }),
@@ -111,7 +109,6 @@ describe('MembersPanel · T130.4 ImBindingCell', () => {
     useAuthStore.setState({
       user: { id: 'alice@example.com', email: 'a@x.com', display_name: 'A' } as never,
       accessToken: 't',
-      refreshToken: null,
     })
     _stubMembers([
       _mkMember({ user_id: 'ou-owner', role: 'owner' }),
@@ -149,7 +146,6 @@ describe('MembersPanel · T130.4 ImBindingCell', () => {
     useAuthStore.setState({
       user: { id: 'alice@example.com', email: 'a@x.com', display_name: 'A' } as never,
       accessToken: 't',
-      refreshToken: null,
     })
     _stubMembers([
       _mkMember({ user_id: 'ou-owner', role: 'owner' }),
@@ -187,7 +183,6 @@ describe('MembersPanel · T130.4 ImBindingCell', () => {
     useAuthStore.setState({
       user: { id: 'carol@example.com', email: 'c@x.com', display_name: 'C' } as never,
       accessToken: 't',
-      refreshToken: null,
     })
     _stubMembers([
       _mkMember({ id: 'm-owner', user_id: 'ou-owner', role: 'owner' }),

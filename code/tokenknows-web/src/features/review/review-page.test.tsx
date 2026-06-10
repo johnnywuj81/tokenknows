@@ -35,6 +35,7 @@ const mkChapter = (overrides: Partial<Chapter> = {}): Chapter => ({
   id: 'c1', asset_id: 'a1', asset_version: 1, order_index: 0,
   title: '亮点', content: '内容', layout: {}, generated_by: null,
   regeneration_history: [], approval_state: 'pending',
+  redacted_spans: [],
   created_at: '', updated_at: '',
   ...overrides,
 })
@@ -165,7 +166,7 @@ describe('ReviewPage', () => {
       }
       if (url.includes('/chapters')) {
         return Promise.resolve({
-          data: [mkChapter({ id: 'kg-c1', layout: kgLayout })],
+          data: [mkChapter({ id: 'kg-c1', layout: kgLayout as unknown as Record<string, unknown> })],
         })
       }
       return Promise.resolve({

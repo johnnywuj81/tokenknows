@@ -28,6 +28,7 @@ const TYPE_LABEL: Record<AssetType, string> = {
   incident: '问题复盘',
   book: '书籍', // v0.2
   agent_skill: 'Agent Skill', // v0.2 (实际有独立 /skills 页, 此处兜底)
+  knowledge_graph: '知识图谱', // v1.2
 }
 
 const STATUS_META: Record<

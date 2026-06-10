@@ -26,11 +26,11 @@ function _render(ui: React.ReactNode) {
 
 beforeEach(() => {
   mock.reset()
-  useProjectStore.setState({ currentProjectId: null, projects: [] })
+  useProjectStore.setState({ currentProjectId: null })
 })
 
 afterEach(() => {
-  useProjectStore.setState({ currentProjectId: null, projects: [] })
+  useProjectStore.setState({ currentProjectId: null })
 })
 
 const _seedItem = (overrides: Record<string, unknown> = {}) => ({
@@ -112,10 +112,7 @@ describe('MarketplacePage', () => {
   })
 
   it('import POST with current project', async () => {
-    useProjectStore.setState({
-      currentProjectId: 'proj-B',
-      projects: [],
-    })
+    useProjectStore.setState({ currentProjectId: 'proj-B' })
     mock.onGet(/\/marketplace\/skills/).reply(200, {
       items: [_seedItem()],
       total: 1,

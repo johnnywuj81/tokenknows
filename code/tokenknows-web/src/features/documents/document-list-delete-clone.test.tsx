@@ -132,7 +132,8 @@ describe('DocumentListPage delete + clone flows', () => {
         meta: { total: 1, cursor: null, has_more: false },
       },
     })
-    let resolveDelete: ((v: unknown) => void) | null = null
+    // 不能初始化为 null: 闭包内赋值不参与 narrowing, 调用处会推成 never (TS2349)
+    let resolveDelete: (v: unknown) => void = () => {}
     vi.spyOn(api, 'delete').mockReturnValueOnce(
       new Promise((res) => { resolveDelete = res }),
     )
@@ -142,7 +143,7 @@ describe('DocumentListPage delete + clone flows', () => {
     await waitFor(() => expect(screen.getByText('确认删除')).toBeInTheDocument())
     fireEvent.click(screen.getByText('确认删除'))
     await waitFor(() => expect(screen.getByText(/删除中/)).toBeInTheDocument())
-    resolveDelete?.({ data: {} })
+    resolveDelete({ data: {} })
   })
 
   it('cancel delete: closes dialog without DELETE', async () => {

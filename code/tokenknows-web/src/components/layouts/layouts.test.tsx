@@ -62,7 +62,10 @@ describe('AppLayout', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     useAuthStore.setState({
-      user: { id: 'u1', email: 'a@b.com', display_name: 'Alice', role: 'editor' },
+      user: {
+        id: 'u1', email: 'a@b.com', display_name: 'Alice',
+        is_instance_admin: false, created_at: '', updated_at: '',
+      },
       accessToken: 'tk',
       isAuthenticated: true,
     })
@@ -95,7 +98,10 @@ describe('AppLayout', () => {
   it('is_instance_admin: shows Admin link', () => {
     vi.spyOn(api, 'get').mockResolvedValue({ data: [] })
     useAuthStore.setState({
-      user: { id: 'u1', email: 'a@b.com', display_name: 'Alice', role: 'admin', is_instance_admin: true },
+      user: {
+        id: 'u1', email: 'a@b.com', display_name: 'Alice',
+        is_instance_admin: true, created_at: '', updated_at: '',
+      },
       accessToken: 'tk',
       isAuthenticated: true,
     })
@@ -117,7 +123,10 @@ describe('AppLayout', () => {
 describe('AdminLayout', () => {
   beforeEach(() => {
     useAuthStore.setState({
-      user: { id: 'u1', email: 'admin@b.com', display_name: 'Admin', role: 'admin', is_instance_admin: true },
+      user: {
+        id: 'u1', email: 'admin@b.com', display_name: 'Admin',
+        is_instance_admin: true, created_at: '', updated_at: '',
+      },
       accessToken: 'tk',
       isAuthenticated: true,
     })
@@ -140,7 +149,10 @@ describe('AdminLayout', () => {
 
   it('non-admin user: redirects (no admin content)', () => {
     useAuthStore.setState({
-      user: { id: 'u1', email: 'a@b.com', display_name: 'A', role: 'editor', is_instance_admin: false },
+      user: {
+        id: 'u1', email: 'a@b.com', display_name: 'A',
+        is_instance_admin: false, created_at: '', updated_at: '',
+      },
       isAuthenticated: true,
     })
     render(withWrappers(<AdminLayout />, '/admin'))

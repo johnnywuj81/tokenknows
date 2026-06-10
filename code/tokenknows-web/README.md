@@ -13,7 +13,7 @@ npm install
 npm run dev            # Vite dev server · http://127.0.0.1:5173
 npm run build          # tsc -b + vite build
 npm run lint           # ESLint (CI 严格执行, 0 error)
-npx tsc --noEmit       # 类型检查
+npx tsc -b --force     # 类型检查 (根 tsconfig 是 solution-style, --noEmit 查不到东西)
 npm run test           # Vitest 单测
 npm run test:coverage  # 带覆盖率
 npm run test:visual    # Playwright 视觉回归
