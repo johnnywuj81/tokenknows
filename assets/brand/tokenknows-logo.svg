@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <!-- TokenKnows logo · 蒸馏漏斗 glyph (透明底, 对齐 Codex 官方插件线条风格)
+       tokens (上方散点) → 漏斗蒸馏 → 一滴知识晶体 -->
+  <circle cx="166" cy="96" r="19" fill="#f3b08c"/>
+  <circle cx="256" cy="74" r="15" fill="#f3b08c"/>
+  <circle cx="346" cy="96" r="19" fill="#f3b08c"/>
+  <circle cx="211" cy="142" r="11" fill="#d97757"/>
+  <circle cx="301" cy="142" r="11" fill="#d97757"/>
+  <path d="M96 176 L416 176 L296 326 L296 396 L216 396 L216 326 Z"
+        stroke="#d97757" stroke-width="34" stroke-linejoin="round" fill="none"/>
+  <path d="M256 426 L292 460 L256 494 L220 460 Z" fill="#b8623f"/>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- TokenKnows logo · 深色瓷砖版 (GitHub README / 社交卡片 / app 图标) -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#241b15"/><stop offset="1" stop-color="#171010"/>
+    </linearGradient>
+    <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3b08c"/><stop offset="0.5" stop-color="#d97757"/><stop offset="1" stop-color="#b05a39"/>
+    </linearGradient>
+    <linearGradient id="cry" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7c7a6"/><stop offset="1" stop-color="#c4663f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="115" fill="url(#tile)"/>
+  <circle cx="186" cy="118" r="13" fill="#f3b08c"/>
+  <circle cx="256" cy="102" r="10.5" fill="#f3b08c"/>
+  <circle cx="326" cy="118" r="13" fill="#f3b08c"/>
+  <circle cx="221" cy="152" r="8" fill="#e8a07e"/>
+  <circle cx="291" cy="152" r="8" fill="#e8a07e"/>
+  <path d="M136 196 L376 196 L286 314 L286 372 L226 372 L226 314 Z"
+        fill="#d97757" fill-opacity="0.12" stroke="url(#tg)" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M256 400 L284 428 L256 456 L228 428 Z" fill="url(#cry)"/>
+</svg>

@@ -33,6 +33,9 @@
       "Write"
     ],
     "websiteURL": "https://github.com/johnnywuj81/tokenknows",
+    "brandColor": "#d97757",
+    "composerIcon": "./assets/composer-icon.png",
+    "logo": "./assets/tokenknows.png",
     "defaultPrompt": [
       "把这次会话蒸馏成一篇周报",
       "用知识图谱梳理最近 14 天的项目实体关系"
