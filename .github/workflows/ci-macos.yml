@@ -1,0 +1,71 @@
+name: CI (macOS self-hosted)
+
+# 自托管 macOS ARM64 对照流水线 — 仅维护者 main push / 手动触发.
+# 安全约束 (公开仓库):
+#   1. 绝不 on: pull_request — 否则外部 PR 代码会在维护者的机器上执行
+#   2. 每个 job 带 repository guard — fork 不会挂着等不存在的 self-hosted runner
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Web · macOS host
+    if: github.repository == 'johnnywuj81/tokenknows'
+    runs-on: [self-hosted, macOS, ARM64]
+    defaults:
+      run:
+        working-directory: code/tokenknows-web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: npm ci --prefer-offline --no-audit --progress=false
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: ESLint (strict)
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Vitest
+        run: npm test
+
+  api:
+    name: API · macOS host
+    if: github.repository == 'johnnywuj81/tokenknows'
+    runs-on: [self-hosted, macOS, ARM64]
+    defaults:
+      run:
+        working-directory: code/tokenknows-api
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install (host .venv)
+        run: |
+          if [ ! -d .venv ]; then python3 -m venv .venv; fi
+          .venv/bin/pip install --quiet -e ".[dev]"
+      - name: Import smoke
+        run: |
+          PYTHONPATH=. .venv/bin/python -c "
+          from app.main import app
+          routes = [r.path for r in app.routes if hasattr(r, 'path')]
+          assert len(routes) > 0
+          print(f'routes: {len(routes)} ✓')
+          "
+      - name: pytest
+        run: PYTHONPATH=. .venv/bin/pytest tests/ -q
+
+  status:
+    name: macOS CI Status
+    if: github.repository == 'johnnywuj81/tokenknows' && always()
+    needs: [web, api]
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - name: Report
+        run: |
+          echo "Web: ${{ needs.web.result }}"
+          echo "API: ${{ needs.api.result }}"
+          if [ "${{ needs.web.result }}" != "success" ] \
+             || [ "${{ needs.api.result }}" != "success" ]; then
+            exit 1
+          fi

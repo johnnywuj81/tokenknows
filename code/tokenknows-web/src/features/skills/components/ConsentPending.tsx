@@ -12,7 +12,7 @@
  * 设计依据: T51 §5.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Skill } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
@@ -25,10 +25,14 @@ interface ConsentPendingProps {
 export function ConsentPending({ skill }: ConsentPendingProps) {
   const user = useAuthStore((s) => s.user)
   const [action, setAction] = useState<'sign' | 'reject' | null>(null)
-  // v1.0.1 review fix: skill 变化时重置 action
-  useEffect(() => {
+  // v1.0.1 review fix: skill 变化时重置 action.
+  // render 期间调整 (官方 adjusting-state-when-props-change 模式),
+  // 比 useEffect 少一帧旧 dialog 闪烁.
+  const [prevSkillId, setPrevSkillId] = useState(skill.id)
+  if (prevSkillId !== skill.id) {
+    setPrevSkillId(skill.id)
     setAction(null)
-  }, [skill.id])
+  }
 
   // 仅 pending 时显示
   if (skill.status !== 'pending_contributor_consent') {

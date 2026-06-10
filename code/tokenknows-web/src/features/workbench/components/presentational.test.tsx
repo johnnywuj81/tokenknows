@@ -4,7 +4,7 @@
  * EmptyWorkbench (with router) / EventFilter / EventCard / ProjectStats / TodoList
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { EmptyWorkbench } from './EmptyWorkbench'
@@ -13,7 +13,7 @@ import { EventCard } from './EventCard'
 import { ProjectStats } from './ProjectStats'
 import { TodoList } from './TodoList'
 import type {
-  Event, EventSourceType, EventType, Project, ProjectStats as Stats,
+  Event, Project, ProjectStats as Stats,
   TodoItem,
 } from '@/types/api'
 

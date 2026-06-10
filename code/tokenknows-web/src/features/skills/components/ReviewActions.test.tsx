@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Skill, ReviewState } from '@/types/api'
+import type { Skill } from '@/types/api'
 import { ReviewActions } from './ReviewActions'
 import { useAuthStore } from '@/stores/authStore'
 

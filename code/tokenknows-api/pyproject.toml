@@ -2,6 +2,8 @@
 name = "tokenknows-api"
 version = "0.1.0"
 description = "TokenKnows API · FastAPI 后端 + LLM Gateway (三层出域门禁 + LiteLLM 多家适配)"
+license = "MIT"
+authors = [{ name = "johnnywuj81" }]
 requires-python = ">=3.11"
 dependencies = [
     # Web 框架

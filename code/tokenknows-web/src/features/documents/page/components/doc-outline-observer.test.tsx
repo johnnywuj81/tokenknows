@@ -4,8 +4,8 @@
  * 用真实 IO mock 捕获 callback, 手动触发 entries → 验证 activeId 更新.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { render, act } from '@testing-library/react'
 import { DocOutline } from './DocOutline'
 import type { Chapter } from '@/types/api'
 
@@ -28,6 +28,8 @@ class FakeIntersectionObserver {
   constructor(cb: IOCallback, options?: IntersectionObserverInit) {
     this.callback = cb
     this.options = options
+    // 测试桩需要把实例暴露给模块级变量, 供手动触发 entries
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     lastIO = this
   }
   observe(el: Element) { this.observed.push(el) }

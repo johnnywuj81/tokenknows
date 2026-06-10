@@ -48,7 +48,7 @@ beforeEach(() => {
   mock.reset()
   _setUser('ou-alice')
   // EventSource not in jsdom; stub to noop
-  // @ts-expect-error
+  // @ts-expect-error jsdom 没有 EventSource, 用最小桩替代
   globalThis.EventSource = class {
     addEventListener() {}
     close() {}
@@ -56,7 +56,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // @ts-expect-error
+  // @ts-expect-error 清理测试桩 (delete 全局内建属性类型上不允许)
   delete globalThis.EventSource
   useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false })
 })

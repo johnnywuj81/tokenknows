@@ -54,4 +54,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 )
 Button.displayName = "Button"
 
+// shadcn 上游模板同时导出 variants 常量, fast-refresh 规则误报
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants }

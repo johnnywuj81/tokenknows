@@ -13,7 +13,7 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Plus, X } from 'lucide-react'
+import { Loader2, Plus } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,6 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 import type { TriggerMode, TriggerRule } from '@/types/api'
 
 interface RuleEditorDialogProps {

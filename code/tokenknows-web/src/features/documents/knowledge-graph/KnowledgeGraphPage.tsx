@@ -6,7 +6,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import type { Chapter, KGEdge, KGNode, KnowledgeGraphLayout } from '@/types/api'
+import type { Chapter, KGNode, KnowledgeGraphLayout } from '@/types/api'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { GraphCanvas } from './GraphCanvas'
@@ -78,7 +78,7 @@ export default function KnowledgeGraphPage({
     onNodeClick?.(node)
   }
 
-  function handleEdgeClick(_edge: KGEdge): void {
+  function handleEdgeClick(): void {
     // v1.2 MVP: 仅 hover label; v1.3 加 EdgeDetail Drawer
   }
 

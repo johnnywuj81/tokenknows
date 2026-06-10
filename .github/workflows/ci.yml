@@ -1,5 +1,8 @@
 name: CI
 
+# GitHub-hosted runners (公开仓库免费) — 任何 fork 的 PR 都能跑.
+# 自托管 macOS runner 的对照流水线见 ci-macos.yml (仅维护者 main push, 绝不跑外部 PR 代码).
+
 on:
   push:
     branches: [main]
@@ -7,25 +10,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# self-hosted runner: macOS ARM64 (TokenKnows/actions-runner)
-# labels = [self-hosted, macOS, ARM64]
-# 注意 self-hosted job 之间共享磁盘, 需要每个 step 清理 working dir 避免污染
-# 不需要 pip 缓存 (Node/Python 全在 host 已装)
-
 jobs:
-  # ─── 前端 · TypeScript + ESLint + Build ───────────────────
+  # ─── 前端 · TypeScript + ESLint + Build + Vitest ──────────
   web:
-    name: Web · tsc + lint + build
-    runs-on: [self-hosted, macOS, ARM64]
+    name: Web · tsc + lint + build + test
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: code/tokenknows-web
     steps:
       - uses: actions/checkout@v4
 
-      # node 已在 host 装 (开发环境一致), 走 host 的 node 18+/20+ 即可
-      - name: Node version
-        run: node --version && npm --version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: code/tokenknows-web/package-lock.json
 
       - name: Install
         run: npm ci --prefer-offline --no-audit --progress=false
@@ -33,108 +33,92 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
-      - name: ESLint
-        # 既有 2 个 shadcn fast-refresh 错误 (badge.tsx / button.tsx) 是上游模板
-        # 自带, 不影响业务. 用 || true 不阻塞 CI; 业务代码新错会单独 fail.
-        run: |
-          npm run lint > lint-output.txt 2>&1 || true
-          cat lint-output.txt
-          NEW_ERRORS=$(grep -c " error " lint-output.txt || echo 0)
-          if [ "$NEW_ERRORS" -gt 2 ]; then
-            echo "::error::ESLint 出现 $NEW_ERRORS 个 error (>2 个已知 shadcn 错误)"
-            exit 1
-          fi
+      - name: ESLint (strict)
+        run: npm run lint
 
       - name: Build
         run: npm run build
 
-      - name: Vitest + coverage (info only, no enforcement)
+      - name: Vitest + coverage
         run: |
-          if find src -name "*.test.ts" -o -name "*.test.tsx" 2>/dev/null | grep -q .; then
-            npm test -- --coverage --reporter=default 2>&1 | tee vitest-output.txt
-            # 抽 "All files" 总行打到 step summary
-            grep -E "^All files" vitest-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
-          else
-            echo "no .test files yet, skip"
-          fi
+          npm test -- --coverage --reporter=default 2>&1 | tee vitest-output.txt
+          grep -E "^All files" vitest-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
 
-  # ─── 后端 · 模块导入冒烟 + ruff ───────────────────────────
+  # ─── 后端 · ruff + import smoke + pytest ──────────────────
   api:
-    name: API · ruff + import smoke
-    runs-on: [self-hosted, macOS, ARM64]
+    name: API · ruff + import smoke + pytest
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: code/tokenknows-api
     steps:
       - uses: actions/checkout@v4
 
-      - name: Python version
-        run: python3 --version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: code/tokenknows-api/pyproject.toml
 
-      - name: Install (use repo .venv if exists, else create)
-        run: |
-          if [ -d .venv ]; then
-            echo "using existing .venv"
-            .venv/bin/python --version
-          else
-            python3 -m venv .venv
-            .venv/bin/pip install -e . || .venv/bin/pip install \
-              fastapi uvicorn pydantic pydantic-settings python-dotenv \
-              structlog litellm httpx requests
-          fi
-          .venv/bin/pip install --quiet ruff pytest pytest-asyncio pytest-cov httpx
+      - name: Install
+        run: pip install -e ".[dev]"
 
       - name: ruff (info only)
         run: |
-          .venv/bin/ruff check app/ || true
-          .venv/bin/ruff format --check app/ || true
+          ruff check app/ || true
+          ruff format --check app/ || true
 
       - name: Import smoke (FastAPI app loads + routes registered)
         run: |
-          PYTHONPATH=. .venv/bin/python -c "
+          PYTHONPATH=. python -c "
           from app.main import app
           routes = [r.path for r in app.routes if hasattr(r, 'path')]
           print(f'routes: {len(routes)}')
-          # 核心端点都注册
           for need in ['/api/v1/healthz', '/api/v1/projects/{project_id}/events',
                        '/api/v1/assets/{asset_id}/publish']:
               assert any(need in r for r in routes), f'missing {need}'
           print('all required routes registered ✓')
           "
 
-      - name: pytest + coverage (info only, no enforcement)
+      - name: pytest + coverage
         run: |
-          if [ -d tests ]; then
-            PYTHONPATH=. .venv/bin/pytest tests/ -v --cov --cov-report=term \
-              | tee pytest-output.txt
-            # 抽 TOTAL 行打到 summary 让 PR/job 可见
-            grep -E "^TOTAL " pytest-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
-          else
-            echo "no tests/ dir yet, skip"
-          fi
+          PYTHONPATH=. pytest tests/ --cov --cov-report=term | tee pytest-output.txt
+          grep -E "^TOTAL " pytest-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
 
-  # ─── 插件层 · Python plugins import smoke ─────────────────
+  # ─── 插件层 · 全部 5 个 collector 语法 + VS Code 扩展编译 ──
   plugins:
-    name: Plugins · syntax check
-    runs-on: [self-hosted, macOS, ARM64]
+    name: Plugins · syntax + vscode tsc
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Python syntax check 3 个 plugin
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Python syntax check (5 collectors)
         run: |
-          for f in plugins/claude-code/sync.py plugins/cursor/sync.py plugins/github/sync.py; do
+          for f in plugins/claude-code/sync.py plugins/cursor/sync.py \
+                   plugins/github/sync.py plugins/codex/sync.py \
+                   plugins/local-docs/sync.py; do
             python3 -m py_compile "$f" && echo "  ✓ $f"
           done
+
       - name: VS Code 扩展 TS 编译
         working-directory: plugins/vscode-tokenknows
         run: |
-          npm install --prefer-offline --no-audit --progress=false
+          npm ci --prefer-offline --no-audit --progress=false
           npx tsc -p ./
 
-  # ─── 综合状态 ─────────────────────────────────────────────
+  # ─── 综合状态 (branch protection 唯一 required check) ──────
   status:
     name: CI Status
     needs: [web, api, plugins]
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Report

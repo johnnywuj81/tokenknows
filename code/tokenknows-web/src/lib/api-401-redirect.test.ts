@@ -75,7 +75,7 @@ describe('api 401 redirect branch', () => {
       },
     })
     mock.onGet('/test').reply(401, {})
-    try { await api.get('/test') } catch {}
+    try { await api.get('/test') } catch { /* 只关心拦截器副作用, 吞掉 401 */ }
     expect(hrefSetter).not.toHaveBeenCalled()
   })
 })

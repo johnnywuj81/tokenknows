@@ -76,7 +76,7 @@ describe('api instance', () => {
 
 
 import { useAuthStore } from '@/stores/authStore'
-import { vi, beforeEach, afterEach } from 'vitest'
+import { beforeEach, afterEach } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 
 describe('api interceptor · error normalization', () => {
