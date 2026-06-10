@@ -19,14 +19,12 @@ decrypt access_token 复用 im_crypto.decrypt_token.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import httpx
 
 from app.config.logging import logger
 from app.config.settings import get_settings
 from app.services.im_crypto import TokenCryptoError, decrypt_token
-
 
 _HTTP_TIMEOUT = 10.0  # 短超时, 不阻塞 webhook
 

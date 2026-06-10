@@ -76,7 +76,7 @@ async def get_event(event_id: str) -> Event:
 # ─── T03 · 项目统计 ───────────────────────────────────────────
 
 
-from datetime import datetime, timedelta, timezone  # noqa: E402
+from datetime import UTC, datetime, timedelta  # noqa: E402
 
 from app.persistence import get_db  # noqa: E402
 from app.services import generation_service as gen_svc  # noqa: E402
@@ -91,7 +91,7 @@ async def get_project_stats(project_id: str) -> dict:
     - datasources_total / healthy: 当前用 fixture (4 个 source_type 区分)
     """
     db = get_db()
-    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    week_ago = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     events_this_week, _ = db.list_events(
         project_id=project_id, from_iso=week_ago, limit=1
     )
@@ -145,14 +145,15 @@ async def get_datasource_health(
         - cold     : last_seen_at within window_days
         - inactive : 无事件 (event_count = 0)
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.persistence import get_db
     db = get_db()
     rows = db.datasource_health(project_id, window_days=window_days)
 
     # 已出现的源
     by_type = {r["source_type"]: r for r in rows}
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     def _health(last_seen: str | None, count: int) -> str:
         if count == 0 or not last_seen:
@@ -161,7 +162,7 @@ async def get_datasource_health(
             ts = last_seen.replace("Z", "+00:00") if last_seen.endswith("Z") else last_seen
             dt = datetime.fromisoformat(ts)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             hours_ago = (now - dt).total_seconds() / 3600
         except ValueError:
             return "cold"

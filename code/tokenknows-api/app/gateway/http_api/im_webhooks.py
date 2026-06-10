@@ -7,13 +7,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 
 from app.config.logging import logger
 from app.services import im_service
 from app.services.im import feishu_connector, feishu_webhook  # noqa: F401 注册副作用
 from app.services.im.connector_base import (
-    ConnectorError,
     OAuthExchangeError,
     registry,
 )

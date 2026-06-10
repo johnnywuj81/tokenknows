@@ -21,11 +21,10 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from app.config.logging import logger
-
 
 # user_id → list[Queue]; 多 tab 都收
 _sse_queues: dict[str, list[asyncio.Queue]] = {}
@@ -72,7 +71,7 @@ class SseNotificationEvent:
 
     def __post_init__(self) -> None:
         if not self.timestamp:
-            self.timestamp = datetime.now(timezone.utc).isoformat()
+            self.timestamp = datetime.now(UTC).isoformat()
 
     def to_json(self) -> str:
         return json.dumps(

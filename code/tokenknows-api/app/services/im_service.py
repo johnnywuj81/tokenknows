@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from app.config.logging import logger
 from app.persistence import get_db
@@ -28,8 +27,8 @@ from app.schemas.im import (
     IMPlatform,
 )
 from app.services.im import (  # noqa: F401 注册副作用
-    feishu_connector,
     dingtalk_connector,
+    feishu_connector,
     wework_connector,
 )
 from app.services.im.connector_base import (
@@ -126,7 +125,7 @@ def create_connection(
     consent_user_id: str | None = None,
 ) -> IMConnection:
     """新建 pending 状态的 IMConnection. OAuth 完成前 token 字段为空."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     conn = IMConnection(
         id=f"im-{uuid.uuid4().hex[:12]}",
         project_id=project_id,
@@ -164,9 +163,9 @@ def update_status(
         return None
     updated = conn.model_copy(update={
         "status": status,
-        "updated_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(UTC),
         "revoked_at": (
-            datetime.now(timezone.utc) if status == "revoked" else conn.revoked_at
+            datetime.now(UTC) if status == "revoked" else conn.revoked_at
         ),
     })
     _registry.upsert(updated)
@@ -189,7 +188,7 @@ def apply_oauth_result(
     except TokenCryptoError as e:
         logger.error("im_oauth_encrypt_failed", id=connection_id, error=str(e))
         raise
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     updated = conn.model_copy(update={
         "auth_token_enc": access_enc,
         "refresh_token_enc": refresh_enc,

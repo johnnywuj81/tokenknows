@@ -6,7 +6,7 @@ sub=user_id, exp=now+24h (configurable via JWT_ACCESS_TOKEN_TTL_MINUTES).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
@@ -14,7 +14,6 @@ from passlib.context import CryptContext
 
 from app.config.logging import logger
 from app.config.settings import get_settings
-
 
 # bcrypt 全局 context
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -47,7 +46,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 def issue_access_token(user_id: str, *, extra_claims: dict | None = None) -> str:
     """签发 access_token. sub=user_id, exp=now+TTL."""
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     exp = now + timedelta(minutes=settings.jwt_access_token_ttl_minutes)
     payload: dict[str, Any] = {
         "sub": user_id,

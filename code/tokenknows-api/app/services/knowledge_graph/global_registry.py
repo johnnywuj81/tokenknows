@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ── 内存 store ─────────────────────────────────────────────────────

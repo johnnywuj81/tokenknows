@@ -10,15 +10,14 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import AsyncIterator
 from urllib.parse import urlencode
 
 from app.config.logging import logger
 from app.config.settings import get_settings
 from app.schemas.im import IMUser
 from app.services.im.connector_base import (
-    ConnectorError,
     ConnectorHealth,
     IMConnector,
     IMNormalizedMessage,

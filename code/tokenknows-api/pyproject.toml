@@ -70,7 +70,9 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["E501", "E402"]
+# N818: 10 个公共异常类未带 Error 后缀 (InvalidTransition 等) — 改名牵连
+# 全部调用方语义, 列入 backlog 渐进改, 暂不阻塞 CI.
+ignore = ["E501", "E402", "N818"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # 架构铁律 (TDD §2.3): 业务代码必须走 LLM Gateway

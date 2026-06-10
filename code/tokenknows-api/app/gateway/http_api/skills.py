@@ -21,6 +21,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config.logging import logger
+from app.gateway.http_api._session import get_current_user_id, require_user_id
 from app.schemas.skill import (
     ConsentRejectRequest,
     ConsentRejectResponse,
@@ -40,7 +41,6 @@ from app.schemas.skill import (
     SkillSubmitForReviewRequest,
     SkillUpdateRequest,
 )
-from app.gateway.http_api._session import get_current_user_id, require_user_id
 from app.services import generation_service, skill_service
 from app.services.project import membership
 from app.services.skill import consent as skill_consent
@@ -686,6 +686,7 @@ async def import_skill_endpoint(
     # 避免 select_skills_for_chapter 排序 score=0 (空 embedding 跳过)
     try:
         import asyncio
+
         from app.services.skill_service import embed_batch
 
         async def _reembed() -> None:

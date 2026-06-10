@@ -21,12 +21,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.persistence import get_db
 from app.schemas.auto_trigger import (
-    SkipReason,
     TriggerEvaluation,
     TriggerRule,
     TriggerSignal,
@@ -34,7 +33,6 @@ from app.schemas.auto_trigger import (
 from app.services import auto_trigger_service as svc
 from app.services.auto_trigger.evaluator.conditions import evaluate_extra_condition
 from app.services.auto_trigger.evaluator.cron_matcher import matches_in_window
-
 
 SCAN_WINDOW_SECONDS = 60
 """与 APScheduler cron_evaluator IntervalTrigger=1min 对齐."""
@@ -65,7 +63,7 @@ def _check_cooldown(rule: TriggerRule, project_id: str, now: datetime) -> bool:
 def _check_daily_cap(rule: TriggerRule, project_id: str, now: datetime) -> bool:
     """True = 当日 fired 已达上限, 应跳过."""
     # 当天起点 (UTC) → now
-    today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
     n = svc.count_fired_since(rule.id, today_start)
     return n >= rule.daily_cap
 
@@ -90,7 +88,7 @@ def evaluate_cron_rules(now: datetime | None = None) -> dict[str, int]:
           "skipped_extra_condition": ..., "errors": ... }
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     stats = {
         "evaluated": 0,

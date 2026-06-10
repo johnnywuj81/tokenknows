@@ -17,11 +17,11 @@ import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, time as dt_time, timedelta, timezone
-from typing import Literal
+from datetime import UTC, datetime, timedelta
+from datetime import time as dt_time
+from typing import Any, Literal
 
 from app.schemas.auto_trigger import TriggerSignal
-
 
 # ─── 类型定义 (OD-1) ──────────────────────────────────────
 
@@ -129,13 +129,13 @@ def window_to_timedelta(window: WindowPreset, now: datetime | None = None) -> ti
 
     # today / yesterday 需要当前时间
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     if now.tzinfo is None:
         raise ValueError("now must be tz-aware; got naive datetime")
 
     # 归一化到 UTC, 防止非 UTC 时区导致负 timedelta
-    now_utc = now.astimezone(timezone.utc)
-    today_start = datetime.combine(now_utc.date(), dt_time.min, tzinfo=timezone.utc)
+    now_utc = now.astimezone(UTC)
+    today_start = datetime.combine(now_utc.date(), dt_time.min, tzinfo=UTC)
     if window == "today":
         # 今天 0 点 UTC → now (≥ 0)
         return now_utc - today_start
@@ -280,7 +280,7 @@ def _ensure_virtual_mention_rule(subcommand: Subcommand):
     from app.schemas.auto_trigger import TriggerRule
 
     rule_id = f"rule-virtual-mention-{subcommand}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rule = TriggerRule(
         id=rule_id,
         project_id=None,  # 实例级 (跨项目)

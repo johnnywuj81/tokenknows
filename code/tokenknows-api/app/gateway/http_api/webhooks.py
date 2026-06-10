@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -58,7 +58,7 @@ def _verify_signature(body: bytes, signature: str | None) -> bool:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _sha256(text: str) -> str:

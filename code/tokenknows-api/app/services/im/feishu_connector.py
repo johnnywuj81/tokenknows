@@ -16,8 +16,8 @@ OAuth scopes:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -166,7 +166,7 @@ class FeishuConnector(IMConnector):
         if not access:
             raise OAuthExchangeError(f"飞书响应缺 access_token: {payload!r}")
         expires_in = payload.get("expires_in") or 7200
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+        expires_at = datetime.now(UTC) + timedelta(seconds=int(expires_in))
         return OAuthExchangeResult(
             access_token=access,
             refresh_token=payload.get("refresh_token"),
@@ -304,7 +304,7 @@ class FeishuConnector(IMConnector):
 
         async def _gen() -> AsyncIterator[IMNormalizedMessage]:
             from datetime import timedelta
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             async for msg in self.fetch_history(
                 chat_id, now - timedelta(minutes=5), now
             ):
@@ -341,10 +341,10 @@ class FeishuConnector(IMConnector):
                 mentions.append(uid)
         # 时间戳: 飞书 create_time 是毫秒字符串
         ts_raw = raw.get("create_time") or raw.get("received_at")
-        received = datetime.now(timezone.utc)
+        received = datetime.now(UTC)
         try:
             if ts_raw:
-                received = datetime.fromtimestamp(int(ts_raw) / 1000, tz=timezone.utc)
+                received = datetime.fromtimestamp(int(ts_raw) / 1000, tz=UTC)
         except (ValueError, TypeError):
             pass
         return IMNormalizedMessage(

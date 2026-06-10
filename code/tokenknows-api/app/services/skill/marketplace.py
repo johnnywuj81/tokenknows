@@ -16,17 +16,16 @@ from __future__ import annotations
 
 import heapq
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.config.logging import logger
 from app.schemas.skill import Skill
 
-
 # v1.2 perf (T79): tz-aware 最小值供 heapq sort key fallback;
 # 防止 published_at=None 与 published_at=tz-aware 比较时崩.
 # 实际 list_marketplace 只放 visibility=public 的 skill, 必有 published_at.
-_TZ_AWARE_MIN = datetime.min.replace(tzinfo=timezone.utc)
+_TZ_AWARE_MIN = datetime.min.replace(tzinfo=UTC)
 
 
 class MarketplaceError(Exception):
@@ -56,7 +55,7 @@ def publish_public(
         raise MarketplaceError("locked skill cannot be published")
     if skill.visibility == "public":
         return skill  # 幂等
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     return skill.model_copy(update={
         "visibility": "public",
         "published_at": now_utc,
@@ -72,7 +71,7 @@ def unpublish(skill: Skill, *, now: datetime | None = None) -> Skill:
     """
     if skill.visibility == "private":
         return skill
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     return skill.model_copy(update={
         "visibility": "private",
         "published_at": None,
@@ -160,7 +159,7 @@ def import_skill(
         raise MarketplaceError(
             f"source skill {source_skill.id} is not public"
         )
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     new_id = f"skill-{uuid.uuid4().hex[:12]}"
     new_skill = source_skill.model_copy(update={
         "id": new_id,

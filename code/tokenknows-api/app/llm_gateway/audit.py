@@ -13,7 +13,7 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -128,7 +128,7 @@ def record_egress(
     hash_req = _hash_request(messages)
 
     log_id = str(uuid4())
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
 
     with _db_conn() as conn:
         conn.execute(

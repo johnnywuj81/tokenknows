@@ -9,8 +9,8 @@ OpenAPI: <http://localhost:8000/docs>
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,12 +20,12 @@ from app.config.logging import logger, setup_logging
 from app.config.settings import get_settings
 from app.gateway.http_api import api_router
 from app.persistence import bootstrap as bootstrap_db
-from app.services.generation_service import _bootstrap_from_db
-from app.services.im import retention as im_retention
-from app.services.im import token_refresher as im_token_refresher
 from app.services.auto_trigger import scheduler as auto_trigger_scheduler
 from app.services.auto_trigger.seeder import seed_default_rules
 from app.services.auto_trigger_service import bootstrap as bootstrap_auto_trigger
+from app.services.generation_service import _bootstrap_from_db
+from app.services.im import retention as im_retention
+from app.services.im import token_refresher as im_token_refresher
 from app.services.im_service import bootstrap as bootstrap_im
 from app.services.skill_service import bootstrap as bootstrap_skills
 

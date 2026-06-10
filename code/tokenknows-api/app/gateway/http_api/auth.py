@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.config.logging import logger
 from app.config.settings import get_settings
 from app.gateway.http_api._session import require_user_id
 from app.schemas.user import (

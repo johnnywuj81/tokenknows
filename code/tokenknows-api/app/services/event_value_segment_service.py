@@ -18,13 +18,12 @@ MVP 规则 (足够简单, 不接 LLM):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config.logging import logger
 from app.persistence import get_db
 from app.schemas.event import Event
 from app.schemas.im import ValueSegment, ValueSegmentSource
-
 
 # 过滤阈值: trust_score 缺省按 0.5 (中等), 低于这个值的事件不入 segment
 _MIN_TRUST = 0.3
@@ -59,7 +58,7 @@ def event_to_segment(event: Event) -> ValueSegment | None:
         ),
         content=content,
         trust_score=trust,
-        extracted_at=datetime.now(timezone.utc),
+        extracted_at=datetime.now(UTC),
     )
 
 

@@ -1,5 +1,10 @@
 # TokenKnows MVP — 工程施工手册
 
+> **历史档说明** · 本目录是 MVP 阶段的工程交接记录(sprint 计划 / 架构 / 任务包 / demo),
+> 按当时原貌保留 —— 文内出现的绝对路径、端口、机器名反映的是初始开发机环境,
+> 不代表当前安装方式;新人上手请从 [仓库根 README](../README.md) 与
+> [CONTRIBUTING](../CONTRIBUTING.md) 开始。
+
 **给 1 个人 + Claude Code/Cursor 用的版本**。跳过 Figma 环节,基于现有 HTML mockup 直接开工。
 
 ---

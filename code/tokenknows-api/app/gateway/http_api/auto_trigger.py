@@ -35,8 +35,9 @@ from app.schemas.auto_trigger import (
     ExtraCondition,
     ThresholdSpec,
     TriggerExecution,
-    TriggerMode,
     TriggerRule,
+)
+from app.schemas.auto_trigger import (
     TriggerSignal as TriggerSignalDTO,
 )
 from app.services import auto_trigger_service as svc

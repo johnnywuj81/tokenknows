@@ -145,7 +145,7 @@ Details: [PRD §6.7 data residency & egress control](docs/product/PRD_TokenKnows
 
 ## Community
 
-[CONTRIBUTING](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md) · [Issues](https://github.com/johnnywuj81/tokenknows/issues)
+[CONTRIBUTING](CONTRIBUTING.md) · [Roadmap](ROADMAP.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md) · [Issues](https://github.com/johnnywuj81/tokenknows/issues)
 
 ## License
 

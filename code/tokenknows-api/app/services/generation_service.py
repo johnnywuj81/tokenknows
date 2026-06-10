@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -185,7 +185,7 @@ def _bootstrap_from_db() -> None:
     # v1.8 T110 · sweep stuck generating: 重启时 LLM 跑到一半挂了的 asset
     # 永远停在 generating, 用户 UI 一直转圈. 启动时把超时的 mark draft + 标记
     # parse_error 让用户能看出失败原因.
-    _GENERATING_TIMEOUT_MIN = 5
+    generating_timeout_min = 5
     try:
         now_ts = _now()
         stuck_ids: list[str] = []
@@ -193,7 +193,7 @@ def _bootstrap_from_db() -> None:
             if a.status != "generating":
                 continue
             age_min = (now_ts - a.updated_at).total_seconds() / 60
-            if age_min < _GENERATING_TIMEOUT_MIN:
+            if age_min < generating_timeout_min:
                 continue
             # 标 draft + parse_error 告诉用户失败
             a.status = "draft"
@@ -359,7 +359,7 @@ def _json_failure_window(text: str, err: json.JSONDecodeError) -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ── T126 · events grounding helpers ─────────────────────────────────
@@ -1374,11 +1374,11 @@ async def _stage_outline_knowledge_graph(
     5. 创建一个 fake "图谱" Chapter (order_index=0, content=节点 ID 索引锚点行,
        layout 暂留 nodes; edges 留 content stage 填)
     """
-    from app.services.knowledge_graph.assess import dedup_nodes
     from app.schemas.knowledge_graph import (
         KGOutlineLLMOutput,
         KnowledgeGraphLayout,
     )
+    from app.services.knowledge_graph.assess import dedup_nodes
 
     asset = _assets[asset_id]
     progress = _progress[asset_id]
@@ -1610,7 +1610,6 @@ async def _stage_content_knowledge_graph(
 
     # 创建 Chapter (单一, order_index=0, content + layout)
     chapter_id = f"ch-{asset_id}-kg"
-    now_iso = _now()
     chapter = Chapter(
         id=chapter_id,
         asset_id=asset_id,
@@ -2071,6 +2070,7 @@ async def _stage_evidence(asset_id: str, req: GenerateAssetRequest) -> dict:
     改用统一 _time_window_from_iso() helper.
     """
     import random
+
     from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
 
     # B 改造: agent_skill 是单章节 markdown SKILL.md, 不需要 evidence-badge
@@ -2289,7 +2289,7 @@ def _compute_recency(occurred_at: str | None, now: datetime) -> float:
         ts = occurred_at.replace("Z", "+00:00") if occurred_at.endswith("Z") else occurred_at
         ev_dt = datetime.fromisoformat(ts)
         if ev_dt.tzinfo is None:
-            ev_dt = ev_dt.replace(tzinfo=timezone.utc)
+            ev_dt = ev_dt.replace(tzinfo=UTC)
     except ValueError:
         return 0.5
     days = max(0.0, (now - ev_dt).total_seconds() / 86400.0)
@@ -2360,7 +2360,7 @@ def _normalize_evidence_tags(content: str, k: int) -> tuple[str, int]:
     return new_content, count
 
 
-def _chapter_to_embed_text(ch: "Chapter") -> str:
+def _chapter_to_embed_text(ch: Chapter) -> str:
     """章节 → embedding 文本 (标题 + 前 500 字)."""
     return f"{ch.title}\n\n{(ch.content or '')[:500]}"
 
@@ -2640,7 +2640,7 @@ async def _stage_assess(asset_id: str, req: GenerateAssetRequest) -> dict:
 
 
 async def _compute_book_consistency(
-    chapters: list["Chapter"],
+    chapters: list[Chapter],
 ) -> tuple[float | None, str]:
     """v0.2 · book 跨章一致性: 同卷内相邻 depth=1 章节的 cosine 均值.
 
@@ -2657,7 +2657,7 @@ async def _compute_book_consistency(
     from app.llm_gateway.embedding import EmbeddingError, cosine, embed_batch
 
     # 按卷 (parent_id) 分组, 只看 depth=1 子章节
-    groups: dict[str, list["Chapter"]] = {}
+    groups: dict[str, list[Chapter]] = {}
     for ch in chapters:
         if (ch.depth or 0) != 1 or not ch.parent_id:
             continue
@@ -2698,7 +2698,7 @@ async def _compute_book_consistency(
     return round(avg, 3), "adjacent_chapter_cosine"
 
 
-def _build_outline_text(title: str, chapters: list["Chapter"]) -> str:
+def _build_outline_text(title: str, chapters: list[Chapter]) -> str:
     """把 asset outline 拼成 embedding 输入. 拍上限 1500 字符避免长尾."""
     parts: list[str] = [title or ""]
     for ch in chapters:
@@ -2713,7 +2713,7 @@ def _build_outline_text(title: str, chapters: list["Chapter"]) -> str:
 
 async def _compute_similarity_to_history(
     asset: Asset,
-    chapters: list["Chapter"],
+    chapters: list[Chapter],
 ) -> tuple[float, str, str | None]:
     """与同项目内其它 asset 的最大余弦相似度.
 
@@ -2746,7 +2746,7 @@ async def _compute_similarity_to_history(
 
     # 一次性 embedding (current + N prior)
     try:
-        from app.llm_gateway.embedding import embed_batch, cosine
+        from app.llm_gateway.embedding import cosine, embed_batch
         texts = [current_text] + [t for _, t in prior_texts]
         vectors = await embed_batch(texts)
     except Exception as e:  # noqa: BLE001
@@ -2773,7 +2773,7 @@ async def _compute_similarity_to_history(
 
 async def _assess_slop_via_llm(
     asset: Asset,
-    chapters: list["Chapter"],
+    chapters: list[Chapter],
     req: GenerateAssetRequest,
 ) -> tuple[float, str, str]:
     """1 次 LLM 调用评全文 slop_score (0..1, 低=好).
@@ -3261,7 +3261,7 @@ def reject_chapter(asset_id: str, chapter_id: str, reason: str) -> Chapter | Non
 
 
 def _publish_chapter_rejected_im(
-    asset: "Asset | None", chapter: Chapter, reason: str
+    asset: Asset | None, chapter: Chapter, reason: str
 ) -> None:
     """T130 MVP · 给作者发飞书 DM (best-effort, 不阻断主流程).
 
@@ -3290,7 +3290,7 @@ def _publish_chapter_rejected_im(
 
 
 def _publish_chapter_rejected_sse(
-    asset: "Asset | None", chapter: Chapter, reason: str
+    asset: Asset | None, chapter: Chapter, reason: str
 ) -> None:
     """T129 · 推 SSE 给 asset.created_by (作者). 作者未订阅时 silently
     deliver=0; 异常完全 swallow 不影响主流程."""

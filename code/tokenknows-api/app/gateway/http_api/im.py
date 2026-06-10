@@ -11,10 +11,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 import asyncio
 import json
+from datetime import UTC
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -28,15 +27,13 @@ from app.schemas.im import (
     IMConnectionStatus,
     IMPlatform,
     IMSourceMode,
-    ValueSegment,
 )
 from app.services import im_service
-from app.services.im import retention
+from app.services.im import distill_jobs, retention
 from app.services.im.connector_base import (
     ConnectorError,
     TokenExpiredError,
 )
-from app.services.im import distill_jobs
 from app.services.im.distill_jobs import DistillJob, JobStatus
 from app.services.im.value_segment_service import (
     process_messages_to_segments,
@@ -191,7 +188,7 @@ async def sign_consent(
       - consent_user_id = body.user_id
       - consent_signed_at = now
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
     if not body.accepts_terms:
         raise HTTPException(
             400, detail="必须勾选 accepts_terms=true 才能签字"
@@ -199,7 +196,7 @@ async def sign_consent(
     conn = im_service.get_connection(connection_id)
     if conn is None:
         raise HTTPException(404, detail="Connection not found")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     updated = conn.model_copy(update={
         "consent_signed_by": body.signed_by,
         "consent_user_id": body.user_id or conn.consent_user_id,
@@ -355,6 +352,7 @@ async def trigger_distill(
     if not rows:
         return DistillResponse(segments_persisted=0, segment_ids=[])
     from datetime import datetime
+
     from app.schemas.im import IMUser
     from app.services.im.connector_base import IMNormalizedMessage
     msgs: list[IMNormalizedMessage] = []
@@ -503,7 +501,7 @@ async def stream_distill_job(job_id: str) -> StreamingResponse:
                 try:
                     ev = await asyncio.wait_for(q.get(), timeout=30.0)
                     yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keep-alive\n\n"
         finally:
             registry.unsubscribe(job_id, q)

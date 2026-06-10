@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.schemas.skill import ReviewRecord, ReviewState, Skill
 
@@ -72,7 +72,7 @@ def submit_for_review(
             f"got review_state={skill.review_state}"
         )
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     record = ReviewRecord(
         reviewer_id=user_id,  # submit 时 actor 就是作者本人
         action="submit",
@@ -110,7 +110,7 @@ def approve(
             f"approve requires status=draft, got {skill.status}"
         )
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     record = ReviewRecord(
         reviewer_id=reviewer_id,
         action="approve",
@@ -149,7 +149,7 @@ def reject(
     if not reason or not reason.strip():
         raise InvalidReviewTransition("reject reason required")
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     record = ReviewRecord(
         reviewer_id=reviewer_id,
         action="reject",

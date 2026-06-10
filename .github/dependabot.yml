@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /code/tokenknows-web
+    schedule:
+      interval: weekly
+    groups:
+      web-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /plugins/vscode-tokenknows
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: /code/tokenknows-api
+    schedule:
+      interval: weekly
+    groups:
+      api-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.config.logging import logger
@@ -32,7 +32,6 @@ from app.schemas.auto_trigger import (
     can_transition,
 )
 
-
 # ─── 常量 ──────────────────────────────────────────────────
 
 DEFAULT_WITHDRAW_WINDOW_MIN = 5
@@ -46,11 +45,11 @@ EXPIRED_GRACE_MIN = 60
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _to_iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat()
+    return dt.astimezone(UTC).isoformat()
 
 
 def _new_id(prefix: str) -> str:

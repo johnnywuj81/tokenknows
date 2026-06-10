@@ -17,11 +17,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from app.schemas.skill import ConsentRecord, Skill, SkillStatus
-
 
 # OD-6: 30 天无人响应 → 自动 expired.
 _CONSENT_WINDOW_DAYS = 30
@@ -113,7 +112,7 @@ def initialize_pending(skill: Skill, *, now: datetime | None = None) -> Skill:
             f"initialize_pending only from draft, got {skill.status}"
         )
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     return skill.model_copy(
         update={
             "status": "pending_contributor_consent",
@@ -203,7 +202,7 @@ def mark_expired(skill: Skill, *, now: datetime | None = None) -> Skill:
     return skill.model_copy(
         update={
             "status": "expired_no_consent",
-            "updated_at": now or datetime.now(timezone.utc),
+            "updated_at": now or datetime.now(UTC),
         }
     )
 
@@ -212,7 +211,7 @@ def is_expired(skill: Skill, *, now: datetime | None = None) -> bool:
     """sweep 辅助: 是否超 consent_expires_at."""
     if skill.consent_expires_at is None:
         return False
-    return (now or datetime.now(timezone.utc)) > skill.consent_expires_at
+    return (now or datetime.now(UTC)) > skill.consent_expires_at
 
 
 # ─── Sweep (T50 daily 03:00) ──────────────────────────────────────
@@ -232,7 +231,7 @@ def sweep_expired_consents(*, now: datetime | None = None) -> dict[str, int]:
     # 延迟 import 避免 consent.py ↔ consent_notifier 循环
     from app.services.im import consent_notifier as _notifier
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     db = store_module.get_db()
 
     rows = db._query(  # noqa: SLF001 - sweep 内部用, 不暴露 API
@@ -316,7 +315,7 @@ def sign_consent(
         )
     record = ConsentRecord(
         user_id=user_id,
-        signed_at=now or datetime.now(timezone.utc),
+        signed_at=now or datetime.now(UTC),
         channel=channel,
         note=note,
     )
@@ -359,7 +358,7 @@ def reject_consent(
         )
     record = ConsentRecord(
         user_id=user_id,
-        signed_at=now or datetime.now(timezone.utc),
+        signed_at=now or datetime.now(UTC),
         channel=channel,
         note=reason,
     )

@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.schemas.im import IMConnection
@@ -39,7 +39,7 @@ def list_due_connections(now: datetime | None = None) -> list[IMConnection]:
         token_expires_at <= now + REFRESH_AHEAD AND
         refresh_token_enc IS NOT NULL  (没 refresh token 没法刷)
     """
-    now_dt = now or datetime.now(timezone.utc)
+    now_dt = now or datetime.now(UTC)
     threshold = now_dt + REFRESH_AHEAD
     out: list[IMConnection] = []
     # 遍历各项目的 active connection

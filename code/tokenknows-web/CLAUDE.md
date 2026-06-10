@@ -105,7 +105,7 @@ src/features/workbench/
 
 ```bash
 # 类型检查
-npx tsc --noEmit
+npx tsc -b --force   # 注意: 根 tsconfig 是 solution-style, --noEmit 是空检查
 
 # Lint
 npm run lint

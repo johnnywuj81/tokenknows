@@ -19,11 +19,11 @@ MVP 简化:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.persistence import get_db
-from app.schemas.im import IMConnection, IMMessage, IMUser, ValueSegment
+from app.schemas.im import IMConnection, ValueSegment
 from app.services import im_service
 
 DEFAULT_RETENTION_DAYS = 90
@@ -55,7 +55,7 @@ def expire_messages_now(now: datetime | None = None) -> dict:
     Returns:
         {"scanned": int, "redacted": int, "errors": int}
     """
-    cutoff = (now or datetime.now(timezone.utc)).isoformat()
+    cutoff = (now or datetime.now(UTC)).isoformat()
     db = get_db()
     ids = db.expire_im_messages(cutoff)
     if not ids:
@@ -123,7 +123,7 @@ def revoke_connection(connection_id: str) -> IMConnection | None:
     logger.info(
         "im_connection_revoked",
         id=connection_id,
-        grace_until=(datetime.now(timezone.utc) + timedelta(days=REVOCATION_GRACE_DAYS)).isoformat(),
+        grace_until=(datetime.now(UTC) + timedelta(days=REVOCATION_GRACE_DAYS)).isoformat(),
     )
     return updated
 
@@ -147,7 +147,7 @@ def force_purge_revoked_connection(
             id=connection_id, status=conn.status,
         )
         return {"messages_redacted": 0, "messages_total": 0}
-    now_dt = now or datetime.now(timezone.utc)
+    now_dt = now or datetime.now(UTC)
     if conn.revoked_at is None or (now_dt - conn.revoked_at) < timedelta(
         days=REVOCATION_GRACE_DAYS
     ):
@@ -241,7 +241,7 @@ def upcoming_expirations(
     Returns:
         [{"connection_id", "count", "earliest_until"}, ...]
     """
-    base = now or datetime.now(timezone.utc)
+    base = now or datetime.now(UTC)
     cutoff = (base + timedelta(days=days_ahead)).isoformat()
     db = get_db()
     rows = db._query(

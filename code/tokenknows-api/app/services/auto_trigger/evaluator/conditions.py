@@ -10,8 +10,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.persistence import get_db
@@ -63,7 +62,7 @@ def evaluate_extra_condition(
     if cond is None:
         return True, None
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     actual = _resolve_metric(cond.metric, project_id, now)
     if actual is None:

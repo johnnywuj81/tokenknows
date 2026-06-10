@@ -63,10 +63,10 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
-      - name: ruff (info only)
+      - name: ruff
         run: |
-          ruff check app/ || true
-          ruff format --check app/ || true
+          ruff check app/
+          ruff format --check app/ || true   # format 全量重排是大 churn, 暂 info-only
 
       - name: Import smoke (FastAPI app loads + routes registered)
         run: |

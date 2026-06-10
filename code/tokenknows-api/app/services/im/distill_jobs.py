@@ -19,15 +19,15 @@ import asyncio
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from app.config.logging import logger
 from app.schemas.im import IMSourceMode
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -49,8 +49,8 @@ class DistillJob:
     segments_persisted: int = 0
     segment_ids: list[str] = field(default_factory=list)
     error: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class _JobRegistry:
@@ -96,7 +96,7 @@ class _JobRegistry:
             for k, v in changes.items():
                 if hasattr(job, k):
                     setattr(job, k, v)
-            job.updated_at = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(UTC)
             return job
 
     def publish_event(self, job_id: str, event: dict[str, Any]) -> None:
@@ -138,14 +138,15 @@ def get_registry() -> _JobRegistry:
 async def run_distill_job(job_id: str) -> None:
     """后台 task: 实际跑蒸馏并推 SSE."""
     from datetime import datetime as _dt
+
     from app.persistence import get_db
     from app.schemas.im import IMUser
     from app.services.im.connector_base import IMNormalizedMessage
+    from app.services.im.signal_gate import classify_batch_async
     from app.services.im.value_segment_service import (
         assemble_segments,
         persist_segments,
     )
-    from app.services.im.signal_gate import classify_batch_async
 
     job = _registry.get(job_id)
     if job is None:

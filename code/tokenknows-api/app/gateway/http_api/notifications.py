@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -161,7 +161,7 @@ async def stream_notifications(
                     ev = await asyncio.wait_for(
                         queue.get(), timeout=_SSE_HEARTBEAT_S
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield b": heartbeat\n\n"
                     continue
                 yield _sse_format(event=ev.event, data=ev.to_json())
@@ -180,4 +180,4 @@ async def stream_notifications(
 
 
 def _sse_format(*, event: str, data: str) -> bytes:
-    return f"event: {event}\ndata: {data}\n\n".encode("utf-8")
+    return f"event: {event}\ndata: {data}\n\n".encode()

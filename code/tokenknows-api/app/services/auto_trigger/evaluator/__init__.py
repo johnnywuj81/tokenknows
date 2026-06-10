@@ -6,11 +6,11 @@
 - rule_evaluator: 主流程, 遍历 enabled cron 规则 → 检查 → schedule / skip
 """
 
-from app.services.auto_trigger.evaluator.cron_matcher import matches_in_window
 from app.services.auto_trigger.evaluator.conditions import evaluate_extra_condition
+from app.services.auto_trigger.evaluator.cron_matcher import matches_in_window
 from app.services.auto_trigger.evaluator.rule_evaluator import (
-    evaluate_cron_rules,
     SCAN_WINDOW_SECONDS,
+    evaluate_cron_rules,
 )
 
 __all__ = [

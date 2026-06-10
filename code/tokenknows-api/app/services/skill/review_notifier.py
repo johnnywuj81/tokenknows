@@ -21,7 +21,7 @@ Reviewer 路由策略 (MVP):
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from app.config.logging import logger
@@ -29,7 +29,6 @@ from app.config.settings import get_settings
 from app.persistence import store as store_module
 from app.schemas.notification import NotificationType, WebNotification
 from app.schemas.skill import Skill
-
 
 _ReviewKind = Literal[
     "skill_review_request",
@@ -113,7 +112,7 @@ def _notify_each(
     settings = get_settings()
     base = (settings.public_base_url or "").rstrip("/")
     link = f"{base}/skills/{skill.id}" if base else f"/skills/{skill.id}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db = store_module.get_db()
 
     count = 0

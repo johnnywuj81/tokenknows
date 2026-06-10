@@ -13,7 +13,7 @@ T128 新增 pending_revision 规则:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.schemas.todo import TodoItem, TodoType
@@ -27,10 +27,10 @@ _GENERATING_STUCK_SECONDS = 300
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def _todo_type_for_asset(asset: "Asset") -> TodoType | None:
+def _todo_type_for_asset(asset: Asset) -> TodoType | None:
     """决定单个 asset 产生哪种 todo (None = 无 todo).
 
     优先级 (高 → 低):
@@ -55,7 +55,7 @@ def _todo_type_for_asset(asset: "Asset") -> TodoType | None:
             updated = datetime.fromisoformat(
                 str(asset.updated_at).replace("Z", "+00:00")
             )
-            elapsed = (datetime.now(timezone.utc) - updated).total_seconds()
+            elapsed = (datetime.now(UTC) - updated).total_seconds()
             if elapsed > _GENERATING_STUCK_SECONDS:
                 return "pending_generate"
         except (ValueError, TypeError):
@@ -64,7 +64,7 @@ def _todo_type_for_asset(asset: "Asset") -> TodoType | None:
     return None
 
 
-def _title_for_todo(asset: "Asset", todo_type: TodoType) -> str:
+def _title_for_todo(asset: Asset, todo_type: TodoType) -> str:
     """根据 asset.type + todo 类型给一个友好标题."""
     type_label = {
         "weekly_report": "周报",

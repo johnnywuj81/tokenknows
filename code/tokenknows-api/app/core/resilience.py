@@ -19,7 +19,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ T = TypeVar("T")
 # ── Circuit Breaker ──────────────────────────────────────────────────
 
 
-class CircuitState(str, Enum):
+class CircuitState(StrEnum):
     CLOSED = "closed"        # Normal — requests pass through
     OPEN = "open"            # Tripped — requests fail fast
     HALF_OPEN = "half_open"  # Probing — one test request allowed

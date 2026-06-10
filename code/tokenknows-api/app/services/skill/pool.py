@@ -5,11 +5,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.config.logging import logger
-
 
 # T60 deprecation 阈值
 DORMANT_DAYS = 60
@@ -114,7 +113,7 @@ def recompute_all_trust_scores(*, now: datetime | None = None) -> dict[str, int]
             )
             new_skill = skill.model_copy(update={
                 "metrics": new_metrics,
-                "updated_at": now or datetime.now(timezone.utc),
+                "updated_at": now or datetime.now(UTC),
             })
             skill_service.get_registry().update(new_skill)
             updated += 1
@@ -139,7 +138,7 @@ def collect_deprecation_candidates(
     """
     from app.services import skill_service
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     dormant_cutoff = now_utc - timedelta(days=DORMANT_DAYS)
     candidates: list[dict[str, Any]] = []
     try:
@@ -187,7 +186,7 @@ def build_governance_summary(
     """
     from app.services import skill_service
 
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     dormant_cutoff = now_utc - timedelta(days=DORMANT_DAYS)
 
     by_status: dict[str, int] = {}

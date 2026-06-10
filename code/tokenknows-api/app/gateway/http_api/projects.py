@@ -21,9 +21,10 @@ T144 修复 code-review 发现的 4 个问题:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any, Final, Mapping
+from typing import Any, Final
 
 from fastapi import APIRouter, HTTPException
 
@@ -61,7 +62,7 @@ _PROJECT_METADATA: Final[Mapping[str, Mapping[str, Any]]] = MappingProxyType({
 
 def _compute_stats(project_id: str) -> ProjectStats:
     db = store_module.get_db()
-    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    week_ago = (datetime.now(UTC) - timedelta(days=7)).isoformat()
 
     _rows, total_week = db.list_events(
         project_id=project_id, from_iso=week_ago, limit=1,

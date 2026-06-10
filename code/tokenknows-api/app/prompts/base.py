@@ -153,7 +153,7 @@ def _parse(raw: str) -> tuple[dict[str, Any], str, str]:
         sections["user"] = body.strip("\n")
 
     if "user" not in sections:
-        raise ValueError(f"PromptTemplate must have @user section")
+        raise ValueError("PromptTemplate must have @user section")
 
     return options, sections.get("system", ""), sections["user"]
 

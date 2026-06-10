@@ -19,7 +19,7 @@ execution → fire(execution.id) 单次执行.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.config.logging import logger
@@ -28,7 +28,6 @@ from app.schemas.auto_trigger import AssetTriggerMeta, TriggerExecution, Trigger
 from app.schemas.generation import GenerateAssetRequest
 from app.services import auto_trigger_service as svc
 from app.services import generation_service, skill_service
-
 
 # 默认 time_window: 自动触发的 asset 用"上周"窗口
 # (与 PRD §5.3 C1 "每周自动生成上周周报" 对齐)
@@ -60,7 +59,7 @@ class PrematureFire(DispatcherError):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _build_trigger_meta(rule: TriggerRule, execution: TriggerExecution) -> dict:
@@ -263,7 +262,7 @@ async def _dispatch_skill_distill(
 
     返回 skill.id 作为 artifact_id (替代 asset.id).
     """
-    since = datetime.now(timezone.utc) - timedelta(days=SKILL_DISTILL_DAYS)
+    since = datetime.now(UTC) - timedelta(days=SKILL_DISTILL_DAYS)
     signals = get_db().list_top_im_signals_in_project(
         execution.project_id,
         since_iso=since.isoformat(),

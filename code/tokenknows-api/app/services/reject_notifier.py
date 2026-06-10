@@ -30,7 +30,6 @@ from app.schemas.asset import Asset, Chapter
 from app.services import im_service
 from app.services.im_crypto import TokenCryptoError, decrypt_token
 
-
 _HTTP_TIMEOUT = 10.0
 _FEISHU_OPENID_PREFIX = "ou_"
 

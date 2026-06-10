@@ -13,9 +13,9 @@ project 跨 asset 去重 (不破坏 asset 内 node id, 只建立 entity_id 映�
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
 from threading import RLock
-from typing import Callable, Iterable
 from uuid import uuid4
 
 import structlog
@@ -31,7 +31,7 @@ logger = structlog.get_logger()
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _canonical(label: str) -> str:

@@ -26,7 +26,7 @@ import random
 import re
 import threading
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import yaml
@@ -210,7 +210,7 @@ async def distill_skill(
             chapter_id=c["id"],
             asset_id=c["asset_id"],
             asset_version=c.get("asset_version", 1),
-            quoted_at=datetime.now(timezone.utc),
+            quoted_at=datetime.now(UTC),
         )
         for c in source_chapters
     ]
@@ -244,7 +244,7 @@ async def distill_skill(
         logger.warning("skill_embedding_failed", error=str(e))
         embedding = None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     skill = Skill(
         id=f"skill-{uuid.uuid4().hex[:12]}",
         project_id=project_id,
@@ -484,7 +484,7 @@ def record_skill_application(
     Returns:
         SkillApplicationRecord 列表 (供 generation_service 写入 chapter dump)
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     records: list[SkillApplicationRecord] = []
     for skill, score in picked:
         records.append(SkillApplicationRecord(
@@ -562,7 +562,7 @@ def on_chapter_state_changed(
             avg_acceptance_rate=acc_rate,
             trust_score=new_trust,
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # 自动 active 条件
         new_status: SkillStatus = skill.status
         if (
@@ -607,7 +607,7 @@ def _compute_trust_score(
     if last_used_at is None:
         recency = 1.0
     else:
-        days = (datetime.now(timezone.utc) - last_used_at).total_seconds() / 86400
+        days = (datetime.now(UTC) - last_used_at).total_seconds() / 86400
         recency = math.exp(-days / RECENCY_HALF_LIFE_DAYS)
     confidence = min(1.0, usage / 10.0) if usage > 0 else 0.3  # 0 use → 0.3 默认
     score = base * recency * confidence
@@ -663,7 +663,7 @@ async def evolve_skill_v2(
     # 旧 skill 标 deprecated
     old_deprecated = old.model_copy(update={
         "status": "deprecated",
-        "updated_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(UTC),
     })
     _registry.update(old_deprecated)
 
@@ -697,7 +697,7 @@ def update_skill(
     skill = _registry.get(skill_id)
     if skill is None:
         return None
-    update: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+    update: dict[str, Any] = {"updated_at": datetime.now(UTC)}
     if skill_md is not None:
         update["skill_md"] = skill_md
     if name is not None:

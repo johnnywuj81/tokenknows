@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.persistence import get_db
@@ -194,7 +194,7 @@ def persist_segments(
     """写入 value_segments 表; 返回构造好的 ValueSegment 列表."""
     db = get_db()
     written: list[ValueSegment] = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for seg in segments:
         vs = ValueSegment(
             id=f"seg-{uuid.uuid4().hex[:12]}",

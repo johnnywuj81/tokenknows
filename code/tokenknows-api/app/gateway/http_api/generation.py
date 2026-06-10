@@ -9,12 +9,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-
 from pydantic import BaseModel
 
 from app.schemas.asset import Asset, Chapter, Evidence, PublishRecord, RedactionScanJob
@@ -507,7 +505,7 @@ async def stream_progress(asset_id: str, request: Request) -> StreamingResponse:
                     break
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=15.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # 心跳 - 防 nginx / Vite proxy 掐连接
                     yield b": heartbeat\n\n"
                     continue
@@ -535,4 +533,4 @@ async def stream_progress(asset_id: str, request: Request) -> StreamingResponse:
 
 def _sse_format(*, event: str, data: str) -> bytes:
     """格式化 SSE 行."""
-    return f"event: {event}\ndata: {data}\n\n".encode("utf-8")
+    return f"event: {event}\ndata: {data}\n\n".encode()

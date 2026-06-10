@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config.logging import logger
 from app.persistence import store as store_module
@@ -53,7 +53,7 @@ def add_member(
 ) -> ProjectMember:
     """添加 / 更新成员 (project_id, user_id) UNIQUE 约束自动 upsert role."""
     db = store_module.get_db()
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     member = ProjectMember(
         id=f"member-{uuid.uuid4().hex[:12]}",
         project_id=project_id,

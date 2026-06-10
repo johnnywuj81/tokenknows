@@ -26,8 +26,8 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -37,7 +37,6 @@ from app.persistence import store as store_module
 from app.schemas.notification import NotificationType, WebNotification
 from app.schemas.skill import Skill
 from app.services.im_crypto import TokenCryptoError, decrypt_token
-
 
 _HTTP_TIMEOUT = 10.0
 
@@ -175,7 +174,7 @@ def _write_web_notification(skill: Skill, user_id: str) -> WebNotification:
         ),
         link_url=link,
         read=False,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         related_skill_id=skill.id,
     )
     _persist_notification(notif)
@@ -610,7 +609,7 @@ def notify_followup(
     settings = get_settings()
     base = (settings.public_base_url or "").rstrip("/")
     link = f"{base}/skills/{skill.id}" if base else f"/skills/{skill.id}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     count = 0
     for uid in recipient_user_ids:
         notif = WebNotification(

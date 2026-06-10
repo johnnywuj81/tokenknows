@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.services import auto_trigger_service as svc
@@ -194,7 +194,7 @@ async def quota_resetter_job() -> None:
     Stub 行为: 仅 log 触发时刻 + 当前月份.
     """
     try:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         logger.info(
             "auto_trigger_quota_resetter_tick",
             stub=True,
@@ -242,7 +242,7 @@ async def skill_deprecation_sweep_job() -> None:
     Tolerance: 单 skill 失败 try-except.
     """
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.services import skill_service
         from app.services.skill import pool as skill_pool
@@ -255,7 +255,7 @@ async def skill_deprecation_sweep_job() -> None:
 
         # v1.0.1 (review fix): 移除未用的 db assignment (ruff F841);
         # 实际持久化通过 skill_service.get_registry().update 透传到 store.
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         deprecated = 0
         errors = 0
         for c in candidates:
@@ -349,7 +349,7 @@ async def cleanup_audit_log_job() -> None:
     T27 真实现: 直接调 store.delete_old_trigger_executions.
     """
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        cutoff = datetime.now(UTC) - timedelta(days=90)
         from app.persistence import get_db
         deleted = get_db().delete_old_trigger_executions(cutoff.isoformat())
         if deleted > 0:

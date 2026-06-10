@@ -35,7 +35,7 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.config.logging import logger
@@ -91,9 +91,7 @@ def decrypt_payload(encrypted_b64: str, encrypt_key: str) -> dict:
     body = cipher_bytes[16:]
 
     try:
-        from cryptography.hazmat.primitives.ciphers import (
-            Cipher, algorithms, modes
-        )
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
         decryptor = cipher.decryptor()
         decrypted = decryptor.update(body) + decryptor.finalize()
@@ -189,10 +187,10 @@ def _parse_event_message(
 
     # 时间戳: 飞书 create_time 是毫秒字符串
     ts_raw = msg.get("create_time")
-    received = datetime.now(timezone.utc)
+    received = datetime.now(UTC)
     try:
         if ts_raw:
-            received = datetime.fromtimestamp(int(ts_raw) / 1000, tz=timezone.utc)
+            received = datetime.fromtimestamp(int(ts_raw) / 1000, tz=UTC)
     except (ValueError, TypeError):
         pass
 
@@ -320,7 +318,8 @@ def process_event_payload(
     try:
         from app.config.settings import get_settings
         from app.services.auto_trigger.mention_dispatcher import (
-            dispatch_mention, normalize_im_mention,
+            dispatch_mention,
+            normalize_im_mention,
         )
 
         bot_open_id = get_settings().feishu_bot_open_id

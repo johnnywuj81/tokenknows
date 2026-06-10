@@ -59,7 +59,6 @@ def render_kg_svg(layout: dict[str, Any]) -> str:
         key=lambda n: n.get("trust_score", 0.0),
         reverse=True,
     )[:_MAX_NODES]
-    keep_ids = {n["id"] for n in sorted_nodes}
 
     # 按 type 分列
     by_type: dict[str, list[dict]] = {

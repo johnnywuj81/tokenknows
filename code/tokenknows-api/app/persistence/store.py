@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -379,8 +380,8 @@ class SqliteStore:
              event_count(30d) = 0, last_seen_at = 8个月前, last_ingested_at = 1小时前.
              前端可据此判断: "插件在跑, 但近期没有新对话".
         """
-        from datetime import datetime, timedelta, timezone
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
         # 窗口内的事件统计
         in_window = self._query(
             """

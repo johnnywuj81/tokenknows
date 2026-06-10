@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config.logging import logger
 from app.persistence import store as store_module
@@ -36,7 +36,7 @@ def register(
     normalized_email = email.strip().lower()
     if db.get_user_by_email(normalized_email):
         raise UserAlreadyExists(f"email already registered: {normalized_email}")
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     user = User(
         id=f"user-{uuid.uuid4().hex[:12]}",
         email=normalized_email,
@@ -78,7 +78,7 @@ def login(*, email: str, password: str) -> User:
     if not verify_password(password, user.password_hash):
         raise InvalidCredentials("invalid email or password")
     # 更新 last_login_at
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     updated = user.model_copy(update={
         "last_login_at": now,
         "updated_at": now,

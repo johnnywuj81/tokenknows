@@ -24,7 +24,6 @@ from app.schemas.auto_trigger import (
     EventMatch,
     ExtraCondition,
     ThresholdSpec,
-    TriggerMode,
 )
 from app.services import auto_trigger_service as svc
 

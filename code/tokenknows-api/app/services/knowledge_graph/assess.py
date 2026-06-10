@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import defaultdict
 
 from app.schemas.knowledge_graph import KGEdge, KGNode
 

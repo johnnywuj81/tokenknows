@@ -19,7 +19,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ─── 类型定义 ────────────────────────────────────────────────
 
 TriggerMode = Literal["cron", "event", "threshold", "mention"]

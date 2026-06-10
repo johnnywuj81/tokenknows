@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -27,7 +27,7 @@ logger = structlog.get_logger()
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ── 内存 store ─────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ def list_logs(
                 continue
             out.append(log)
     # newest first
-    out.sort(key=lambda l: l.created_at, reverse=True)
+    out.sort(key=lambda rec: rec.created_at, reverse=True)
     return out[:limit]
 
 

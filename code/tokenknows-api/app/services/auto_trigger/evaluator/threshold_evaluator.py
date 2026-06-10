@@ -24,8 +24,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from app.config.logging import logger
 from app.persistence import get_db
@@ -72,7 +71,7 @@ def _count_approved_chapters(project_id: str) -> int:
 
 def _count_events_in_window(project_id: str, days: int) -> int:
     """近 N 天 events 数 (复用 store 接口)."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     return get_db().count_events_in_window(project_id, since.isoformat())
 
 
@@ -88,7 +87,7 @@ def _has_asset_of_type(project_id: str, asset_type: str) -> bool:
 
 def _count_im_signals(project_id: str, days: int) -> int:
     """统计项目下近 N 天 is_signal=1 的 IM 消息数."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     return get_db().count_im_signals_in_project(project_id, since.isoformat())
 
 
@@ -180,7 +179,7 @@ def evaluate_threshold_rules(
         return stats
 
     db = get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for rule in rules:
         stats["rules_evaluated"] += 1
@@ -249,7 +248,7 @@ def _evaluate_for_project(
             return
 
     # daily_cap
-    today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
     if svc.count_fired_since(rule.id, today_start) >= rule.daily_cap:
         stats["skipped_daily_cap"] += 1
         return

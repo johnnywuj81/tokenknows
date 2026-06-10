@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import fnmatch
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from app.config.logging import logger
@@ -33,7 +33,6 @@ from app.schemas.auto_trigger import (
     TriggerSignal,
 )
 from app.services import auto_trigger_service as svc
-
 
 GitHubEventType = Literal[
     "github_pr_opened",
@@ -143,7 +142,7 @@ def evaluate_github_event(
         "skipped_no_match": 0,
         "errors": 0,
     }
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # 按 priority DESC; 同类型 (asset_type) 同 event 只取最高优先级
     rules_sorted = sorted(rules, key=lambda r: -r.priority)
@@ -229,7 +228,7 @@ def _evaluate_for_project(
             return
 
     # daily_cap
-    today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
     if svc.count_fired_since(rule.id, today_start) >= rule.daily_cap:
         svc.record_skip(
             rule, project_id, signal, "daily_cap_reached",
