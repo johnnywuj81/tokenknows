@@ -1,0 +1,21 @@
+# gitleaks 配置 · 已知误报 allowlist (开源前全史扫密用)
+[extend]
+useDefault = true
+
+[allowlist]
+description = "TokenKnows known false positives"
+paths = [
+  # 脱敏功能自身的正则规则 (匹配 secret 模式不是 secret)
+  '''code/tokenknows-api/app/services/generation_service\.py''',
+  # 前端连接器 UI 的占位提示
+  '''code/tokenknows-web/src/features/projects/components/connectors/GitHubConnector\.tsx''',
+]
+regexes = [
+  # demo-seed 的演示 key (内容自标 do-not-use)
+  '''sk-ant-api03-demo-key-do-not-use''',
+  # 测试夹具自描述占位值
+  '''test-pw-12345678''',
+  '''test-encrypt-key-12345''',
+  # base64("fernet-key-shall-be-32-bytes") · 部署文档示例占位
+  '''ZmVybmV0LWtleS1zaGFsbC1iZS0zMi1ieXRlcw==''',
+]
