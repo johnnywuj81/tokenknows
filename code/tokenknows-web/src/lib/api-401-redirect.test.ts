@@ -4,7 +4,7 @@
  * jsdom 不支持真 navigation; 我们用 Object.defineProperty 覆盖 window.location 来断言.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import { api } from './api'
 import { useAuthStore } from '@/stores/authStore'
@@ -13,7 +13,7 @@ import { useAuthStore } from '@/stores/authStore'
 describe('api 401 redirect branch', () => {
   let mock: MockAdapter
   let originalLocation: Location
-  let hrefSetter: ReturnType<typeof vi.fn>
+  let hrefSetter: Mock<(v: string) => void>
 
   beforeEach(() => {
     mock = new MockAdapter(api)
