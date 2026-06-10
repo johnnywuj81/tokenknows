@@ -15,7 +15,7 @@ type=1 → user, type=2 → assistant.
 调用:
     python3 plugins/cursor/sync.py
     python3 plugins/cursor/sync.py --watch          # 60s 轮询
-    python3 plugins/cursor/sync.py --filter-cwd /Users/wujun/TokenKnows
+    python3 plugins/cursor/sync.py --filter-cwd ~/TokenKnows
 """
 
 from __future__ import annotations
@@ -316,7 +316,7 @@ def main() -> None:
     # T141: default 从 env 读 (TOKENKNOWS_API_BASE / TOKENKNOWS_DEFAULT_PROJECT)
     parser.add_argument(
         "--backend",
-        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8001"),
     )
     parser.add_argument(
         "--project",

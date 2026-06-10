@@ -42,5 +42,5 @@ description: "把当前 Codex 会话蒸馏成结构化文档 (周报 / 技术方
 
 ## 注意
 
-- 工具会 POST 到本地后端 (默认 `http://127.0.0.1:8002`),后端必须在跑。
+- 工具会 POST 到本地后端 (默认 `http://127.0.0.1:8001`),后端必须在跑。
 - 蒸馏是后台 5 阶段流水线 (collect → outline → content → evidence → assess),`distill_document` 立即返回 generating 态,稍后 `get_asset` 轮询到 draft。

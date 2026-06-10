@@ -2,7 +2,7 @@
 
 > FastAPI 后端 + LLM Gateway (三层出域门禁 + LiteLLM 多家适配 + 出域审计)
 >
-> 架构依据: [`engineering_handoff/Architecture.md`](../../engineering_handoff/Architecture.md) §17.1 + §5 (LLM Gateway 详细设计) + [`TDD`](../../TDD_TokenKnows_MVP.md) §6.6 / §7
+> 架构依据: [`engineering_handoff/Architecture.md`](../../engineering_handoff/Architecture.md) §17.1 + §5 (LLM Gateway 详细设计) + [`TDD`](../../docs/product/TDD_TokenKnows_MVP.md) §6.6 / §7
 
 ---
 

@@ -11,7 +11,7 @@
 调用:
     python3 sync.py --backend http://localhost:8001 --project proj-demo-001 \
         [--projects-dir ~/.claude/projects] \
-        [--filter-cwd /Users/wujun/TokenKnows] \
+        [--filter-cwd ~/TokenKnows] \
         [--watch]   # 持续模式, 默认 30s 轮询
 
 stdin/stdout 也能跑成 cron / launchd.
@@ -302,12 +302,12 @@ def run_once(
 
 def main() -> None:
     # T141: default 从 env 读, 防止 plist hardcode URL 跟实际 backend 端口漂移.
-    # 优先级: CLI --backend > env TOKENKNOWS_API_BASE > 内置 8002.
+    # 优先级: CLI --backend > env TOKENKNOWS_API_BASE > 内置 8001.
     parser = argparse.ArgumentParser(description="TokenKnows Claude Code sync")
     parser.add_argument(
         "--backend",
-        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
-        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8002)",
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8001"),
+        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8001)",
     )
     parser.add_argument(
         "--project",

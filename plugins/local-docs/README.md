@@ -71,7 +71,7 @@ python3 plugins/local-docs/sync.py \
   "content": "...(全文,最多 2MB)...",
   "trust_score": 0.77,
   "payload": {
-    "file_path": "/Users/wujun/Documents/notes/architecture/sqlite-switch.md",
+    "file_path": "~/Documents/notes/architecture/sqlite-switch.md",
     "size_bytes": 2840,
     "truncated": false,
     "extension": ".md",
@@ -95,7 +95,7 @@ PDF 单页 event 示例:
   "content": "...(第 19 页全部抽出的文本)...",
   "trust_score": 0.85,
   "payload": {
-    "file_path": "/Users/wujun/Documents/notes/playbook.pdf",
+    "file_path": "~/Documents/notes/playbook.pdf",
     "extension": ".pdf",
     "page": 19,
     "total_pages": 36,

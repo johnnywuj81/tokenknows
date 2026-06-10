@@ -32,10 +32,10 @@ pip install requests   # 唯一外部依赖
 python3 plugins/cursor/sync.py
 
 # 限定项目 (按 workspaceRootUri 过滤):
-python3 plugins/cursor/sync.py --filter-cwd /Users/wujun/TokenKnows
+python3 plugins/cursor/sync.py --filter-cwd ~/TokenKnows
 
 # 持续监听 60s 轮询:
-python3 plugins/cursor/sync.py --watch --filter-cwd /Users/wujun/TokenKnows
+python3 plugins/cursor/sync.py --watch --filter-cwd ~/TokenKnows
 ```
 
 state 存 `~/.tokenknows/cursor_state.json`:`{convId: lastUpdatedAt_ms}`。增量按对话级 `lastUpdatedAt` 推进,新 turn 才会再扫。

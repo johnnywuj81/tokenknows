@@ -514,8 +514,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="TokenKnows local docs sync")
     parser.add_argument(
         "--backend",
-        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
-        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8002)",
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8001"),
+        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8001)",
     )
     parser.add_argument(
         "--project",

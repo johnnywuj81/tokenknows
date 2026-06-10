@@ -32,7 +32,7 @@ python3 plugins/claude-code/sync.py --watch
 ```bash
 python3 plugins/claude-code/sync.py \
   --watch \
-  --filter-cwd /Users/wujun/TokenKnows
+  --filter-cwd ~/TokenKnows
 ```
 
 ## 后台跑(macOS launchd)

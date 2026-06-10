@@ -409,7 +409,7 @@ def main() -> None:
     # T141: default 从 env 读 (TOKENKNOWS_API_BASE / TOKENKNOWS_DEFAULT_PROJECT)
     parser.add_argument(
         "--backend",
-        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8001"),
     )
     parser.add_argument(
         "--project",

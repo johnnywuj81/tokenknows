@@ -114,7 +114,7 @@ plutil -lint ~/Library/LaunchAgents/com.tokenknows.claude-code.plist
 
 | Label | 作用 | 端口 | plist 来源 |
 |-------|------|------|-----------|
-| `com.tokenknows.api` | FastAPI 后端 (uvicorn) | 8002 | 手写 `~/Library/LaunchAgents/com.tokenknows.api.plist` |
+| `com.tokenknows.api` | FastAPI 后端 (uvicorn) | 8001 | 手写 `~/Library/LaunchAgents/com.tokenknows.api.plist` |
 | `com.tokenknows.web` | Vite dev server | 5173 | 由 `web.sh` 自动生成 |
 
 ## web.sh — 管 Vite LaunchAgent

@@ -41,7 +41,7 @@ python3 plugins/codex/sync.py --dry-run --include-archived
 
 ```bash
 python3 plugins/codex/sync.py \
-  --backend http://127.0.0.1:8002 \
+  --backend http://127.0.0.1:8001 \
   --project proj-demo-001
 ```
 
@@ -55,7 +55,7 @@ project**。只采某个项目:
 ```bash
 python3 plugins/codex/sync.py \
   --watch \
-  --filter-cwd /Users/wujun/TokenKnows
+  --filter-cwd ~/TokenKnows
 ```
 
 ## 持续监听
@@ -82,7 +82,7 @@ tail -f ~/Library/Logs/tokenknows/codex.log
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--backend` | env `TOKENKNOWS_API_BASE` / `http://127.0.0.1:8002` | 后端基址 |
+| `--backend` | env `TOKENKNOWS_API_BASE` / `http://127.0.0.1:8001` | 后端基址 |
 | `--project` | env `TOKENKNOWS_DEFAULT_PROJECT` / `proj-demo-001` | 目标 project_id |
 | `--sessions-dir` | `~/.codex/sessions` | 会话目录 |
 | `--filter-cwd` | (无) | 只采 session cwd 匹配的会话 |

@@ -207,7 +207,7 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **端到端流程**
 
-![旅程 A 流程图](./assets/journey-a-首次接入.svg)
+![旅程 A 流程图](../../assets/journey-a-onboarding.svg)
 
 **关键体验设计要点**
 
@@ -235,7 +235,7 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **端到端流程**
 
-![旅程 B 流程图](./assets/journey-b-过程到资产.svg)
+![旅程 B 流程图](../../assets/journey-b-process-to-asset.svg)
 
 **关键体验设计要点**
 
@@ -267,7 +267,7 @@ TokenKnows 是面向 AI Native 研发团队的**知识资产操作系统**。它
 
 **端到端流程**
 
-![旅程 C 流程图](./assets/journey-c-审核到发布.svg)
+![旅程 C 流程图](../../assets/journey-c-review-to-publish.svg)
 
 **关键体验设计要点**
 

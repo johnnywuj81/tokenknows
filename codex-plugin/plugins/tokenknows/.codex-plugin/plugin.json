@@ -1,7 +1,7 @@
 {
   "name": "tokenknows",
   "version": "2.1.0",
-  "description": "把当前 Codex session 蒸馏成结构化文档 (周报 / 技术方案 / ADR / 复盘 / 书籍 / Skill / 知识图谱), 通过 tokenknows MCP 接后端 5-stage pipeline. 也能检索跨会话的项目知识资产.\n\nAliases: @tokenknows, tokenknows, 知识蒸馏, 知识库.\n\n需先在 config.toml 配 [mcp_servers.tokenknows] (本插件 skills 调用其工具) + tokenknows-api 后端在 :8002 跑.",
+  "description": "把当前 Codex session 蒸馏成结构化文档 (周报 / 技术方案 / ADR / 复盘 / 书籍 / Skill / 知识图谱), 通过 tokenknows MCP 接后端 5-stage pipeline. 也能检索跨会话的项目知识资产.\n\nAliases: @tokenknows, tokenknows, 知识蒸馏, 知识库.\n\n需先在 config.toml 配 [mcp_servers.tokenknows] (本插件 skills 调用其工具) + tokenknows-api 后端在 :8001 跑.",
   "author": {
     "name": "TokenKnows",
     "url": "https://github.com/johnnywuj81/tokenknows"

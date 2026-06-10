@@ -26,7 +26,7 @@
 
 | Plugin 依赖 (当前) | Cowork sandbox VM 里的现实 |
 |---|---|
-| `TOKENKNOWS_API_ROOT=/Users/wujun/TokenKnows/code/tokenknows-api` (host 路径) | ❌ Linux VM 文件系统里这路径不存在 |
+| `TOKENKNOWS_API_ROOT=<repo>/code/tokenknows-api` (host 路径) | ❌ Linux VM 文件系统里这路径不存在 |
 | `PYTHONPATH` 指向 host repo + `python -m mcp_server` (本地代码加载) | ❌ VM 里没有 `mcp_server` Python package |
 | `TOKENKNOWS_API_BASE=http://127.0.0.1:8002` (host loopback) | ❌ VM 的 `127.0.0.1` 不是 host 的 `127.0.0.1` |
 

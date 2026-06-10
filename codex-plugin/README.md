@@ -31,7 +31,7 @@
 ```toml
 [marketplaces.tokenknows]
 source_type = "local"
-source = "/Users/wujun/TokenKnows/codex-plugin"
+source = "~/TokenKnows/codex-plugin"   # 改成你的 clone 路径
 ```
 
 然后**完全退出 + 重开 Codex**(Cmd+Q)。Plugins 市场里筛选 "All"(非 "Built by OpenAI")
@@ -43,5 +43,5 @@ source = "/Users/wujun/TokenKnows/codex-plugin"
 
 ## 依赖
 
-- tokenknows-api 后端在 `http://127.0.0.1:8002` 跑
+- tokenknows-api 后端在 `http://127.0.0.1:8001` 跑
 - `[mcp_servers.tokenknows]` 已配 (否则 skill 调不到工具)

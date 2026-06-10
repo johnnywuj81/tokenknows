@@ -16,9 +16,9 @@
 - 投递: POST /api/v1/projects/:project_id/events 批量 (≤200/批)
 
 调用:
-    python3 sync.py --backend http://127.0.0.1:8002 --project proj-demo-001 \
+    python3 sync.py --backend http://127.0.0.1:8001 --project proj-demo-001 \
         [--sessions-dir ~/.codex/sessions] \
-        [--filter-cwd /Users/wujun/TokenKnows] \
+        [--filter-cwd ~/TokenKnows] \
         [--include-archived] \
         [--dry-run]   # 只解析+打印统计, 不 POST (验证用)
         [--watch]     # 持续模式, 默认 30s 轮询
@@ -399,8 +399,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="TokenKnows Codex sync")
     parser.add_argument(
         "--backend",
-        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8002"),
-        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8002)",
+        default=os.environ.get("TOKENKNOWS_API_BASE", "http://127.0.0.1:8001"),
+        help="后端基址 (默认从 env TOKENKNOWS_API_BASE 读, fallback 127.0.0.1:8001)",
     )
     parser.add_argument(
         "--project",
