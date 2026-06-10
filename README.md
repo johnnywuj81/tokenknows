@@ -58,7 +58,7 @@ Prerequisite: the TokenKnows backend running at `http://localhost:8001` (see Qui
 | Platform | How |
 |---|---|
 | **Claude Code** | `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows` |
-| **Codex** | Clone this repo, then add `[marketplaces.tokenknows]` (`source_type = "local"`, `source = <clone>/codex-plugin`) and `[mcp_servers.tokenknows]` to `~/.codex/config.toml` — see [codex-plugin/README.md](codex-plugin/README.md) |
+| **Codex** | `codex plugin marketplace add johnnywuj81/tokenknows` → `codex plugin add tokenknows@tokenknows` (loads skills, commands and the MCP server; local-clone alternative in [codex-plugin/README.md](codex-plugin/README.md)) |
 | **Cursor** | Add the tokenknows MCP block to `~/.cursor/mcp.json` (same shape as [tokenknows-plugin/.mcp.json](tokenknows-plugin/.mcp.json)) |
 | **VS Code** | Download the `.vsix` from [Releases](https://github.com/johnnywuj81/tokenknows/releases) → `code --install-extension tokenknows-vscode-*.vsix` |
 

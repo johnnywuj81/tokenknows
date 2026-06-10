@@ -51,7 +51,7 @@
 | 平台 | 安装方式 |
 |---|---|
 | **Claude Code** | `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows` |
-| **Codex** | clone 本仓库 → `~/.codex/config.toml` 加 `[marketplaces.tokenknows]`(`source_type = "local"`,`source = <clone>/codex-plugin`)+ `[mcp_servers.tokenknows]`,详见 [codex-plugin/README.md](codex-plugin/README.md) |
+| **Codex** | `codex plugin marketplace add johnnywuj81/tokenknows` → `codex plugin add tokenknows@tokenknows`(skills / commands / MCP server 一并加载;本地 clone 备选方案见 [codex-plugin/README.md](codex-plugin/README.md)) |
 | **Cursor** | `~/.cursor/mcp.json` 加 tokenknows MCP 块(同 [tokenknows-plugin/.mcp.json](tokenknows-plugin/.mcp.json) 形状) |
 | **VS Code** | 从 [Releases](https://github.com/johnnywuj81/tokenknows/releases) 下载 `.vsix` → `code --install-extension tokenknows-vscode-*.vsix` |
 
