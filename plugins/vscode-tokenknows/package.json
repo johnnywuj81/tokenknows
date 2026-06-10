@@ -2,11 +2,17 @@
   "name": "tokenknows-vscode",
   "displayName": "TokenKnows · 代码事件采集",
   "description": "把 VS Code 里的文件保存 / 切换等研发事件实时推到 TokenKnows 工作台",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "tokenknows",
+  "icon": "assets/icon.png",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/johnnywuj81/tokenknows"
+  },
+  "homepage": "https://github.com/johnnywuj81/tokenknows#readme",
+  "bugs": {
+    "url": "https://github.com/johnnywuj81/tokenknows/issues"
   },
   "engines": {
     "vscode": "^1.84.0"
@@ -14,6 +20,20 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "tokenknows",
+    "knowledge",
+    "events",
+    "telemetry",
+    "productivity",
+    "knowledge-graph",
+    "self-hosted"
+  ],
+  "galleryBanner": {
+    "color": "#1d1311",
+    "theme": "dark"
+  },
+  "pricing": "Free",
   "activationEvents": [
     "onStartupFinished"
   ],

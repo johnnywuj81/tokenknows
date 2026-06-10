@@ -78,3 +78,9 @@ actions-runner/
 /data/
 
 code/tokenknows-web/data/
+
+# VS Code extension build artifacts (distribute via GitHub Releases)
+*.vsix
+
+# One-off bootstrap log
+bootstrap.log
