@@ -19,7 +19,7 @@ jobs:
       run:
         working-directory: code/tokenknows-web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install
         run: npm ci --prefer-offline --no-audit --progress=false
       - name: TypeScript check
@@ -39,7 +39,7 @@ jobs:
       run:
         working-directory: code/tokenknows-api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install (host .venv)
         run: |
           if [ ! -d .venv ]; then python3 -m venv .venv; fi
