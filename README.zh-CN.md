@@ -14,6 +14,11 @@
 </p>
 <p align="center"><a href="README.md">English</a> | <b>简体中文</b></p>
 
+<p align="center">
+  <img src="assets/demo/tokenknows-demo.gif" alt="TokenKnows demo: capture an AI coding session, distill it into a weekly report and knowledge graph" width="920" />
+</p>
+
+
 ---
 
 私有化部署的 AI 研发知识资产平台。自动采集 Claude Code / Codex / Cursor / VS Code / GitHub / 本地文档的研发过程,识别架构决策、Bug 复盘、Prompt 模式,经 5 阶段 LLM 流水线生成项目周报 / 技术方案 / ADR / 复盘报告 / 技术书籍 / Agent Skill / 知识图谱 —— 每段内容都可回溯到原始 PR / 对话 / Commit。

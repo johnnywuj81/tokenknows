@@ -15,6 +15,11 @@
 </p>
 <p align="center"><b>English</b> | <a href="README.zh-CN.md">简体中文</a></p>
 
+<p align="center">
+  <img src="assets/demo/tokenknows-demo.gif" alt="TokenKnows demo: capture an AI coding session, distill it into a weekly report and knowledge graph" width="920" />
+</p>
+
+
 ---
 
 ## What is TokenKnows?

@@ -36,7 +36,7 @@
 
 **弹药清单（发布前必须就位）：**
 
-- ☐ README 首屏 demo GIF（采集 → 蒸馏 → 周报/KG 的 30 秒闭环演示）
+- ✅ README 首屏 demo GIF（assets/demo/tokenknows-demo.gif · 50s/6.5MB/1080px · 终端→工作台实时事件流→周报→KG证据链→尾帧；另有 mp4 版供社交帖；制作管线 /tmp/tk-demo 已可复刻）
 - ☐ `docker-compose up` 一键起（HN / r/selfhosted 评论区必问）
 - ☐ 隐私答辩词：支持哪些 LLM 后端、能否全本地跑、token 流向
 
