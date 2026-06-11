@@ -1,5 +1,5 @@
 ---
-description: 把当前 Claude session 蒸馏成技术方案文档 (6 段: 背景/目标/设计思路/关键决策/风险与取舍/实施计划).
+description: "把当前 Claude session 蒸馏成技术方案文档 (6 段: 背景/目标/设计思路/关键决策/风险与取舍/实施计划)."
 ---
 
 按 `tokenknows:distill` skill 的标准流程,把当前 session 蒸馏成 **tech_design**:

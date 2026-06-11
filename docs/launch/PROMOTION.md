@@ -19,18 +19,18 @@
 
 | 状态 | 渠道 | 方式 | 备注 |
 |---|---|---|---|
-| ☐ | [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers)（88.8k⭐） | 直接 PR，Knowledge & Memory 类目 | 明文欢迎 agent PR（标题**末尾**加 🤖🤖🤖 可加速）；收录后自动进 Glama |
+| ✅ | [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers)（88.8k⭐） | 直接 PR，Knowledge & Memory 类目 | 明文欢迎 agent PR；已提 [PR #7816](https://github.com/punkpeye/awesome-mcp-servers/pull/7816)（🤖 fast-track）；收录后自动进 Glama |
 | ☐ | [appcypher/awesome-mcp-servers](https://github.com/appcypher/awesome-mcp-servers)（5.6k⭐） | PR，字母序，一条一个 PR | |
-| ☐ | [jamesmurdza/awesome-ai-devtools](https://github.com/jamesmurdza/awesome-ai-devtools)（3.8k⭐） | PR，按 PR 模板 checklist | Agent Infrastructure 或 Specialized Tools 节 |
-| ☐ | [ComposioHQ/awesome-claude-plugins](https://github.com/ComposioHQ/awesome-claude-plugins)（1.7k⭐） | PR，README 链接条目 | 不 vendor 代码，只加外链 |
-| ☐ | [mcp.so](https://mcp.so/) | 给 [chatmcp/mcpso](https://github.com/chatmcp/mcpso) 开 issue | 标题格式 `Submit MCP Server: ...`；积压多，慢 |
-| ☐ | Glama 认领 | 仓库根放 `glama.json`（maintainers: johnnywuj81） | punkpeye 收录后自动建档，glama.json 用于认领 |
-| ☐ | [PulseMCP](https://www.pulsemcp.com/submit) | 网页表单（一个 URL 字段） | 也会从官方 Registry 每周自动同步 |
-| ☐ | [mcpservers.org/submit](https://mcpservers.org/submit) | 网页表单 | wong2 的列表由此生成，不收 PR |
-| ☐ | GitHub topics 补全 | `gh repo edit --add-topic` | 补 `claude` / `self-hosted` / `vscode-extension` |
-| ☐ | Release v0.2.1 | `gh release create` 挂 vsix | README 安装表引用 Releases，旧的停在 v0.1.0 |
-| ☐ | Anthropic 社区插件市场 | [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) 表单 | 先本地跑 `claude plugin validate`；过审后出现在 anthropics/claude-plugins-community（夜间同步） |
-| ☐ | 官方 MCP Registry | `mcp-publisher` CLI | **工程前置**：MCP server 需先发 PyPI 包（pyproject 配 mcpName 对应物）；发布后 PulseMCP 等自动同步。注意 registry 仍标 preview |
+| ✅ | [jamesmurdza/awesome-ai-devtools](https://github.com/jamesmurdza/awesome-ai-devtools)（3.8k⭐） | PR，按 PR 模板 checklist | 已提 [PR #637](https://github.com/jamesmurdza/awesome-ai-devtools/pull/637)，Agent Infrastructure → Configuration & Context Management |
+| ✅ | [ComposioHQ/awesome-claude-plugins](https://github.com/ComposioHQ/awesome-claude-plugins)（1.7k⭐） | PR，README 链接条目 | 已提 [PR #287](https://github.com/ComposioHQ/awesome-claude-plugins/pull/287)，外链条目 |
+| ✅ | [mcp.so](https://mcp.so/) | 给 [chatmcp/mcpso](https://github.com/chatmcp/mcpso) 开 issue | 已提 [issue #2715](https://github.com/chatmcp/mcpso/issues/2715)；积压多，慢 |
+| ✅ | Glama 认领 | 仓库根放 `glama.json`（maintainers: johnnywuj81） | glama.json 已入库（commit a2b0e39）；等收录自动建档后走 Claim ownership |
+| ⏳ | [PulseMCP](https://www.pulsemcp.com/submit) | 网页表单（一个 URL 字段） | 2026 改制：server 不收直接提交，只从官方 MCP Registry 每日同步 → 并入下面 Registry 任务 |
+| ✅ | [mcpservers.org/submit](https://mcpservers.org/submit) | 网页表单 | 2026-06-11 表单已提交，12h 内审核，结果发 john.wuj@outlook.com |
+| ✅ | GitHub topics 补全 | `gh repo edit --add-topic` | 已补 claude / self-hosted / vscode-extension（现 15 个） |
+| ✅ | Release v0.2.1 | `gh release create` 挂 vsix | [已发布](https://github.com/johnnywuj81/tokenknows/releases/tag/v0.2.1)，挂 vsix |
+| ▶ | Anthropic 社区插件市场 | [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) 表单 | `claude plugin validate` 已通过（修了 adr/design/incident 三处 frontmatter YAML）；**待本人**登录 [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) 提交表单 |
+| ☐ | 官方 MCP Registry | `mcp-publisher` CLI | **工程前置**：MCP server 需先发 PyPI 包（需要 PyPI 账号）→ `mcp-publisher` 发布；完成后 PulseMCP 等自动同步 |
 
 ## 第二波 · 一次性发布（弹药齐了再打）
 

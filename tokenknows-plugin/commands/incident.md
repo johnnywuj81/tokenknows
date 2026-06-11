@@ -1,5 +1,5 @@
 ---
-description: 把当前 session 中的故障排查 / Bug 修复过程蒸馏成故障复盘 (6 段: 现象/影响/根因/解决过程/改进/时间线).
+description: "把当前 session 中的故障排查 / Bug 修复过程蒸馏成故障复盘 (6 段: 现象/影响/根因/解决过程/改进/时间线)."
 ---
 
 按 `tokenknows:distill` skill 的标准流程,把当前 session 蒸馏成 **incident**:

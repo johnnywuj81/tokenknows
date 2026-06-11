@@ -1,5 +1,5 @@
 ---
-description: 把当前 session 中的架构决策蒸馏成 ADR (Architecture Decision Record, 5 段: 上下文/决策/备选/后果/状态).
+description: "把当前 session 中的架构决策蒸馏成 ADR (Architecture Decision Record, 5 段: 上下文/决策/备选/后果/状态)."
 ---
 
 按 `tokenknows:distill` skill 的标准流程,把当前 session 蒸馏成 **adr**:
