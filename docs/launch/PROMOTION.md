@@ -20,7 +20,7 @@
 | 状态 | 渠道 | 方式 | 备注 |
 |---|---|---|---|
 | ✅ | [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers)（88.8k⭐） | 直接 PR，Knowledge & Memory 类目 | 明文欢迎 agent PR；已提 [PR #7816](https://github.com/punkpeye/awesome-mcp-servers/pull/7816)（🤖 fast-track）；收录后自动进 Glama |
-| ☐ | [appcypher/awesome-mcp-servers](https://github.com/appcypher/awesome-mcp-servers)（5.6k⭐） | PR，字母序，一条一个 PR | |
+| ⏳ | [appcypher/awesome-mcp-servers](https://github.com/appcypher/awesome-mcp-servers)（5.6k⭐） | PR，字母序，一条一个 PR | 该仓库 2026-02 起关闭 PR 创建；分支已备好 `johnnywuj81/awesome-mcp-servers-1:add-tokenknows`，重开即提 |
 | ✅ | [jamesmurdza/awesome-ai-devtools](https://github.com/jamesmurdza/awesome-ai-devtools)（3.8k⭐） | PR，按 PR 模板 checklist | 已提 [PR #637](https://github.com/jamesmurdza/awesome-ai-devtools/pull/637)，Agent Infrastructure → Configuration & Context Management |
 | ✅ | [ComposioHQ/awesome-claude-plugins](https://github.com/ComposioHQ/awesome-claude-plugins)（1.7k⭐） | PR，README 链接条目 | 已提 [PR #287](https://github.com/ComposioHQ/awesome-claude-plugins/pull/287)，外链条目 |
 | ✅ | [mcp.so](https://mcp.so/) | 给 [chatmcp/mcpso](https://github.com/chatmcp/mcpso) 开 issue | 已提 [issue #2715](https://github.com/chatmcp/mcpso/issues/2715)；积压多，慢 |
