@@ -39,7 +39,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     # 注: bcrypt 5.x 与 passlib 1.7.x 不兼容 (passlib 探测 __about__);
     # pin <4.1 等 passlib 2.x 出来再放开
-    "bcrypt>=4.0,<4.1",
+    "bcrypt>=4.0,<5.1",
     "email-validator>=2.0.0",
     # v1.5 T100 · KG 缩略图 PNG 渲染 (Pillow 纯 Python, 无系统依赖)
     # cairosvg 留 v1.6+ 备选 (需系统 cairo 库)
