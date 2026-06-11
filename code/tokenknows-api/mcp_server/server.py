@@ -17,6 +17,8 @@
     TOKENKNOWS_API_BASE      backend URL (默认 http://127.0.0.1:8001)
     TOKENKNOWS_API_TOKEN     JWT bearer (可选)
     TOKENKNOWS_DEFAULT_PROJECT  当前默认 project_id
+    TOKENKNOWS_WEB_BASE      web UI base URL (默认 http://127.0.0.1:5173,
+                             用于拼 view_url 绝对地址)
 """
 
 from __future__ import annotations
@@ -58,12 +60,19 @@ This server bridges your session into the TokenKnows knowledge base.
 mcp = FastMCP("tokenknows", instructions=_MCP_INSTRUCTIONS)
 
 
+def _web_base() -> str:
+    """获取 web UI base URL (env TOKENKNOWS_WEB_BASE > 默认本地 dev 5173), 去尾斜杠."""
+    return os.getenv("TOKENKNOWS_WEB_BASE", "http://127.0.0.1:5173").rstrip("/")
+
+
 def _default_project_id(override: str | None = None) -> str:
     """获取 default project_id (CLI flag > env > raise)."""
     pid = override or os.getenv("TOKENKNOWS_DEFAULT_PROJECT")
     if not pid:
         raise ValueError(
-            "未指定 project_id. 设置环境变量 TOKENKNOWS_DEFAULT_PROJECT 或在"
+            "project_id missing; set TOKENKNOWS_DEFAULT_PROJECT or pass the "
+            "project_id argument"
+            " · 未指定 project_id: 设置环境变量 TOKENKNOWS_DEFAULT_PROJECT 或在"
             "命令中传入 project_id 参数."
         )
     return pid
@@ -159,7 +168,7 @@ async def distill_document(
           "asset_id": "...",
           "status": "generating",
           "title": "...",
-          "view_url": "/projects/{pid}/documents/{aid}",
+          "view_url": "http://127.0.0.1:5173/projects/{pid}/documents/{aid}",
           "estimated_seconds": 60,
           "note": "可调 get_asset 轮询完成状态"
         }
@@ -173,13 +182,22 @@ async def distill_document(
         f"/api/v1/projects/{pid}/assets/generate", json=payload,
     )
     aid = resp["id"]
+    note = "调 get_asset(asset_id) 查完成状态; status='draft' 即可读 markdown."
+    if not os.getenv("TOKENKNOWS_WEB_BASE"):
+        note += (
+            " view_url assumes the web UI at http://127.0.0.1:5173 "
+            "(npm run dev); set TOKENKNOWS_WEB_BASE if deployed elsewhere; "
+            "login required"
+            " · view_url 默认假设 web UI 跑在 http://127.0.0.1:5173 "
+            "(npm run dev), 部署在别处请设 TOKENKNOWS_WEB_BASE, 打开需先登录."
+        )
     return {
         "asset_id": aid,
         "status": resp["status"],
         "title": resp["title"],
-        "view_url": f"/projects/{pid}/documents/{aid}",
+        "view_url": f"{_web_base()}/projects/{pid}/documents/{aid}",
         "estimated_seconds": 60,
-        "note": "调 get_asset(asset_id) 查完成状态; status='draft' 即可读 markdown.",
+        "note": note,
     }
 
 

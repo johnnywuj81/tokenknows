@@ -5,7 +5,6 @@ Backend HTTP 用 fake client mock; 验证 MCP tool 参数 → backend payload �
 
 from __future__ import annotations
 
-import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -16,6 +15,8 @@ import pytest
 def mcp_env(monkeypatch: pytest.MonkeyPatch):
     """每个 test 设 default project + mock client."""
     monkeypatch.setenv("TOKENKNOWS_DEFAULT_PROJECT", "p-test")
+    # view_url 默认值依赖 TOKENKNOWS_WEB_BASE 未设; 清掉宿主机可能的残留
+    monkeypatch.delenv("TOKENKNOWS_WEB_BASE", raising=False)
     from mcp_server import client as client_mod
     fake = MagicMock()
     fake.post = AsyncMock()
@@ -105,11 +106,32 @@ async def test_distill_kg(mcp_env):
     res = await distill_document(document_type="knowledge_graph")
     assert res["asset_id"] == "asset-x"
     assert res["status"] == "generating"
-    assert "view_url" in res
+    # view_url 绝对化: TOKENKNOWS_WEB_BASE 未设时用默认 dev 地址
+    assert res["view_url"] == "http://127.0.0.1:5173/projects/p-test/documents/asset-x"
+    # 未设 TOKENKNOWS_WEB_BASE → note 带双语提示
+    assert "TOKENKNOWS_WEB_BASE" in res["note"]
     url = mcp_env.post.call_args.args[0]
     body = mcp_env.post.call_args.kwargs["json"]
     assert url == "/api/v1/projects/p-test/assets/generate"
     assert body["type"] == "knowledge_graph"
+
+
+@pytest.mark.asyncio
+async def test_distill_view_url_web_base_override(
+    mcp_env, monkeypatch: pytest.MonkeyPatch,
+):
+    """TOKENKNOWS_WEB_BASE 覆盖 view_url base; 尾斜杠不产生双斜杠."""
+    monkeypatch.setenv("TOKENKNOWS_WEB_BASE", "https://tk.example.com/")
+    mcp_env.post.return_value = {
+        "id": "a9", "status": "generating", "title": "t",
+    }
+    from mcp_server.server import distill_document
+    res = await distill_document(document_type="adr")
+    assert res["view_url"] == "https://tk.example.com/projects/p-test/documents/a9"
+    # 只有 scheme 处一个 "//", 没有路径双斜杠
+    assert res["view_url"].count("//") == 1
+    # 显式设置了 TOKENKNOWS_WEB_BASE → note 不再带默认地址提示
+    assert "TOKENKNOWS_WEB_BASE" not in res["note"]
 
 
 @pytest.mark.asyncio
@@ -242,3 +264,112 @@ def test_distill_session_prompt():
     assert "adr" in text
     assert "submit_session_events" in text
     assert "distill_document" in text
+
+
+# ── client 错误翻译 (TokenKnowsAPIError) ─────────────────────────
+
+
+def _install_mock_transport(monkeypatch: pytest.MonkeyPatch, handler) -> None:
+    """让 TokenKnowsClient 内部的 httpx.AsyncClient 走 MockTransport."""
+    import httpx
+
+    real_async_client = httpx.AsyncClient
+    transport = httpx.MockTransport(handler)
+
+    def factory(**kwargs: Any):
+        kwargs["transport"] = transport
+        return real_async_client(**kwargs)
+
+    monkeypatch.setattr("mcp_server.client.httpx.AsyncClient", factory)
+
+
+@pytest.mark.asyncio
+async def test_connect_error_translated(monkeypatch: pytest.MonkeyPatch):
+    import httpx
+
+    from mcp_server.client import TokenKnowsAPIError, TokenKnowsClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    _install_mock_transport(monkeypatch, handler)
+    client = TokenKnowsClient(base_url="http://127.0.0.1:9999")
+    with pytest.raises(TokenKnowsAPIError) as ei:
+        await client.get("/api/v1/projects/p-test/assets")
+    msg = str(ei.value)
+    assert "http://127.0.0.1:9999" in msg
+    assert "uvicorn" in msg
+    assert "TOKENKNOWS_API_BASE" in msg
+
+
+@pytest.mark.asyncio
+async def test_401_translated_to_token_hint(monkeypatch: pytest.MonkeyPatch):
+    import httpx
+
+    from mcp_server.client import TokenKnowsAPIError, TokenKnowsClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"detail": "unauthorized"})
+
+    _install_mock_transport(monkeypatch, handler)
+    client = TokenKnowsClient(base_url="http://127.0.0.1:8001")
+    with pytest.raises(TokenKnowsAPIError) as ei:
+        await client.get("/api/v1/projects/p-test/assets")
+    msg = str(ei.value)
+    assert "TOKENKNOWS_API_TOKEN" in msg
+    assert "MCP 接入" in msg
+
+
+@pytest.mark.asyncio
+async def test_404_project_translated(monkeypatch: pytest.MonkeyPatch):
+    import httpx
+
+    from mcp_server.client import TokenKnowsAPIError, TokenKnowsClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "not found"})
+
+    _install_mock_transport(monkeypatch, handler)
+    client = TokenKnowsClient(base_url="http://127.0.0.1:8001")
+    with pytest.raises(TokenKnowsAPIError) as ei:
+        await client.post("/api/v1/projects/p-missing/assets/generate", json={})
+    msg = str(ei.value)
+    assert "TOKENKNOWS_DEFAULT_PROJECT" in msg
+    assert "p-missing" in msg
+
+
+@pytest.mark.asyncio
+async def test_other_status_includes_body(monkeypatch: pytest.MonkeyPatch):
+    import httpx
+
+    from mcp_server.client import TokenKnowsAPIError, TokenKnowsClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="internal pipeline exploded")
+
+    _install_mock_transport(monkeypatch, handler)
+    client = TokenKnowsClient(base_url="http://127.0.0.1:8001")
+    with pytest.raises(TokenKnowsAPIError) as ei:
+        await client.get("/api/v1/assets/a1")
+    msg = str(ei.value)
+    assert "500" in msg
+    assert "/api/v1/assets/a1" in msg
+    assert "internal pipeline exploded" in msg
+
+
+@pytest.mark.asyncio
+async def test_read_timeout_translated(monkeypatch: pytest.MonkeyPatch):
+    import httpx
+
+    from mcp_server.client import TokenKnowsAPIError, TokenKnowsClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("read timed out")
+
+    _install_mock_transport(monkeypatch, handler)
+    client = TokenKnowsClient(base_url="http://127.0.0.1:8001")
+    with pytest.raises(TokenKnowsAPIError) as ei:
+        await client.get("/api/v1/assets/a1")
+    msg = str(ei.value)
+    assert "get_asset" in msg
+    assert "30-60" in msg
