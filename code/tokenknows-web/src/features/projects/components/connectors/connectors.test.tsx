@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Sparkles } from 'lucide-react'
 import { ConnectorCard } from './ConnectorCard'
-import { TokenDisplay } from './TokenDisplay'
+import { TokenDisplay } from '@/components/shared/TokenDisplay'
 import { PluginConnector } from './PluginConnector'
 import { GitHubConnector } from './GitHubConnector'
 import { LocalFileConnector } from './LocalFileConnector'
@@ -71,11 +71,18 @@ describe('TokenDisplay', () => {
     })
   })
 
-  it('default visible=false: masks middle of token', () => {
+  it('default visible=false: long token shows 前 12 字符 + 16 个 •', () => {
     render(<TokenDisplay token="head.MIDDLE_LONG_SECRET.tail" />)
-    // 应展示 mask, 不展示 MIDDLE
+    // 应展示 mask (前 12 字符 + 16 个 •), 不展示明文
     expect(screen.queryByText('head.MIDDLE_LONG_SECRET.tail')).toBeNull()
+    expect(screen.getByText(`head.MIDDLE_${'•'.repeat(16)}`)).toBeInTheDocument()
     expect(screen.getByLabelText('显示 token')).toBeInTheDocument()
+  })
+
+  it('default visible=false: short token (≤16 字符) 全遮蔽', () => {
+    render(<TokenDisplay token="abc.def.ghi" />)
+    expect(screen.queryByText('abc.def.ghi')).toBeNull()
+    expect(screen.getByText('•'.repeat(16))).toBeInTheDocument()
   })
 
   it('clicking eye reveals plain token', () => {

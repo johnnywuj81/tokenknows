@@ -9,7 +9,7 @@
 import { Sparkles, Code2, FileCode, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConnectorCard } from './ConnectorCard'
-import { TokenDisplay } from './TokenDisplay'
+import { TokenDisplay } from '@/components/shared/TokenDisplay'
 import type { Datasource, DatasourceType } from '@/types/api'
 
 type PluginType = Extract<DatasourceType, 'claude_code' | 'cursor' | 'vscode'>

@@ -1,18 +1,19 @@
 /**
  * T13 · ProjectSettingsPage
  *
- * Tab 切换 (使用 URL query ?tab=info|members|datasources|llm):
+ * Tab 切换 (使用 URL query ?tab=info|members|datasources|llm|mcp):
  *   - info: 基本信息 (name / description) - 可编辑
  *   - members: 成员表 (只读)
  *   - datasources: 数据源 (只读)
  *   - llm: T14 LLM 出域 sub-page
+ *   - mcp: Phase B MCP 接入 (个人 API token + env 配置块)
  *
  * MVP 简化: 不实现 删除项目 / 邀请成员 / 新增数据源 (留 v2)
  */
 
 import { useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { Info, Users, Database, Shield, Zap, Loader2, AlertCircle } from 'lucide-react'
+import { Info, Users, Database, Shield, Zap, Plug, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -20,9 +21,10 @@ import { useProject } from '../workbench/hooks/useProject'
 import { LlmEgressPanel } from './tabs/LlmEgressPanel'
 import { AutoTriggersPanel } from './tabs/AutoTriggersPanel'
 import { MembersPanel } from './tabs/MembersPanel'
+import { McpAccessPanel } from './tabs/McpAccessPanel'
 import { cn } from '@/lib/utils'
 
-type Tab = 'info' | 'members' | 'datasources' | 'llm' | 'auto-triggers'
+type Tab = 'info' | 'members' | 'datasources' | 'llm' | 'auto-triggers' | 'mcp'
 
 const TABS: { value: Tab; label: string; icon: typeof Info }[] = [
   { value: 'info', label: '基本信息', icon: Info },
@@ -30,6 +32,7 @@ const TABS: { value: Tab; label: string; icon: typeof Info }[] = [
   { value: 'datasources', label: '数据源', icon: Database },
   { value: 'llm', label: 'LLM 与出域', icon: Shield },
   { value: 'auto-triggers', label: '自动触发', icon: Zap }, // v0.4 T33
+  { value: 'mcp', label: 'MCP 接入', icon: Plug }, // Phase B
 ]
 
 export default function ProjectSettingsPage() {
@@ -101,6 +104,7 @@ export default function ProjectSettingsPage() {
           {tab === 'datasources' ? <DataSourcesTab /> : null}
           {tab === 'llm' ? <LlmEgressPanel projectId={projectId} /> : null}
           {tab === 'auto-triggers' ? <AutoTriggersPanel projectId={projectId} /> : null}
+          {tab === 'mcp' && projectId ? <McpAccessPanel projectId={projectId} /> : null}
         </div>
       </main>
     </div>

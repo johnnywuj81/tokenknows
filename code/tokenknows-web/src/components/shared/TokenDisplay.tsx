@@ -2,6 +2,10 @@
  * TokenDisplay · 连接 token 显示 + 显示切换 + 复制 + toast。
  *
  * 决策 (TaskTechDesign T02): token 默认遮蔽 + "显示"按钮 + 复制 toast。
+ *
+ * Phase B: 从 features/projects/components/connectors/ 移到 shared,
+ * 供连接器 + MCP 接入 (个人 API token) 共用。遮蔽逻辑同步修复:
+ * 不再只匹配 JWT 点分格式, 任意 token 都遮蔽尾部。
  */
 
 import { useState } from 'react'
@@ -10,15 +14,19 @@ import { Eye, EyeOff, Copy, Check } from 'lucide-react'
 interface TokenDisplayProps {
   token: string
   label?: string
+  helpText?: string
 }
 
-export function TokenDisplay({ token, label = '连接 token' }: TokenDisplayProps) {
+export function TokenDisplay({
+  token,
+  label = '连接 token',
+  helpText = '粘贴到插件 / 扩展配置中。token 长期有效, 可在项目设置里随时重置。',
+}: TokenDisplayProps) {
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const masked = token.replace(/^([^.]+)\..+\.(.+)$/, (_m, head: string, tail: string) =>
-    `${head}.${'•'.repeat(16)}.${tail}`,
-  )
+  const masked =
+    token.length > 16 ? token.slice(0, 12) + '•'.repeat(16) : '•'.repeat(16)
 
   const handleCopy = async () => {
     try {
@@ -75,9 +83,7 @@ export function TokenDisplay({ token, label = '连接 token' }: TokenDisplayProp
           )}
         </button>
       </div>
-      <p className="text-caption text-text-subtle">
-        粘贴到插件 / 扩展配置中。token 长期有效, 可在项目设置里随时重置。
-      </p>
+      <p className="text-caption text-text-subtle">{helpText}</p>
     </div>
   )
 }

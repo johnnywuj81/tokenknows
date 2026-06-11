@@ -88,6 +88,32 @@ export interface RegisterRequest {
   display_name: string
 }
 
+// ── 个人 API token (MCP 接入, Phase B) · /me/tokens ──
+
+/** 个人 API token 公开视图 — 永远不含明文 token. */
+export interface ApiTokenPublic {
+  id: string
+  name: string
+  /** 明文前缀 (如 'tkk_abcd'), 用于列表区分; 完整 token 仅创建时返回一次. */
+  token_prefix: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface CreateApiTokenRequest {
+  name: string
+}
+
+/** POST /me/tokens 201 — token 明文只在这一次响应里出现. */
+export interface CreateApiTokenResponse {
+  token: string
+  item: ApiTokenPublic
+}
+
+export interface ApiTokensListResponse {
+  items: ApiTokenPublic[]
+}
+
 // ────────────────────────────────────────────────────────────────────
 // 项目
 // ────────────────────────────────────────────────────────────────────
