@@ -48,7 +48,7 @@
 | ⏳ | V2EX [分享创造](https://www.v2ex.com/go/create) | 终稿已备好（D0-posts-final.md） | **账号被激活门槛拦住**：新号 wu163689 需邀请码激活（或 1 万 $V2EX token）；激活后还需养号几天（签到/回帖，新号外链受限）。计划：拿到邀请码 → 养号 → 下周晚 8 点发 |
 | ☐ | [Linux.do 开发调优](https://linux.do/c/develop/4) | `[开源项目]` 前缀；2026 中文 Claude Code 浓度最高社区；**禁 AI 生成内容，必须本人写**；需 TL1（读 30 帖 ×10 分钟即达） |
 | ☐ | Reddit r/ClaudeAI（~91.6 万成员） | Built with Claude flair；角度 = "把你的 Claude Code session 蒸馏成周报/ADR/KG" |
-| ☐ | Show HN | 周二–四 7–10am PT；标题平实：`Show HN: TokenKnows – Self-hosted workbench that distills AI coding sessions into docs`；发完立刻顶楼讲架构与求反馈；**严禁拉票**；回复每条评论 |
+| ⏳ | Show HN | 终稿就绪（D3-D7-posts-final.md） | **2026-06-12 实测被拦**：HN 对新账号临时限制 Show HN（提交重定向 /showlim 政策页），需先攒 karma（认真评论/提交好链接）再发。养号期间正常参与，解锁后挑周二–四 7–10am PT 窗口 |
 | ☐ | Reddit r/ChatGPTCoding | 跨工具（Claude Code/Codex/Cursor）角度；与其它 sub 分天发 |
 | ☐ | Product Hunt | Show HN 后 1–2 周再上，定位社会证明而非获客 |
 
