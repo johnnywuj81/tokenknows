@@ -2,6 +2,20 @@
 
 本 plugin **同时兼容 Claude Cowork** (与 Claude Code 同结构: 同样的 `plugin.json`/`skills/`/`commands/`/`.mcp.json`)。无需任何代码改动。
 
+## 前置
+
+与 Claude Code 相同 (详见 [README.md](./README.md) "5 分钟跑通"):
+
+1. **backend** 跑在 `http://127.0.0.1:8001`
+2. **Web 工作台** 跑在 `http://localhost:5173` — 注册/登录后在 **项目设置 → MCP 接入** 自助创建 API token (公网/开鉴权部署时需要)
+3. **uv** 已安装 — MCP server 经 `uvx` 从 PyPI 拉起 (`tokenknows-mcp`),不需要 clone 仓库
+
+> ⚠️ **Cowork 专属 uvx PATH 注意**: GUI 启动的 app 不继承 `~/.zshrc` 的 PATH,
+> `~/.local/bin`(uv 默认安装位置)可能不在 Cowork 的 PATH 里。验证:
+> `launchctl getenv PATH`。如果 uvx 找不到,两个办法:
+> `launchctl setenv PATH "$HOME/.local/bin:$(launchctl getenv PATH)"`,
+> 或 `brew install uv` (Homebrew 路径通常在 GUI PATH 里)。
+
 ## 安装方式
 
 ### 方式 1 · GitHub 自托管 marketplace (推荐)
@@ -37,26 +51,19 @@ zip -r tokenknows-plugin.zip tokenknows-plugin
 
 ## 环境变量
 
-Cowork plugin 与 Code 一样,**必须先 export 4 个变量到 host shell**:
+**全部可选,带本机默认值** (`.mcp.json` 内置 `${VAR:-default}` 展开)。默认本机部署 (backend :8001 + web :5173 + demo 项目) **零配置可用**。
+
+只有非默认场景才需要设置,且 **Cowork (桌面 app) 启动时只继承 GUI launch 时的 env (一般是 `~/.zshenv` / launchd `setenv`),不读 `~/.zshrc`**:
 
 ```bash
-# macOS: 写到 ~/.zshrc 让 Cowork 启动时能读到
-export TOKENKNOWS_API_ROOT="/abs/path/to/tokenknows/code/tokenknows-api"
-export TOKENKNOWS_API_BASE="http://127.0.0.1:8001"
-export TOKENKNOWS_DEFAULT_PROJECT="proj-demo-001"
-export TOKENKNOWS_API_TOKEN=""
+# macOS · launchctl setenv (永久, 重启后仍生效) — 按需设置, 不需要全设
+launchctl setenv TOKENKNOWS_API_BASE "http://my-server:8001"      # backend 不在本机时
+launchctl setenv TOKENKNOWS_API_TOKEN "tkk_..."                   # 后端开鉴权时 (Web → 项目设置 → MCP 接入 创建)
+launchctl setenv TOKENKNOWS_DEFAULT_PROJECT "proj-..."            # 不用 demo 项目时
+launchctl setenv TOKENKNOWS_WEB_BASE "http://my-server:5173"      # web 不在本机时 (view_url 前缀)
 ```
 
-**重要**: Cowork (桌面 app) 启动时只继承 GUI launch 时的 env (一般是 `~/.zshenv` / launchd `setenv`),不读 `~/.zshrc`。建议:
-
-```bash
-# macOS · launchctl setenv (永久, 重启后仍生效)
-launchctl setenv TOKENKNOWS_API_ROOT "/abs/path/to/tokenknows/code/tokenknows-api"
-launchctl setenv TOKENKNOWS_API_BASE "http://127.0.0.1:8001"
-launchctl setenv TOKENKNOWS_DEFAULT_PROJECT "proj-demo-001"
-```
-
-或者在 macOS Login Items 跑一个脚本设这些 env。
+设完 **完全退出 Cowork (Cmd+Q) 再启动** 才生效 — 进程 env 是启动时的 snapshot。
 
 ## Cowork vs Code 行为差异
 
@@ -65,7 +72,7 @@ launchctl setenv TOKENKNOWS_DEFAULT_PROJECT "proj-demo-001"
 | 触发 skill 主要方式 | 用户自然语言描述意图 | 用户敲 `/tokenknows:weekly` |
 | Slash command 命名 | `/tokenknows:weekly` (同) | `/tokenknows:weekly` (同) |
 | hook 支持 | Cowork 当前不支持 hooks | Code 支持 PreToolUse/PostToolUse/Stop |
-| 多 session 状态 | Cowork 单 conversation 内 | Code 跨 session (T118 daemon 监 `~/.claude/projects/*.jsonl`) |
+| 多 session 状态 | Cowork 单 conversation 内 | Code 跨 session (tokenknows-watcher 监 `~/.claude/projects/*.jsonl`) |
 | 适合场景 | 商务对话 → ADR/PRD/方案 | 编程对话 → 周报/复盘/KG |
 
 ## 验证
@@ -80,7 +87,7 @@ Cowork 自动用 tokenknows:distill skill →
   · distill_document(type="adr")
   · get_asset_chapters
    ↓
-返回 5 段 ADR markdown
+返回 5 段 ADR markdown + Web 查看链接 (登录后打开)
 ```
 
 如果 skill 没自动触发,显式说 `/tokenknows:adr`。
@@ -127,5 +134,6 @@ MCP server 已经内置 instructions 引导 Cowork 在每个任务结束时主�
 ## 排错
 
 - **slash command 不出现**: 重启 Cowork; 确认 plugin 在 Plugins 设置里 enabled
-- **MCP server 启动失败**: 检查 `launchctl getenv TOKENKNOWS_API_ROOT` 是否返回正确路径; Cowork 不读 `~/.zshrc`
-- **backend 网络不通**: macOS firewall 检查 `127.0.0.1:8001` 是否被拦
+- **MCP server 启动失败 (spawn uvx ENOENT)**: uvx 不在 Cowork 的 PATH 里 — 见上方"Cowork 专属 uvx PATH 注意";改完 `launchctl setenv` 后 Cmd+Q 重启 Cowork
+- **"Backend not reachable"**: backend (8001) 没起;macOS firewall 检查 `127.0.0.1:8001` 是否被拦
+- **"Authentication failed (401)"**: Web → 项目设置 → MCP 接入 创建 token → `launchctl setenv TOKENKNOWS_API_TOKEN "tkk_..."` → Cmd+Q 重启 Cowork

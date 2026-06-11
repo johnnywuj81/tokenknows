@@ -16,6 +16,6 @@ limit: 20  // 默认
    metrics: coverage=0.88 / citation=0.72
 ```
 
-如果用户想看具体某条, 提示 "调 /tokenknows:open asset-xxx" 或者 "在浏览器打开 {view_url}"。
+如果用户想看具体某条, 提示 "调 /tokenknows:open asset-xxx" 或者 "在浏览器打开 {view_url}" (绝对 URL, 需登录 Web 工作台)。
 
 无 `$ARGUMENTS` 时列出全部 7 类 asset (按时间倒序). 有 `$ARGUMENTS` 时按 type 过滤.

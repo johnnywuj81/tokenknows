@@ -50,14 +50,13 @@
 
 ## 🔌 安装插件 (在你的 AI 工具里用 TokenKnows)
 
-前置:后端跑在 `http://localhost:8001`(见下方 Quick Start),并 export 4 个环境变量
-(`TOKENKNOWS_API_ROOT` / `TOKENKNOWS_API_BASE` / `TOKENKNOWS_DEFAULT_PROJECT` / `TOKENKNOWS_API_TOKEN`)。
+前置:后端跑在 `http://localhost:8001`,**Web 前端跑在 `http://localhost:5173`**(见下方 Quick Start),外加 [uv](https://docs.astral.sh/uv/)(插件经 `uvx` 从 PyPI 拉起 MCP server)。所有插件环境变量都有本机默认值——只有非默认部署才需要 export(`TOKENKNOWS_API_BASE` / `TOKENKNOWS_API_TOKEN` / `TOKENKNOWS_DEFAULT_PROJECT` / `TOKENKNOWS_WEB_BASE`)。后端开了鉴权时,在 Web 注册/登录后到 **项目设置 → MCP 接入** 自助创建 API token。
 
 | 平台 | 安装方式 |
 |---|---|
-| **Claude Code** | `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows` |
+| **Claude Code** | `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows`,完整步骤见 [tokenknows-plugin/README.md](tokenknows-plugin/README.md)(5 分钟跑通) |
 | **Codex** | `codex plugin marketplace add johnnywuj81/tokenknows` → `codex plugin add tokenknows@tokenknows`(skills / commands / MCP server 一并加载;本地 clone 备选方案见 [codex-plugin/README.md](codex-plugin/README.md)) |
-| **Cursor** | `~/.cursor/mcp.json` 加 tokenknows MCP 块(同 [tokenknows-plugin/.mcp.json](tokenknows-plugin/.mcp.json) 形状) |
+| **Cursor** | `~/.cursor/mcp.json` 加 tokenknows MCP 块(uvx 配置示例见 [code/tokenknows-mcp/README.md](code/tokenknows-mcp/README.md)) |
 | **VS Code** | 从 [Releases](https://github.com/johnnywuj81/tokenknows/releases) 下载 `.vsix` → `code --install-extension tokenknows-vscode-*.vsix` |
 
 ## 🚀 Quick Start · 三步本机起来

@@ -21,5 +21,5 @@ KG 关键价值:
 5. 展示:
    - 节点数 / 边数 / 4 类节点分布
    - 用 ASCII art 示意一两条关键关系 (e.g. `Alice --authored_by--> PR#127 --depends_on--> retry_jitter`)
-   - 给浏览器 URL 让用户看完整可视化
+   - 给浏览器 URL 让用户看完整可视化 (view_url 是绝对 URL, 前缀由 TOKENKNOWS_WEB_BASE 决定; 需登录 Web 工作台)
 6. 如果用户问 "X 在哪些文档里也出现", 调 `search_entity(query="X")`

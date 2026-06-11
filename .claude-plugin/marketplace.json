@@ -6,7 +6,7 @@
     "url": "https://github.com/johnnywuj81/tokenknows"
   },
   "metadata": {
-    "version": "2.1.0",
+    "version": "2.2.0",
     "homepage": "https://github.com/johnnywuj81/tokenknows",
     "license": "MIT"
   },
@@ -14,7 +14,7 @@
     {
       "name": "tokenknows",
       "source": "./tokenknows-plugin",
-      "description": "蒸馏当前 Claude session 成 7 类结构化文档 (周报/技术方案/ADR/复盘/书籍/Skill/知识图谱). 走 MCP 接 tokenknows-api 后端 5-stage LLM pipeline. 同时兼容 Claude Code 和 Cowork.",
+      "description": "蒸馏当前 Claude session 成 7 类结构化文档 (周报/技术方案/ADR/复盘/书籍/Skill/知识图谱). 走 MCP 接 tokenknows-api 后端 5-stage LLM pipeline. 同时兼容 Claude Code 和 Cowork. 前置: 自托管 tokenknows-api 后端 (默认 127.0.0.1:8001) + Web 工作台 (5173, 注册登录后自助拿 API token) + uv (uvx 拉起 PyPI 包 tokenknows-mcp), 详见 plugin README.",
       "keywords": [
         "knowledge-distill",
         "weekly-report",

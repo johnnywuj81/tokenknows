@@ -58,13 +58,13 @@ You spend hours pair-programming with Claude Code, Codex, and Cursor. The decisi
 
 ## Install the plugin
 
-Prerequisite: the TokenKnows backend running at `http://localhost:8001` (see Quick start), plus four exported env vars (`TOKENKNOWS_API_ROOT` / `TOKENKNOWS_API_BASE` / `TOKENKNOWS_DEFAULT_PROJECT` / `TOKENKNOWS_API_TOKEN`).
+Prerequisite: the TokenKnows backend at `http://localhost:8001` **and the web UI at `http://localhost:5173`** (see Quick start), plus [uv](https://docs.astral.sh/uv/) (the plugin pulls the MCP server from PyPI via `uvx`). All plugin env vars have working local defaults — export `TOKENKNOWS_API_BASE` / `TOKENKNOWS_API_TOKEN` / `TOKENKNOWS_DEFAULT_PROJECT` / `TOKENKNOWS_WEB_BASE` only for non-default setups. Register/login in the web UI and create an API token under **Project Settings → MCP 接入** when your backend requires auth.
 
 | Platform | How |
 |---|---|
-| **Claude Code** | `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows` |
+| **Claude Code** | `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows` — full walkthrough in [tokenknows-plugin/README.md](tokenknows-plugin/README.md) (5-minute quickstart) |
 | **Codex** | `codex plugin marketplace add johnnywuj81/tokenknows` → `codex plugin add tokenknows@tokenknows` (loads skills, commands and the MCP server; local-clone alternative in [codex-plugin/README.md](codex-plugin/README.md)) |
-| **Cursor** | Add the tokenknows MCP block to `~/.cursor/mcp.json` (same shape as [tokenknows-plugin/.mcp.json](tokenknows-plugin/.mcp.json)) |
+| **Cursor** | Add the tokenknows MCP block to `~/.cursor/mcp.json` (uvx config example in [code/tokenknows-mcp/README.md](code/tokenknows-mcp/README.md)) |
 | **VS Code** | Download the `.vsix` from [Releases](https://github.com/johnnywuj81/tokenknows/releases) → `code --install-extension tokenknows-vscode-*.vsix` |
 
 The plugin gives your AI tool MCP tools (`submit_session_events`, `distill_document`, `list_assets`, `get_asset`, `get_asset_chapters`, `search_entity`) plus slash commands like `/tokenknows:weekly` and `/tokenknows:adr`.

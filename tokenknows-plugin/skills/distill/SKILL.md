@@ -66,7 +66,7 @@ document_type: "<step 1 用户选的类型>"
 time_window: "this_week"  // 默认; 用户明说 "上周/最近 7 天" 时改
 ```
 
-返回 `{asset_id, status: "generating", view_url, estimated_seconds: 60}`。
+返回 `{asset_id, status: "generating", view_url, estimated_seconds: 60}`。`view_url` 是完整可点击的绝对 URL (前缀由 `TOKENKNOWS_WEB_BASE` 决定,默认 `http://127.0.0.1:5173`)。
 
 告诉用户:"已触发蒸馏,大约 60 秒。我会轮询完成状态。"
 
@@ -87,10 +87,10 @@ time_window: "this_week"  // 默认; 用户明说 "上周/最近 7 天" 时改
 - **weekly_report / tech_design / adr / incident**: 把每个 chapter 的 `title` + `content` 用 markdown headings 直接输出给用户
 - **book**: 章节多,先列大纲 (chapter titles) 给用户,再问要看哪几章
 - **agent_skill**: 输出 SKILL.md 风格 markdown, 让用户决定是否落地到 `~/.claude/skills/`
-- **knowledge_graph**: layout 含 nodes/edges; 用 ASCII art 简述 (e.g. `Alice --authored_by--> PR#127`),指引用户开浏览器看可视化 (URL 在 view_url 里)
+- **knowledge_graph**: layout 含 nodes/edges; 用 ASCII art 简述 (e.g. `Alice --authored_by--> PR#127`),指引用户开浏览器看可视化 (URL 在 view_url 里,绝对 URL 可直接点)
 
 最后给用户:
-- **后端查看 URL**: `{view_url}` (浏览器打开看完整富文本)
+- **Web 查看 URL**: `{view_url}` (绝对 URL,浏览器打开看完整富文本 + 证据链;需登录 Web 工作台)
 - **跨文档跳转**: 如果是 KG, 用 `search_entity` 查关键人物/概念在其它文档的出现
 
 ## 高级用法
@@ -114,4 +114,4 @@ distill_document(document_type="adr", project_id="proj-other-001")
 
 - **不要** 自己写蒸馏内容; 永远走后端 pipeline
 - **不要** 在 events.content 里塞超大代码 dump; 截短 2000 字符以内
-- backend 不通时 (MCP tool 报 NETWORK_ERROR),提示用户检查 `tokenknows-api` backend 是否运行 (默认 `http://127.0.0.1:8001`)
+- backend 不通 / 401 缺 token / 404 项目不存在时,MCP tool 会返回**带修复指引的双语错误信息** (含 uvicorn 启动命令 / `TOKENKNOWS_API_BASE` / token 获取路径) — **原样转述给用户即可**,不要自己编排查步骤

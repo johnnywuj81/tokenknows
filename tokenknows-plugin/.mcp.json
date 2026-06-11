@@ -1,15 +1,17 @@
 {
-  "_comment_1": "Claude Code 的 .mcp.json 支持 ${VAR} 从 host env 替换 (官方文档: 'any ${ENV_VAR} from the environment'). 默认值语法 ${VAR:-default} 文档未明确保证, 不依赖.",
-  "_comment_2": "用户必须先在 shell profile (e.g. ~/.zshrc) export 这 4 个变量再启 claude. 详见 README · 环境变量.",
+  "_comment_1": "uvx 从 PyPI 拉 tokenknows-mcp, pin 与本 plugin release 配套的版本 (插件 2.2.0 ⇄ mcp 0.3.0). 没装 uv 见 README '第 4 步 · 装 uv' (含 pip 替代方案).",
+  "_comment_2": "Claude Code 官方支持 ${VAR:-default} 默认值展开 (docs → MCP → 'Environment variable expansion in .mcp.json'). 全部变量带默认值: 本机默认部署零 export 可用; 只有远程 backend / 开鉴权 / 非 demo project 才需要 export.",
+  "_comment_3": "本地开发 (editable): export TOKENKNOWS_API_ROOT=/abs/path/code/tokenknows-api → PYTHONPATH 优先于 uvx 装的包, import mcp_server 走本地源码. 不设则此行为空, 无副作用.",
   "mcpServers": {
     "tokenknows": {
-      "command": "python",
-      "args": ["-m", "mcp_server"],
+      "command": "uvx",
+      "args": ["tokenknows-mcp==0.3.0"],
       "env": {
-        "TOKENKNOWS_API_BASE": "${TOKENKNOWS_API_BASE}",
-        "TOKENKNOWS_DEFAULT_PROJECT": "${TOKENKNOWS_DEFAULT_PROJECT}",
-        "TOKENKNOWS_API_TOKEN": "${TOKENKNOWS_API_TOKEN}",
-        "PYTHONPATH": "${TOKENKNOWS_API_ROOT}"
+        "TOKENKNOWS_API_BASE": "${TOKENKNOWS_API_BASE:-http://127.0.0.1:8001}",
+        "TOKENKNOWS_API_TOKEN": "${TOKENKNOWS_API_TOKEN:-}",
+        "TOKENKNOWS_DEFAULT_PROJECT": "${TOKENKNOWS_DEFAULT_PROJECT:-proj-demo-001}",
+        "TOKENKNOWS_WEB_BASE": "${TOKENKNOWS_WEB_BASE:-http://127.0.0.1:5173}",
+        "PYTHONPATH": "${TOKENKNOWS_API_ROOT:-}"
       }
     }
   }

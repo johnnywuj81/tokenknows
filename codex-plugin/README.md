@@ -41,7 +41,22 @@ source = "~/TokenKnows/codex-plugin"   # 改成你的 clone 路径
 
 删掉 config.toml 里 `[marketplaces.tokenknows]` 块 + 重开 Codex。
 
-## 依赖
+## 依赖 (前置链与 Claude Code 插件一致)
 
-- tokenknows-api 后端在 `http://127.0.0.1:8001` 跑
-- `[mcp_servers.tokenknows]` 已配 (否则 skill 调不到工具)
+1. **tokenknows-api 后端**在 `http://127.0.0.1:8001` 跑(部署见[主仓 README](https://github.com/johnnywuj81/tokenknows))
+2. **Web 工作台**在 `http://localhost:5173` 跑 — 蒸馏结果在这里富文本查看;注册/登录后在**项目设置 → MCP 接入**自助创建 API token(后端开鉴权时需要)
+3. **uv** 已装(MCP server 经 `uvx` 从 PyPI 拉起,不需要 clone 仓库)
+4. `[mcp_servers.tokenknows]` 已配(否则 skill 调不到工具):
+
+```toml
+# ~/.codex/config.toml — Codex 不支持 ${VAR:-default} 展开, 写字面量
+[mcp_servers.tokenknows]
+command = "uvx"
+args = ["tokenknows-mcp==0.3.0"]
+
+[mcp_servers.tokenknows.env]
+TOKENKNOWS_API_BASE = "http://127.0.0.1:8001"      # backend
+TOKENKNOWS_API_TOKEN = ""                           # 开鉴权时填 tkk_... (Web → 项目设置 → MCP 接入)
+TOKENKNOWS_DEFAULT_PROJECT = "proj-demo-001"        # 默认项目
+TOKENKNOWS_WEB_BASE = "http://127.0.0.1:5173"      # view_url 链接前缀
+```

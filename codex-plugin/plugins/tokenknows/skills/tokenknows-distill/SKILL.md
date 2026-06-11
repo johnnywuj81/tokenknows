@@ -33,7 +33,7 @@ description: "把当前 Codex 会话蒸馏成结构化文档 (周报 / 技术方
    `agent_skill` 类型必须带 `topic_hint` (单一主题,否则蒸不出可用 skill)。
 3. **取结果** (use `mcp__tokenknows__list_assets` → `mcp__tokenknows__get_asset` →
    `mcp__tokenknows__get_asset_chapters`):
-   告诉用户文档已生成,给出 asset 标题 + 可在 TokenKnows web (`localhost:5173`) 查看/编辑/发布。
+   告诉用户文档已生成,给出 asset 标题 + `view_url`(绝对 URL,前缀由 `TOKENKNOWS_WEB_BASE` 决定,默认 `http://127.0.0.1:5173`;登录 Web 工作台后查看/编辑/发布)。
 
 ## 好例子 / 坏例子
 
@@ -42,5 +42,5 @@ description: "把当前 Codex 会话蒸馏成结构化文档 (周报 / 技术方
 
 ## 注意
 
-- 工具会 POST 到本地后端 (默认 `http://127.0.0.1:8001`),后端必须在跑。
+- 工具会 POST 到本地后端 (默认 `http://127.0.0.1:8001`),后端必须在跑。后端不通 / 401 缺 token / 404 项目不存在时,工具会返回带修复指引的双语错误信息 — 原样转述给用户即可。
 - 蒸馏是后台 5 阶段流水线 (collect → outline → content → evidence → assess),`distill_document` 立即返回 generating 态,稍后 `get_asset` 轮询到 draft。
