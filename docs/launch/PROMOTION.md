@@ -31,6 +31,7 @@
 | ✅ | Release v0.2.1 | `gh release create` 挂 vsix | [已发布](https://github.com/johnnywuj81/tokenknows/releases/tag/v0.2.1)，挂 vsix |
 | ✅ | Anthropic 社区插件市场 | [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) 表单 | 2026-06-11 已提交待审（Claude Code + Cowork 双平台 · MIT）；`claude plugin validate` 通过（修了 adr/design/incident 三处 frontmatter YAML）；过审后进 anthropics/claude-plugins-community（夜间同步） |
 | ✅ | 官方 MCP Registry | `mcp-publisher` CLI | 2026-06-11 已发布 `io.github.johnnywuj81/tokenknows` v0.2.1（PyPI 包 [tokenknows-mcp](https://pypi.org/project/tokenknows-mcp/)，打包脚本 `code/tokenknows-mcp/build.sh`）；PulseMCP 等将自动同步（约一周） |
+| ✅ | **0.3.0 闭环补救发版** | tag `mcp-v0.3.0` → publish-pypi.yml → `mcp-publisher` | 2026-06-11 全链路完成：PyPI 0.3.0（Trusted Publishing 连续 invalid-publisher + 撞 PyPI 全站故障，最终走 PYPI_API_TOKEN secret 双模式发出）→ MCP Registry 0.3.0 (isLatest)。核心修复：插件 `.mcp.json` 改 `uvx` 拉 PyPI 包（marketplace 安装零 clone 零 export 可用）、view_url 绝对化、双语错误指引、后端 PAT 自助 token（Web 项目设置→MCP 接入）、AUTH_MODE 开关。插件 2.2.0。**待办：PyPI TP publisher 配置仍不匹配需修（现走 token）；发完记得轮换聊天中暴露过的 PyPI token** |
 
 ## 第二波 · 一次性发布（弹药齐了再打）
 
