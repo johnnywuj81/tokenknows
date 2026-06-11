@@ -45,7 +45,7 @@
 
 | 状态 | 渠道 | 要点 |
 |---|---|---|
-| ☐ | V2EX [分享创造](https://www.v2ex.com/go/create) | 中文、第一人称建造故事、明示开源/MIT/自部署/不收费；**不要**发推广节点 |
+| ⏳ | V2EX [分享创造](https://www.v2ex.com/go/create) | 终稿已备好（D0-posts-final.md） | **账号被激活门槛拦住**：新号 wu163689 需邀请码激活（或 1 万 $V2EX token）；激活后还需养号几天（签到/回帖，新号外链受限）。计划：拿到邀请码 → 养号 → 下周晚 8 点发 |
 | ☐ | [Linux.do 开发调优](https://linux.do/c/develop/4) | `[开源项目]` 前缀；2026 中文 Claude Code 浓度最高社区；**禁 AI 生成内容，必须本人写**；需 TL1（读 30 帖 ×10 分钟即达） |
 | ☐ | Reddit r/ClaudeAI（~91.6 万成员） | Built with Claude flair；角度 = "把你的 Claude Code session 蒸馏成周报/ADR/KG" |
 | ☐ | Show HN | 周二–四 7–10am PT；标题平实：`Show HN: TokenKnows – Self-hosted workbench that distills AI coding sessions into docs`；发完立刻顶楼讲架构与求反馈；**严禁拉票**；回复每条评论 |
@@ -65,7 +65,7 @@
 ## 持续渠道（第二波后长期经营）
 
 - ☐ 掘金：深度技术文（5-stage pipeline 架构、MCP server 设计），AI Coding 是 2026 平台三大热点之一
-- ☐ 即刻：AI探索站/独立开发的日常 圈子，build-in-public 周更，不发硬广
+- ▶ 即刻：✅ 2026-06-11 23:40 首条已发（账号 John_7Hxy · 圈子「工程师的日常」，web 版无圈子搜索只能选推荐 chips）；后续 build-in-public 周更
 - ☐ 少数派 Matrix：申请作者权限（说明自荐产品），投"开发者说"栏目，写造物故事不写通稿
 - ☐ W2solo 新品发布：CN 独立开发社区，零成本
 - ☐ bilibili：5–10 分钟安装+蒸馏演示视频（高成本可选；被中型 up 主翻牌 > 自己投十期）

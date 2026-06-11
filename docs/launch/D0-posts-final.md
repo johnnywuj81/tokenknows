@@ -71,8 +71,8 @@ github.com/johnnywuj81/tokenknows
 
 ## 发后跟进清单
 
-- [ ] V2EX 帖子链接：＿＿＿＿＿
-- [ ] 即刻动态链接：＿＿＿＿＿
+- [ ] V2EX：被新号激活门槛拦截（需邀请码）→ 改期下周；正文继续用本文件终稿
+- [x] 即刻：2026-06-11 23:40 已发，圈子「工程师的日常」，账号 John_7Hxy
 - [ ] 24h 内每条回复都答（隐私问题用 PRIVACY-FAQ 标准答案）
 - [ ] star 到 5 → 手填 awesome-claude-code issue 表单
 - [ ] 反馈里出现的高频需求 → 记进 PROMOTION.md
