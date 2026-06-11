@@ -46,6 +46,12 @@ if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
   Element.prototype.setPointerCapture = vi.fn() as unknown as Element['setPointerCapture']
 }
 
+// elementFromPoint (TipTap ≥3.26 Placeholder viewport tracking 调用,
+// jsdom 未实现; prosemirror posAtCoords 对 null 有兜底, 返回 null 即可)
+if (typeof Document !== 'undefined' && !Document.prototype.elementFromPoint) {
+  Document.prototype.elementFromPoint = vi.fn(() => null) as unknown as Document['elementFromPoint']
+}
+
 // EventSource polyfill (SSE clients in DocumentPage)
 if (typeof globalThis.EventSource === 'undefined') {
   globalThis.EventSource = class EventSource {

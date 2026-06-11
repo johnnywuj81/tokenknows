@@ -20,7 +20,7 @@ import {
   ReactFlow,
   type Edge,
   type Node,
-  type NodeMouseHandler,
+  type OnNodeDrag,
   type NodeTypes,
 } from '@xyflow/react'
 import dagre from '@dagrejs/dagre'
@@ -242,7 +242,7 @@ export function GraphCanvas({
   }, [lodResult, layout.layout_hints.rankdir, storedPositions, serverPositions])
 
   // 拖动结束时保存位置 (本地 store + debounced PATCH); supernode 不可拖
-  const handleNodeDragStop = useCallback<NodeMouseHandler>(
+  const handleNodeDragStop = useCallback<OnNodeDrag>(
     (_event, node) => {
       if (!assetId) return
       if (node.id.startsWith('cluster_')) return
