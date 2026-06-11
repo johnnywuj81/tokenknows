@@ -9,6 +9,11 @@
 # 前置:
 #   - host 跑了 Ollama (ollama serve), 端口 11434
 #   - 当前目录有 .env.local (3 个 LLM key, 见 .env.local.example)
+#
+# 中国大陆网络提示: 构建期容器内直连 pypi.org 可能超时. 两种解法任选:
+#   docker compose build --build-arg HTTP_PROXY=http://host.docker.internal:<代理端口> \
+#                        --build-arg HTTPS_PROXY=http://host.docker.internal:<代理端口>
+#   (或) 在 Dockerfile 的 uv pip install 前加 UV_INDEX_URL 指向国内 PyPI 镜像
 
 services:
   api:

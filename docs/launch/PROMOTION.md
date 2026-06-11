@@ -37,8 +37,8 @@
 **弹药清单（发布前必须就位）：**
 
 - ✅ README 首屏 demo GIF（assets/demo/tokenknows-demo.gif · 50s/6.5MB/1080px · 终端→工作台实时事件流→周报→KG证据链→尾帧；另有 mp4 版供社交帖；制作管线 /tmp/tk-demo 已可复刻）
-- ☐ `docker-compose up` 一键起（HN / r/selfhosted 评论区必问）
-- ☐ 隐私答辩词：支持哪些 LLM 后端、能否全本地跑、token 流向
+- ✅ `docker-compose up` 一键起（2026-06-11 全新数据卷实测: build → up → healthz 200 → register 201；顺手揪出 bcrypt 5.x 发布级 bug 并修复 pin；中国网络构建提示已写进 compose 注释）
+- ✅ 隐私答辩词：[PRIVACY-FAQ.md](PRIVACY-FAQ.md) 7 问中英双语（LLM 后端 / 全本地 Ollama / 三层门禁 / 数据主权）
 
 **发布顺序（中文圈先打收反馈，HN 压轴）：**
 
