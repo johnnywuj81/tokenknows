@@ -8,6 +8,8 @@ MCP server for [TokenKnows](https://github.com/johnnywuj81/tokenknows) — a sel
 
 This server is the bridge between your MCP host and a **self-hosted TokenKnows backend** (default `http://127.0.0.1:8001`). Deploy the backend first — see the [main repository](https://github.com/johnnywuj81/tokenknows). Local-first: your data goes only to the backend you configure.
 
+The distilled documents are best viewed in the **TokenKnows web UI** (default `http://127.0.0.1:5173`, `code/tokenknows-web` in the main repo) — `view_url` links returned by the tools point there and require a logged-in session. To authenticate the MCP server against a protected backend, create an API token in the web UI under **项目设置 → MCP 接入** (Project Settings → MCP Access) and set it as `TOKENKNOWS_API_TOKEN`.
+
 ## Install & run
 
 ```bash
@@ -29,12 +31,19 @@ tokenknows-mcp --transport sse --port 8765
   "mcpServers": {
     "tokenknows": {
       "command": "uvx",
-      "args": ["tokenknows-mcp"],
-      "env": { "TOKENKNOWS_API_BASE": "http://127.0.0.1:8001" }
+      "args": ["tokenknows-mcp==0.3.0"],
+      "env": {
+        "TOKENKNOWS_API_BASE": "${TOKENKNOWS_API_BASE:-http://127.0.0.1:8001}",
+        "TOKENKNOWS_API_TOKEN": "${TOKENKNOWS_API_TOKEN:-}",
+        "TOKENKNOWS_DEFAULT_PROJECT": "${TOKENKNOWS_DEFAULT_PROJECT:-proj-demo-001}",
+        "TOKENKNOWS_WEB_BASE": "${TOKENKNOWS_WEB_BASE:-http://127.0.0.1:5173}"
+      }
     }
   }
 }
 ```
+
+All values have working defaults for a default local deployment — zero exports needed. (Claude Code officially supports `${VAR:-default}` expansion in `.mcp.json`; for hosts that don't, write literal values.)
 
 Tip: in Claude Code you can instead install the full plugin (MCP server + slash commands + skills): `/plugin marketplace add johnnywuj81/tokenknows` → `/plugin install tokenknows@tokenknows`.
 
@@ -43,8 +52,9 @@ Tip: in Claude Code you can instead install the full plugin (MCP server + slash 
 | Variable | Default | Description |
 |---|---|---|
 | `TOKENKNOWS_API_BASE` | `http://127.0.0.1:8001` | Self-hosted TokenKnows backend URL |
-| `TOKENKNOWS_API_TOKEN` | — | JWT bearer token (optional) |
-| `TOKENKNOWS_DEFAULT_PROJECT` | — | Default project_id for event submission |
+| `TOKENKNOWS_API_TOKEN` | — | API token (`tkk_...`) or JWT bearer; create in web UI → 项目设置 → MCP 接入. Optional for default local deployments |
+| `TOKENKNOWS_DEFAULT_PROJECT` | `proj-demo-001` | Default project_id for event submission and distill |
+| `TOKENKNOWS_WEB_BASE` | `http://127.0.0.1:5173` | Web UI base used to build `view_url` links (login required to open them) |
 
 ## Tools
 
@@ -54,6 +64,21 @@ Tip: in Claude Code you can instead install the full plugin (MCP server + slash 
 - `search_entity` — cross-document knowledge-graph entity search
 
 Plus `tokenknows://asset/{id}` resources and prompt templates for all 7 document types.
+
+## Session watcher (daemon)
+
+The package also ships `tokenknows-watcher`, a standalone session watcher for Claude Code: it tails `~/.claude/projects/*.jsonl`, incrementally uploads conversation turns as events (deduped by content hash, state kept in `~/.tokenknows-watcher.json`), so `/tokenknows:weekly` always has material without manual `submit_session_events` calls.
+
+```bash
+# foreground, poll every 30s (default)
+uvx --from tokenknows-mcp tokenknows-watcher
+
+# custom interval / one-shot for cron
+uvx --from tokenknows-mcp tokenknows-watcher --interval 60
+uvx --from tokenknows-mcp tokenknows-watcher --once
+```
+
+It reads the same `TOKENKNOWS_API_BASE` / `TOKENKNOWS_API_TOKEN` / `TOKENKNOWS_DEFAULT_PROJECT` environment variables.
 
 ## License
 

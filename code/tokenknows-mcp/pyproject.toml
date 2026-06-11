@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tokenknows-mcp"
-version = "0.2.1"
+version = "0.3.0"
 description = "TokenKnows MCP server — distill AI coding sessions (Claude Code / Codex / Cursor) into weekly reports, ADRs and a knowledge graph on your self-hosted workbench"
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,7 @@ Issues = "https://github.com/johnnywuj81/tokenknows/issues"
 
 [project.scripts]
 tokenknows-mcp = "mcp_server.server:main"
+tokenknows-watcher = "mcp_server.daemon:main"
 
 [tool.hatch.build]
 artifacts = ["mcp_server"]

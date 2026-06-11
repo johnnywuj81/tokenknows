@@ -8,6 +8,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+打通开源用户闭环:装插件 → 登录 Web → 自助拿 token → 蒸馏结果可点击查看。
+
+### Added · 新增
+
+- **API Token 自助管理**(后端 + Web):`api_tokens` 表 + `pat_service`(`tkk_` 前缀、sha256 存储、可撤销、last_used_at 连接信号);`POST/GET/DELETE /me/tokens` 端点;Web 项目设置新增「MCP 接入」tab(token 创建/列表/撤销 + 一键复制插件环境变量块)
+- **AUTH_MODE 开关**(`open`/`required`,默认 `open`):`required` 模式下 events / generation / projects 数据端点强制 Bearer 鉴权(不认可伪造的 `X-User-Id`),公网部署建议开启
+- **CORS_ORIGINS 环境变量**:跨域来源可配置(原 localhost:5173 硬编码)
+- **JWT secret 启动闸**:非 local 环境使用默认 dev secret 时拒绝启动
+- **`tokenknows-watcher` 控制台入口**(tokenknows-mcp 0.3.0):session 守护进程可经 `uvx --from tokenknows-mcp tokenknows-watcher` 调起
+- **PyPI 自动发布**:`.github/workflows/publish-pypi.yml`(Trusted Publishing,`mcp-v*` tag 触发)
+
+### Changed · 变更
+
+- **tokenknows-mcp 0.2.1 → 0.3.0**:`view_url` 由相对路径改为绝对 URL(新 env `TOKENKNOWS_WEB_BASE`,默认 `http://127.0.0.1:5173`);MCP 工具错误信息改为可操作的双语单行指引(后端未启动 / 401 缺 token / 404 项目不存在 / 蒸馏超时)
+- **Claude Code 插件 2.1.0 → 2.2.0**:`.mcp.json` 改用 `uvx tokenknows-mcp==0.3.0` 从 PyPI 拉起(marketplace 安装零 clone 零 export 可用;`${VAR:-default}` 默认值已获官方文档确认);`TOKENKNOWS_API_ROOT` 降级为本地开发可选项(PYTHONPATH 透传 editable 模式)
+- **插件文档重构**:按真实前置链(部署后端 → 启动 Web → 注册登录拿 token → 装 uv → 装插件 → 验证)重写 README;新增 5 分钟跑通脚本、watcher 章节;INSTALL-COWORK / codex-plugin / 根 README 同步;MCP registry server.json 补列 `TOKENKNOWS_DEFAULT_PROJECT` 与 `TOKENKNOWS_WEB_BASE`
+
 ## [0.1.0] — 2026-06-10
 
 First public release. 首个公开版本。

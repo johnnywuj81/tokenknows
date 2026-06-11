@@ -1,0 +1,42 @@
+name: Publish tokenknows-mcp to PyPI
+
+# 触发: 推 mcp-v* tag (例 mcp-v0.3.0) 或手动 dispatch.
+# 凭证: PyPI Trusted Publishing (OIDC, 无长期 secret) —
+#   pypi.org → tokenknows-mcp → Publishing → 添加 publisher:
+#   owner=johnnywuj81, repo=tokenknows, workflow=publish-pypi.yml, environment=pypi
+
+on:
+  push:
+    tags: ["mcp-v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Build + publish (Trusted Publishing)
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC for Trusted Publishing
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Check tag matches pyproject version
+        if: github.ref_type == 'tag'
+        run: |
+          PYPROJECT_VERSION=$(grep -m1 '^version = ' code/tokenknows-mcp/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          TAG_VERSION="${GITHUB_REF_NAME#mcp-v}"
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::tag mcp-v$TAG_VERSION != pyproject version $PYPROJECT_VERSION"
+            exit 1
+          fi
+
+      - name: Build (rsync source of truth + uv build)
+        run: bash code/tokenknows-mcp/build.sh
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: code/tokenknows-mcp/dist
