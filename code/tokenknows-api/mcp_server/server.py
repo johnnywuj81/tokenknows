@@ -51,6 +51,9 @@ This server bridges your session into the TokenKnows knowledge base.
 - `list_assets` / `get_asset` / `get_asset_chapters` — read distilled output.
 - `search_entity(query, entity_type?)` — cross-document KG entity search.
 
+Distilled documents are best viewed in the TokenKnows web UI — always share
+the returned `view_url` (absolute link, login required) with the user.
+
 ## Host source_type quick map
 
 - Cowork Chat / Cowork tab → pass `source_type="claude_cowork"`
