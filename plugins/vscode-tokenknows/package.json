@@ -67,7 +67,28 @@
         },
         "tokenknows.includeFileExtensions": {
           "type": "array",
-          "default": [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java", ".kt", ".swift", ".md", ".sql", ".html", ".css", ".scss", ".vue", ".yaml", ".yml", ".toml", ".json"],
+          "default": [
+            ".ts",
+            ".tsx",
+            ".js",
+            ".jsx",
+            ".py",
+            ".go",
+            ".rs",
+            ".java",
+            ".kt",
+            ".swift",
+            ".md",
+            ".sql",
+            ".html",
+            ".css",
+            ".scss",
+            ".vue",
+            ".yaml",
+            ".yml",
+            ".toml",
+            ".json"
+          ],
           "description": "只采这些扩展名 (其它跳过 · 防止采到 .log/.lock)"
         }
       }
@@ -97,6 +118,6 @@
     "@types/node": "^25",
     "@types/vscode": "^1.84.0",
     "@vscode/vsce": "^3.9.2",
-    "typescript": "^5.5.0"
+    "typescript": "^6.0.3"
   }
 }
