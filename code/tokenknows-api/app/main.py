@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config.logging import logger, setup_logging
+from app.config.security_checks import validate_security
 from app.config.settings import get_settings
 from app.gateway.http_api import api_router
 from app.persistence import bootstrap as bootstrap_db
@@ -41,10 +42,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """启动 + 关闭钩子."""
     settings = get_settings()
     setup_logging(settings.log_level)
+    # v2.1 · 启动期安全门禁 (非 local + dev 默认 JWT 密钥 → 拒绝启动)
+    validate_security(settings)
     logger.info(
         "tokenknows_api_starting",
         version=__version__,
         environment=settings.environment,
+        auth_mode=settings.auth_mode,
         instance_egress_enabled=settings.instance_egress_enabled,
         has_anthropic_key=bool(settings.anthropic_api_key),
         has_openai_key=bool(settings.openai_api_key),
@@ -118,10 +122,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS - 仅本地开发允许 Vite dev server (5173)
+# CORS - 从 settings 读 (CORS_ORIGINS 逗号分隔; 默认仍是 Vite dev server 5173)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=get_settings().cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

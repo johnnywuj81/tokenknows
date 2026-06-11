@@ -1187,6 +1187,93 @@ class SqliteStore:
             return None
         return json.loads(rows[0]["json"])
 
+    # ─── Personal Access Tokens (v2.1) ───────────────────
+
+    def insert_api_token(
+        self,
+        token_id: str,
+        user_id: str,
+        name: str,
+        token_hash: str,
+        token_prefix: str,
+        created_at: str,
+        json_str: str,
+    ) -> None:
+        """新建 PAT. token_hash UNIQUE (明文永不落库)."""
+        self._exec(
+            """
+            INSERT INTO api_tokens
+                (id, user_id, name, token_hash, token_prefix,
+                 created_at, last_used_at, revoked_at, json)
+            VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+            """,
+            (
+                token_id, user_id, name, token_hash, token_prefix,
+                created_at, json_str,
+            ),
+        )
+
+    def get_api_token_by_hash(self, token_hash: str) -> dict[str, Any] | None:
+        """按 sha256 hash 查未撤销的 PAT (verify 热路径)."""
+        rows = self._query(
+            """
+            SELECT json FROM api_tokens
+            WHERE token_hash = ? AND revoked_at IS NULL
+            """,
+            (token_hash,),
+        )
+        if not rows:
+            return None
+        return json.loads(rows[0]["json"])
+
+    def list_api_tokens_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        """某 user 的有效 (未撤销) PAT 列表, 新建在前."""
+        rows = self._query(
+            """
+            SELECT json FROM api_tokens
+            WHERE user_id = ? AND revoked_at IS NULL
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        return [json.loads(r["json"]) for r in rows]
+
+    def revoke_api_token(
+        self,
+        token_id: str,
+        user_id: str,
+        revoked_at_iso: str,
+        json_str: str,
+    ) -> bool:
+        """撤销 PAT. user_id 双重过滤保证只能撤自己的; 已撤销不重复撤.
+
+        故意绕过 _exec() 开码: _exec 丢弃 cursor, 这里需要 rowcount 判断
+        是否真的撤到了 (isolation_level=None 下单条语句自动提交, 行为一致).
+        """
+        with self._write_lock:
+            cur = self._conn.execute(
+                """
+                UPDATE api_tokens
+                SET revoked_at = ?, json = ?
+                WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+                """,
+                (revoked_at_iso, json_str, token_id, user_id),
+            )
+            return cur.rowcount > 0
+
+    def touch_api_token_last_used(
+        self, token_id: str, last_used_iso: str, json_str: str
+    ) -> None:
+        """更新 last_used_at (verify 命中时节流写入)."""
+        self._exec(
+            """
+            UPDATE api_tokens
+            SET last_used_at = ?, json = ?
+            WHERE id = ?
+            """,
+            (last_used_iso, json_str, token_id),
+        )
+
     # ─── 项目成员 (v0.9.0 · T65) ─────────────────────────
 
     def upsert_project_member(

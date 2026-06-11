@@ -271,3 +271,19 @@ CREATE INDEX IF NOT EXISTS notifications_user_unread_idx
     ON notifications(user_id, read, created_at DESC);
 CREATE INDEX IF NOT EXISTS notifications_skill_idx
     ON notifications(related_skill_id) WHERE related_skill_id IS NOT NULL;
+
+-- v2.1 · Personal Access Tokens (MCP / API 长期凭据)
+-- 明文永不落库: token_hash = sha256(plaintext); token_prefix 仅 UI 辨识用.
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    token_hash      TEXT NOT NULL UNIQUE,
+    token_prefix    TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    last_used_at    TEXT,
+    revoked_at      TEXT,
+    json            TEXT NOT NULL                  -- 完整 ApiToken dump
+);
+CREATE INDEX IF NOT EXISTS api_tokens_user_idx
+    ON api_tokens(user_id, created_at DESC);

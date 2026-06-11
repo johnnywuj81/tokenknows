@@ -30,6 +30,10 @@ for _key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY", "OLLAMA_A
 if _env_path.exists():
     load_dotenv(_env_path, override=True)
 
+# v2.1 · dev 默认 JWT 密钥常量; 非 local 环境用此值启动会被
+# security_checks.validate_security 拒绝.
+DEV_DEFAULT_JWT_SECRET = "dev-only-jwt-secret-change-me-in-prod"
+
 
 class Settings(BaseSettings):
     """全局配置 - 自动从 .env.local 加载 (cwd / parent dirs)."""
@@ -186,15 +190,27 @@ class Settings(BaseSettings):
 
     # ─── v1.1 · JWT Auth (T74) ───────────────────────────────────
     # JWT 签名密钥. MVP 用 env var; 生产换 KMS / Vault 旋转.
-    # 默认值仅 dev 用; 生产 startup 校验非默认值.
+    # 默认值仅 dev 用; 生产 startup 校验非默认值 (security_checks.validate_security).
     jwt_secret_key: str = Field(
-        default="dev-only-jwt-secret-change-me-in-prod",
+        default=DEV_DEFAULT_JWT_SECRET,
         alias="JWT_SECRET_KEY",
     )
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     # access_token 过期 (短期); refresh_token v1.2 实现
     jwt_access_token_ttl_minutes: int = Field(
         default=60 * 24, alias="JWT_ACCESS_TOKEN_TTL_MINUTES"
+    )
+
+    # ─── v2.1 · 安全加固 (PAT Phase A) ───────────────────────────
+    # CORS 允许的 origin (逗号分隔). 默认与原硬编码值一致 (Vite dev server).
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173",
+        alias="CORS_ORIGINS",
+    )
+    # 认证模式: open = 现状 (X-User-Id backward-compat 放行);
+    # required = 数据 router 必须带有效 Bearer (JWT / PAT).
+    auth_mode: Literal["open", "required"] = Field(
+        default="open", alias="AUTH_MODE"
     )
 
     # ─── 服务运行 ────────────────────────────────────────────────
@@ -244,6 +260,11 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return self.environment == "local"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """CORS_ORIGINS 逗号分隔 → list (跳过空项)."""
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     def task_provider(self, task: str) -> str:
         """根据 task 名查询 provider (用于 LLMRouter)."""
