@@ -40,3 +40,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: code/tokenknows-mcp/dist
+          # 双模式: secret PYPI_API_TOKEN 存在则用 token; 为空则自动走
+          # Trusted Publishing (OIDC). 两条路任一配置好即可发布.
+          password: ${{ secrets.PYPI_API_TOKEN }}
