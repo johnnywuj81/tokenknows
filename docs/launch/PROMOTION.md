@@ -30,7 +30,7 @@
 | ✅ | GitHub topics 补全 | `gh repo edit --add-topic` | 已补 claude / self-hosted / vscode-extension（现 15 个） |
 | ✅ | Release v0.2.1 | `gh release create` 挂 vsix | [已发布](https://github.com/johnnywuj81/tokenknows/releases/tag/v0.2.1)，挂 vsix |
 | ✅ | Anthropic 社区插件市场 | [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit) 表单 | 2026-06-11 已提交待审（Claude Code + Cowork 双平台 · MIT）；`claude plugin validate` 通过（修了 adr/design/incident 三处 frontmatter YAML）；过审后进 anthropics/claude-plugins-community（夜间同步） |
-| ☐ | 官方 MCP Registry | `mcp-publisher` CLI | **工程前置**：MCP server 需先发 PyPI 包（需要 PyPI 账号）→ `mcp-publisher` 发布；完成后 PulseMCP 等自动同步 |
+| ✅ | 官方 MCP Registry | `mcp-publisher` CLI | 2026-06-11 已发布 `io.github.johnnywuj81/tokenknows` v0.2.1（PyPI 包 [tokenknows-mcp](https://pypi.org/project/tokenknows-mcp/)，打包脚本 `code/tokenknows-mcp/build.sh`）；PulseMCP 等将自动同步（约一周） |
 
 ## 第二波 · 一次性发布（弹药齐了再打）
 
